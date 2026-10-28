@@ -1,0 +1,25 @@
+{
+  "name": "@lightpath/mcp",
+  "version": "0.0.0",
+  "description": "MCP server that lets coding agents ask which code ran for an action in your app",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p test"
+  },
+  "dependencies": {
+    "@lightpath/protocol": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  }
+}
