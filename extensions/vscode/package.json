@@ -3,7 +3,14 @@
   "displayName": "Lightpath",
   "description": "Click anything in your running app and watch the code that ran light up in your editor.",
   "version": "0.0.0",
-  "publisher": "lightpath",
+  "publisher": "lightpath-dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Unknown-333/Lightpath.git",
+    "directory": "extensions/vscode"
+  },
+  "bugs": "https://github.com/Unknown-333/Lightpath/issues",
+  "homepage": "https://github.com/Unknown-333/Lightpath#readme",
   "license": "MIT",
   "private": true,
   "type": "module",

@@ -570,3 +570,11 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: PyPI has no way to reserve a name; the first upload claims it. PyPI removes packages that exist only to hold a name.
 - How: Version set in `agents/python/pyproject.toml` and `__version__`; added keywords and `[project.urls]`; the README now links to GitHub with an absolute URL so it works on PyPI. Built with `python -m build`, checked with `twine check`, and installed into a clean virtual environment before uploading. The upload uses an account-wide token once; afterwards it's replaced with a token scoped to the `lightpath-agent` project.
 - Rejected: An empty placeholder package.
+
+### D-066 VS Code publisher ID is lightpath-dev
+
+- Date: 2026-10-29
+- Decision: Publish the extension under the Marketplace publisher `lightpath-dev` (display name "Lightpath"), so its ID is `lightpath-dev.lightpath-vscode`.
+- Why: Matches the npm organization (D-003), so the project has one name across registries. The publisher was created on 2026-10-29.
+- How: `publisher` in `extensions/vscode/package.json`; also added `repository`, `bugs`, and `homepage`, which `vsce` warns about when missing and the Marketplace shows on the extension page.
+- Rejected: `lightpath` (keeps names inconsistent across registries).
