@@ -1,4 +1,4 @@
-import type { TraceId } from '@lightpath/protocol';
+import type { TraceId } from '@lightpath-dev/protocol';
 
 const ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyz';
 

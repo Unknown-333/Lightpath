@@ -1,4 +1,4 @@
-import type { FileHits, Trace } from '@lightpath/protocol';
+import type { FileHits, Trace } from '@lightpath-dev/protocol';
 import * as vscode from 'vscode';
 import { ago } from './heat.js';
 

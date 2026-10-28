@@ -1,5 +1,5 @@
 {
-  "name": "@lightpath/cli",
+  "name": "@lightpath-dev/cli",
   "version": "0.0.0",
   "description": "Click anything in your running app and see which frontend and backend lines ran",
   "license": "MIT",
@@ -24,11 +24,11 @@
     "typecheck": "tsc -p test"
   },
   "dependencies": {
-    "@lightpath/browser": "workspace:*",
-    "@lightpath/daemon": "workspace:*",
-    "@lightpath/mcp": "workspace:*",
-    "@lightpath/node-agent": "workspace:*",
-    "@lightpath/protocol": "workspace:*",
+    "@lightpath-dev/browser": "workspace:*",
+    "@lightpath-dev/daemon": "workspace:*",
+    "@lightpath-dev/mcp": "workspace:*",
+    "@lightpath-dev/node-agent": "workspace:*",
+    "@lightpath-dev/protocol": "workspace:*",
     "cac": "7.1.0",
     "picocolors": "1.1.1"
   },

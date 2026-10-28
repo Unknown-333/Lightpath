@@ -40,7 +40,7 @@ The VS Code extension: open this folder in VS Code and press F5 ("Lightpath exte
 ## Layout
 
 ```
-packages/      TypeScript packages (published under @lightpath/*)
+packages/      TypeScript packages (published under @lightpath-dev/*)
 extensions/    VS Code extension
 agents/python  Python agent (PyPI: lightpath-agent)
 examples/shop  Demo app and end-to-end test target

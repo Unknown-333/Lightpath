@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import type { IngestBatch, IngestMessage } from '@lightpath/protocol';
+import type { IngestBatch, IngestMessage } from '@lightpath-dev/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const registerPath = fileURLToPath(new URL('../dist/register.js', import.meta.url));

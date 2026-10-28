@@ -1,5 +1,5 @@
 {
-  "name": "@lightpath/protocol",
+  "name": "@lightpath-dev/protocol",
   "version": "0.0.0",
   "description": "Wire protocol types and schemas shared by Lightpath agents, daemon, and clients",
   "license": "MIT",

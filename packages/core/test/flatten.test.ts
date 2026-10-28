@@ -1,4 +1,4 @@
-import type { FunctionCoverage } from '@lightpath/protocol';
+import type { FunctionCoverage } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { countAt, flattenRanges } from '../src/flatten.js';
 

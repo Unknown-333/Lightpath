@@ -1,6 +1,6 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { ResolveContext } from '@lightpath/core';
+import type { ResolveContext } from '@lightpath-dev/core';
 import {
   ClientMessage,
   CloseCode,
@@ -8,7 +8,7 @@ import {
   IngestBatch,
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
-} from '@lightpath/protocol';
+} from '@lightpath-dev/protocol';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { authorize, newToken } from './auth.js';
 import { Correlator } from './correlator.js';

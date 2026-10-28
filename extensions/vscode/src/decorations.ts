@@ -1,4 +1,4 @@
-import type { FileHits, LineHit, Trace } from '@lightpath/protocol';
+import type { FileHits, LineHit, Trace } from '@lightpath-dev/protocol';
 import * as vscode from 'vscode';
 import { bucketize, countLabel, HEAT_BUCKETS, pathKey } from './heat.js';
 

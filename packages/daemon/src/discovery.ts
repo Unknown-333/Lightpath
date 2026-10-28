@@ -1,6 +1,6 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { DaemonDiscovery, DISCOVERY_FILE } from '@lightpath/protocol';
+import { DaemonDiscovery, DISCOVERY_FILE } from '@lightpath-dev/protocol';
 
 /** Writes `.lightpath/daemon.json` with user-only permissions, plus a .gitignore for the folder. */
 export async function writeDiscovery(workspaceRoot: string, info: DaemonDiscovery): Promise<string> {

@@ -1,4 +1,4 @@
-# @lightpath/node-agent
+# @lightpath-dev/node-agent
 
 Runs inside your Node.js process and reports which code ran for each HTTP request. You don't use this package directly: `lightpath dev` loads it with `NODE_OPTIONS=--import=<file URL>`.
 

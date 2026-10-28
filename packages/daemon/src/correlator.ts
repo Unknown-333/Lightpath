@@ -6,7 +6,7 @@ import {
   newTraceId,
   type ResolveContext,
   resolveFile,
-} from '@lightpath/core';
+} from '@lightpath-dev/core';
 import type {
   CollectorKind,
   DeltaMessage,
@@ -17,7 +17,7 @@ import type {
   ScriptInfo,
   Trace,
   TraceId,
-} from '@lightpath/protocol';
+} from '@lightpath-dev/protocol';
 import type { Store } from './store.js';
 
 type Delta = DeltaMessage;

@@ -1,9 +1,9 @@
 import { type ChildProcess, spawn } from 'node:child_process';
 import { resolve } from 'node:path';
-import { BrowserCollector } from '@lightpath/browser';
-import { type RunningDaemon, startDaemon } from '@lightpath/daemon';
-import { registerUrl } from '@lightpath/node-agent';
-import type { IngestMessage } from '@lightpath/protocol';
+import { BrowserCollector } from '@lightpath-dev/browser';
+import { type RunningDaemon, startDaemon } from '@lightpath-dev/daemon';
+import { registerUrl } from '@lightpath-dev/node-agent';
+import type { IngestMessage } from '@lightpath-dev/protocol';
 import pc from 'picocolors';
 import { UrlWatcher } from './detect.js';
 import { agentEnv, nodeVersionProblem, toShellCommand } from './env.js';

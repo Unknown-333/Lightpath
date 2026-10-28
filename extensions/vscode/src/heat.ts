@@ -1,5 +1,5 @@
-import { HEAT_BUCKETS, heatBucket } from '@lightpath/core';
-import type { FileHits, LineHit, Trace } from '@lightpath/protocol';
+import { HEAT_BUCKETS, heatBucket } from '@lightpath-dev/core';
+import type { FileHits, LineHit, Trace } from '@lightpath-dev/protocol';
 
 export { HEAT_BUCKETS };
 

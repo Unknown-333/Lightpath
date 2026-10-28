@@ -104,8 +104,8 @@
     "package": "node esbuild.mjs --production && vsce package --no-dependencies"
   },
   "dependencies": {
-    "@lightpath/core": "workspace:*",
-    "@lightpath/protocol": "workspace:*"
+    "@lightpath-dev/core": "workspace:*",
+    "@lightpath-dev/protocol": "workspace:*"
   },
   "devDependencies": {
     "@types/vscode": "1.100.0",

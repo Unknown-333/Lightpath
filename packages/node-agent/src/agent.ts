@@ -1,4 +1,4 @@
-import type { IngestMessage, RequestInfo, ScriptCoverage } from '@lightpath/protocol';
+import type { IngestMessage, RequestInfo, ScriptCoverage } from '@lightpath-dev/protocol';
 import type { AgentConfig } from './config.js';
 import { normalizeRoot } from './config.js';
 import type { InspectorSession } from './inspector.js';

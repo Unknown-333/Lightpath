@@ -1,4 +1,4 @@
-import type { Trace } from '@lightpath/protocol';
+import type { Trace } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { describeSummaries, describeTrace, diffTraces, lineRanges } from '../src/format.js';
 

@@ -1,5 +1,5 @@
 {
-  "name": "@lightpath/daemon",
+  "name": "@lightpath-dev/daemon",
   "version": "0.0.0",
   "description": "Local Lightpath daemon: receives coverage from agents, maps it to source lines, and serves traces",
   "license": "MIT",
@@ -18,8 +18,8 @@
     "typecheck": "tsc -p test"
   },
   "dependencies": {
-    "@lightpath/core": "workspace:*",
-    "@lightpath/protocol": "workspace:*",
+    "@lightpath-dev/core": "workspace:*",
+    "@lightpath-dev/protocol": "workspace:*",
     "ws": "8.22.0"
   },
   "devDependencies": {

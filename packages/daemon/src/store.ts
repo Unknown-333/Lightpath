@@ -1,4 +1,4 @@
-import type { Trace, TraceId, TraceSummary } from '@lightpath/protocol';
+import type { Trace, TraceId, TraceSummary } from '@lightpath-dev/protocol';
 
 export interface TraceQuery {
   limit?: number | undefined;

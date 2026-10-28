@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { DaemonToClientMessage, IngestBatch } from '@lightpath/protocol';
+import type { DaemonToClientMessage, IngestBatch } from '@lightpath-dev/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { readDiscovery } from '../src/discovery.js';
@@ -133,7 +133,7 @@ describe('daemon client WebSocket', () => {
 
 describe('DaemonClient (protocol package) against the real daemon', () => {
   it('lists and fetches traces, and receives pushed traces', async () => {
-    const { DaemonClient } = await import('@lightpath/protocol');
+    const { DaemonClient } = await import('@lightpath-dev/protocol');
     const client = await DaemonClient.connect(daemon.port, daemon.token);
     const pushed = new Promise<string>((resolve) => client.onTrace((t) => resolve(t.id)));
 
@@ -157,7 +157,7 @@ describe('DaemonClient (protocol package) against the real daemon', () => {
   });
 
   it('rejects a wrong token', async () => {
-    const { DaemonClient } = await import('@lightpath/protocol');
+    const { DaemonClient } = await import('@lightpath-dev/protocol');
     await expect(DaemonClient.connect(daemon.port, 'wrong', 2000)).rejects.toThrow(/could not connect/);
   });
 });

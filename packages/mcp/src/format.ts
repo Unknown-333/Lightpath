@@ -1,4 +1,4 @@
-import type { LineHit, Trace, TraceSummary } from '@lightpath/protocol';
+import type { LineHit, Trace, TraceSummary } from '@lightpath-dev/protocol';
 
 /** Compresses sorted line numbers into ranges: [1,2,3,7,9,10] → "1-3, 7, 9-10". */
 export function lineRanges(lines: readonly LineHit[]): string {

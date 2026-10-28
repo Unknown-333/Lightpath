@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath/protocol';
+import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath-dev/protocol';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';

@@ -27,7 +27,7 @@ You open an unfamiliar or AI-written codebase and spend an hour working out whic
 Requires Node.js 22.12+ and Chrome or Edge.
 
 ```sh
-npx @lightpath/cli dev -- npm run dev
+npx @lightpath-dev/cli dev -- npm run dev
 ```
 
 Lightpath starts your dev command, waits for its URL, and opens your app in a browser. Click something. The code path prints in your terminal, and with the VS Code extension it lights up in your editor.
@@ -57,17 +57,17 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design, [docs/PRO
 
 ## Packages
 
-| Package                                        | What it does                                                      |
-| ---------------------------------------------- | ----------------------------------------------------------------- |
-| [`@lightpath/cli`](packages/cli)               | `lightpath dev`, `lightpath mcp`, `lightpath doctor`              |
-| [`@lightpath/core`](packages/core)             | Coverage ranges to source lines; pure and fully tested            |
-| [`@lightpath/daemon`](packages/daemon)         | Receives coverage, builds traces, serves clients                  |
-| [`@lightpath/browser`](packages/browser)       | Chrome launcher, click boundary, frontend coverage                |
-| [`@lightpath/node-agent`](packages/node-agent) | Runs inside your Node process; no dependencies                    |
-| [`@lightpath/mcp`](packages/mcp)               | MCP tools so coding agents can ask "which code handles Checkout?" |
-| [`@lightpath/protocol`](packages/protocol)     | Message schemas and the daemon client                             |
-| [`lightpath-vscode`](extensions/vscode)        | Heat highlights, hit counts, action list, replay                  |
-| [`lightpath-agent`](agents/python) (PyPI)      | Python agent with WSGI and ASGI middleware                        |
+| Package                                            | What it does                                                      |
+| -------------------------------------------------- | ----------------------------------------------------------------- |
+| [`@lightpath-dev/cli`](packages/cli)               | `lightpath dev`, `lightpath mcp`, `lightpath doctor`              |
+| [`@lightpath-dev/core`](packages/core)             | Coverage ranges to source lines; pure and fully tested            |
+| [`@lightpath-dev/daemon`](packages/daemon)         | Receives coverage, builds traces, serves clients                  |
+| [`@lightpath-dev/browser`](packages/browser)       | Chrome launcher, click boundary, frontend coverage                |
+| [`@lightpath-dev/node-agent`](packages/node-agent) | Runs inside your Node process; no dependencies                    |
+| [`@lightpath-dev/mcp`](packages/mcp)               | MCP tools so coding agents can ask "which code handles Checkout?" |
+| [`@lightpath-dev/protocol`](packages/protocol)     | Message schemas and the daemon client                             |
+| [`lightpath-vscode`](extensions/vscode)            | Heat highlights, hit counts, action list, replay                  |
+| [`lightpath-agent`](agents/python) (PyPI)          | Python agent with WSGI and ASGI middleware                        |
 
 ## Known limits
 

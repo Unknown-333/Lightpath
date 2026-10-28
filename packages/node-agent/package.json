@@ -1,5 +1,5 @@
 {
-  "name": "@lightpath/node-agent",
+  "name": "@lightpath-dev/node-agent",
   "version": "0.0.0",
   "description": "In-process Node.js agent for Lightpath. Load with --import; has no runtime dependencies.",
   "license": "MIT",
@@ -19,6 +19,6 @@
     "typecheck": "tsc -p test"
   },
   "devDependencies": {
-    "@lightpath/protocol": "workspace:*"
+    "@lightpath-dev/protocol": "workspace:*"
   }
 }

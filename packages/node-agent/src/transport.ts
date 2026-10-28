@@ -1,4 +1,4 @@
-import type { IngestMessage } from '@lightpath/protocol';
+import type { IngestMessage } from '@lightpath-dev/protocol';
 
 const PROTOCOL_VERSION = 1;
 const FLUSH_DELAY_MS = 50;

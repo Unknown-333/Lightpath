@@ -1,6 +1,6 @@
 import inspector from 'node:inspector';
 import vm from 'node:vm';
-import type { ScriptCoverage } from '@lightpath/protocol';
+import type { ScriptCoverage } from '@lightpath-dev/protocol';
 
 /**
  * Runs `source` as a script named `url`, calls `act` on its exports, and returns the V8 coverage

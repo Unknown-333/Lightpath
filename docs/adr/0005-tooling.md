@@ -22,4 +22,4 @@ TypeScript 7.0.2 (fallback 6.0.3 if a tool needs the JavaScript API), Vite 8.3.5
 
 ## Naming
 
-`lightpath` on npm and PyPI is taken by unrelated projects. Packages publish under the `@lightpath` npm scope (unclaimed on October 28, 2026), with `@lightpath/cli` providing the `lightpath` command. The Python agent publishes as `lightpath-agent`. Claim the scope and the PyPI name before announcing.
+`lightpath` on npm and PyPI is taken by unrelated projects. Packages publish under the `@lightpath-dev` npm scope (unclaimed on October 28, 2026), with `@lightpath-dev/cli` providing the `lightpath` command. The Python agent publishes as `lightpath-agent`. Claim the scope and the PyPI name before announcing.

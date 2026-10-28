@@ -41,4 +41,4 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # GitHub's Ubuntu images ship Google Chrome, which the collector launches with channel "chrome".
       - run: pnpm e2e
-      - run: LIGHTPATH_BROWSER_TESTS=1 pnpm --filter @lightpath/browser test
+      - run: LIGHTPATH_BROWSER_TESTS=1 pnpm --filter @lightpath-dev/browser test

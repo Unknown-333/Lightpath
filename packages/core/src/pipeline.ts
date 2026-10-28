@@ -1,5 +1,5 @@
 import type { SourceMapInput } from '@jridgewell/trace-mapping';
-import type { DropReason, ScriptCoverage } from '@lightpath/protocol';
+import type { DropReason, ScriptCoverage } from '@lightpath-dev/protocol';
 import { flattenRanges } from './flatten.js';
 import { LineIndex } from './line-index.js';
 import { type LineCounts, rangesToLines } from './lines.js';

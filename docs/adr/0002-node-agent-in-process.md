@@ -17,7 +17,7 @@ The Node side must collect coverage from the user's backend without code changes
 
 ## Decision
 
-Ship `@lightpath/node-agent` as a single ES module, `register.js`, that the CLI adds to `NODE_OPTIONS` as `--import="<file URL>"`.
+Ship `@lightpath-dev/node-agent` as a single ES module, `register.js`, that the CLI adds to `NODE_OPTIONS` as `--import="<file URL>"`.
 
 - It has no npm dependencies. It uses `node:inspector`, `node:diagnostics_channel`, and the global `fetch` to send batches to the daemon (ADR 0006).
 - It does nothing unless `LIGHTPATH_URL` and `LIGHTPATH_TOKEN` are set.

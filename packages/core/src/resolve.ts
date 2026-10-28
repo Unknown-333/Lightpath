@@ -1,4 +1,4 @@
-import type { DropReason } from '@lightpath/protocol';
+import type { DropReason } from '@lightpath-dev/protocol';
 
 export interface ResolveContext {
   /** Absolute workspace roots, any slash style. */
@@ -19,7 +19,7 @@ const INTERNAL_MARKERS = [
   '/@id/__x00__',
   '/__vite',
   '/lightpath-agent/',
-  '/@lightpath/',
+  '/@lightpath-dev/',
 ];
 
 /**

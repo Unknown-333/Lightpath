@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath/protocol';
+import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath-dev/protocol';
 import * as vscode from 'vscode';
 import { Heat } from './decorations.js';
 import { replayOrder } from './heat.js';

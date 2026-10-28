@@ -1,5 +1,5 @@
-import { launchBrowser } from '@lightpath/browser';
-import { readDiscovery } from '@lightpath/daemon';
+import { launchBrowser } from '@lightpath-dev/browser';
+import { readDiscovery } from '@lightpath-dev/daemon';
 import pc from 'picocolors';
 import { nodeVersionProblem } from './env.js';
 

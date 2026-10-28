@@ -33,7 +33,7 @@ This document describes the system as designed. Facts marked **(measured)** come
                          │                                                                   │
   Chrome (Playwright)    │   Node backend(s)                      Python backend              │
   ┌──────────────────┐   │   ┌────────────────────────┐          ┌──────────────────────┐    │
-  │ @lightpath/browser│   │   │ @lightpath/node-agent  │          │ lightpath-agent (py) │    │
+  │ @lightpath-dev/browser│   │   │ @lightpath-dev/node-agent  │          │ lightpath-agent (py) │    │
   │ CDP session:      │   │   │ --import register      │          │ sys.monitoring LINE  │    │
   │  Profiler (cov)   │   │   │ node:inspector Session │          │ WSGI/ASGI middleware │    │
   │  Debugger (maps)  │   │   │ diagnostics_channel    │          └──────────┬───────────┘    │
@@ -41,9 +41,9 @@ This document describes the system as designed. Facts marked **(measured)** come
   │  page.route header│   │               │ HTTP POST /v1/ingest             │ /v1/ingest     │
   └────────┬─────────┘   │               │                                  │                │
            │ in-process  │               ▼                                  ▼                │
-           └────────────────────►  @lightpath/daemon  (127.0.0.1, random port, token)        │
+           └────────────────────►  @lightpath-dev/daemon  (127.0.0.1, random port, token)        │
                          │         ├─ ingest + correlation (trace id, time windows)           │
-                         │         ├─ @lightpath/core: ranges → lines → source maps → files   │
+                         │         ├─ @lightpath-dev/core: ranges → lines → source maps → files   │
                          │         ├─ Store (memory ring buffer; SQLite later)                │
                          │         └─ WebSocket feed for clients                              │
                          │                 │                       │                          │
@@ -57,18 +57,18 @@ This document describes the system as designed. Facts marked **(measured)** come
                          └────────────────────────────────────────────────────────────────────┘
 ```
 
-| Package                 | Path                  | Role                                                                                                      | Runtime deps                      |
-| ----------------------- | --------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `@lightpath/protocol`   | `packages/protocol`   | Wire message types and zod schemas, protocol version                                                      | zod                               |
-| `@lightpath/core`       | `packages/core`       | Pure logic: range flattening, offset→line, source maps, path resolution, noise rules, trace model. No I/O | @jridgewell/trace-mapping         |
-| `@lightpath/daemon`     | `packages/daemon`     | HTTP ingest, client WebSocket feed, auth, correlation, store                                              | ws, core, protocol                |
-| `@lightpath/node-agent` | `packages/node-agent` | Runs inside the user's Node process. Coverage, script capture, HTTP boundaries                            | none (uses Node built-ins only)   |
-| `@lightpath/browser`    | `packages/browser`    | Launches Chrome, marks click boundaries, collects frontend coverage, tags requests                        | playwright-core, core, protocol   |
-| `@lightpath/mcp`        | `packages/mcp`        | MCP server over stdio that queries the daemon                                                             | @modelcontextprotocol/sdk, zod    |
-| `@lightpath/cli`        | `packages/cli`        | `lightpath dev`, `lightpath mcp`, `lightpath doctor`; terminal output                                     | cac, picocolors, all of the above |
-| `lightpath-vscode`      | `extensions/vscode`   | Decorations, gutter counts, trace tree, replay                                                            | ws (bundled)                      |
-| `lightpath-agent`       | `agents/python`       | Python agent (PyPI)                                                                                       | none (standard library only)      |
-| example                 | `examples/shop`       | Vite + React frontend, Node HTTP API with type-stripped TypeScript                                        | react, vite, express              |
+| Package                     | Path                  | Role                                                                                                      | Runtime deps                      |
+| --------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| `@lightpath-dev/protocol`   | `packages/protocol`   | Wire message types and zod schemas, protocol version                                                      | zod                               |
+| `@lightpath-dev/core`       | `packages/core`       | Pure logic: range flattening, offset→line, source maps, path resolution, noise rules, trace model. No I/O | @jridgewell/trace-mapping         |
+| `@lightpath-dev/daemon`     | `packages/daemon`     | HTTP ingest, client WebSocket feed, auth, correlation, store                                              | ws, core, protocol                |
+| `@lightpath-dev/node-agent` | `packages/node-agent` | Runs inside the user's Node process. Coverage, script capture, HTTP boundaries                            | none (uses Node built-ins only)   |
+| `@lightpath-dev/browser`    | `packages/browser`    | Launches Chrome, marks click boundaries, collects frontend coverage, tags requests                        | playwright-core, core, protocol   |
+| `@lightpath-dev/mcp`        | `packages/mcp`        | MCP server over stdio that queries the daemon                                                             | @modelcontextprotocol/sdk, zod    |
+| `@lightpath-dev/cli`        | `packages/cli`        | `lightpath dev`, `lightpath mcp`, `lightpath doctor`; terminal output                                     | cac, picocolors, all of the above |
+| `lightpath-vscode`          | `extensions/vscode`   | Decorations, gutter counts, trace tree, replay                                                            | ws (bundled)                      |
+| `lightpath-agent`           | `agents/python`       | Python agent (PyPI)                                                                                       | none (standard library only)      |
+| example                     | `examples/shop`       | Vite + React frontend, Node HTTP API with type-stripped TypeScript                                        | react, vite, express              |
 
 Two rules keep the dependency graph clean:
 
@@ -90,7 +90,7 @@ This is the path the system is built around. Times are targets, not measurements
 9. **Publish.** The trace is stored and pushed to clients. The VS Code extension lights up `Cart.tsx`, `api.ts`, `routes/orders.ts`, and `payment.ts`. The CLI prints a summary. The MCP tool can now answer questions about `t_42`.
 
 
-## 4. The mapping pipeline (`@lightpath/core`)
+## 4. The mapping pipeline (`@lightpath-dev/core`)
 
 Every coverage source, browser or Node, goes through the same pure pipeline. Each stage is a function with fixture tests.
 
@@ -165,7 +165,7 @@ Three rules, applied in order:
 
 ## 5. Collectors
 
-### 5.1 Browser collector (`@lightpath/browser`)
+### 5.1 Browser collector (`@lightpath-dev/browser`)
 
 - Launch with `playwright-core` using the installed Chrome (`channel: 'chrome'`) so users don't download a browser. Fall back to Edge (`msedge`), then to a Playwright-managed Chromium if the user installed one.
 - One CDP session per page via `context.newCDPSession(page)`. Enable `Profiler` and `Debugger`. Pauses stay enabled: the hook's `debugger;` is the boundary, and any other pause is resumed at once.
@@ -174,7 +174,7 @@ Three rules, applied in order:
 - **Settle rule**: zero in-flight requests and 300 ms without new requests or long tasks, capped at 5 s.
 - **Navigations**: a full page load resets scripts. Coverage keeps running because the session belongs to the target, but script IDs change, so the collector re-reads `scriptParsed`.
 
-### 5.2 Node agent (`@lightpath/node-agent`)
+### 5.2 Node agent (`@lightpath-dev/node-agent`)
 
 Loaded with `NODE_OPTIONS=--import=<file URL of register.js>`. On Windows the path **must** be a `file://` URL; a raw `C:\...` path fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME` **(measured)**. Quoted URLs with `%20` for spaces work **(measured)**.
 
@@ -224,7 +224,7 @@ V8 coverage counts per isolate, not per request. If two requests overlap in one 
 A per-request fix would need V8 to attribute counts to async contexts. It doesn't, so there is no fix planned.
 
 
-## 7. Daemon (`@lightpath/daemon`)
+## 7. Daemon (`@lightpath-dev/daemon`)
 
 ### 7.1 Responsibilities
 

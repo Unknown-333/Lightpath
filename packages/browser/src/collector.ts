@@ -1,5 +1,5 @@
-import { newTraceId } from '@lightpath/core';
-import { type IngestMessage, type ScriptCoverage, TRACE_HEADER, type TraceId } from '@lightpath/protocol';
+import { newTraceId } from '@lightpath-dev/core';
+import { type IngestMessage, type ScriptCoverage, TRACE_HEADER, type TraceId } from '@lightpath-dev/protocol';
 import type { Browser, BrowserContext, CDPSession, Page, Request, Route } from 'playwright-core';
 import { launchBrowser } from './launch.js';
 import { countsTowardSettle, isNoiseScript, labelFor, shouldTag, type TargetInfo } from './rules.js';

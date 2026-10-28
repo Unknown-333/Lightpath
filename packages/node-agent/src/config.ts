@@ -1,5 +1,5 @@
 /**
- * Environment variables set by `lightpath dev`. Names mirror `AgentEnv` in @lightpath/protocol;
+ * Environment variables set by `lightpath dev`. Names mirror `AgentEnv` in @lightpath-dev/protocol;
  * they're duplicated because the agent must not import runtime code (ADR 0002).
  * test/config.test.ts checks the two stay in sync.
  */

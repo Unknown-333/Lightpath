@@ -1,4 +1,4 @@
-import { AgentEnv } from '@lightpath/protocol';
+import { AgentEnv } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { ENV, readConfig } from '../src/config.js';
 

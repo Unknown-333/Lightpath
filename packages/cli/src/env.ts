@@ -1,4 +1,4 @@
-import { AgentEnv } from '@lightpath/protocol';
+import { AgentEnv } from '@lightpath-dev/protocol';
 
 /**
  * Adds `--import="<url>"` to NODE_OPTIONS without dropping the user's own options (ARCHITECTURE 10).

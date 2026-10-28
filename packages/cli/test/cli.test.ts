@@ -1,4 +1,4 @@
-import type { Trace } from '@lightpath/protocol';
+import type { Trace } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { findLocalUrl, UrlWatcher } from '../src/detect.js';
 import { agentEnv, nodeVersionProblem, toShellCommand, withImport } from '../src/env.js';

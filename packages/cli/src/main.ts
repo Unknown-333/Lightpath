@@ -1,4 +1,4 @@
-import { runMcpServer } from '@lightpath/mcp';
+import { runMcpServer } from '@lightpath-dev/mcp';
 import { cac } from 'cac';
 import { dev } from './dev.js';
 import { doctor } from './doctor.js';

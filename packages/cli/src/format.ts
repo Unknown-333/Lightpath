@@ -1,5 +1,5 @@
-import { lineRanges } from '@lightpath/mcp';
-import type { Trace } from '@lightpath/protocol';
+import { lineRanges } from '@lightpath-dev/mcp';
+import type { Trace } from '@lightpath-dev/protocol';
 import pc from 'picocolors';
 
 const COLLECTOR_COLOR = { browser: pc.cyan, node: pc.green, python: pc.yellow } as const;

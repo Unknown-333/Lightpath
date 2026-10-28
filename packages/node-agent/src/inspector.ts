@@ -1,5 +1,5 @@
 import inspector from 'node:inspector';
-import type { ScriptCoverage } from '@lightpath/protocol';
+import type { ScriptCoverage } from '@lightpath-dev/protocol';
 
 export interface ParsedScript {
   scriptId: string;

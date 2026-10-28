@@ -1,5 +1,5 @@
 {
-  "name": "@lightpath/core",
+  "name": "@lightpath-dev/core",
   "version": "0.0.0",
   "description": "Pure mapping pipeline: V8 coverage ranges to original source lines",
   "license": "MIT",
@@ -19,6 +19,6 @@
   },
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
-    "@lightpath/protocol": "workspace:*"
+    "@lightpath-dev/protocol": "workspace:*"
   }
 }

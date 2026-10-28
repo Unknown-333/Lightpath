@@ -1,7 +1,7 @@
 import { once } from 'node:events';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { IngestMessage } from '@lightpath/protocol';
+import type { IngestMessage } from '@lightpath-dev/protocol';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { BrowserCollector } from '../src/collector.js';
 

@@ -1,4 +1,4 @@
-import type { FunctionCoverage } from '@lightpath/protocol';
+import type { FunctionCoverage } from '@lightpath-dev/protocol';
 
 /** A half-open byte span `[start, end)` with the execution count of its innermost range. */
 export interface Segment {

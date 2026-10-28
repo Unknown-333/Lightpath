@@ -250,10 +250,10 @@ importers:
 
   extensions/vscode:
     dependencies:
-      "@lightpath/core":
+      "@lightpath-dev/core":
         specifier: workspace:*
         version: link:../../packages/core
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../../packages/protocol
     devDependencies:
@@ -269,10 +269,10 @@ importers:
 
   packages/browser:
     dependencies:
-      "@lightpath/core":
+      "@lightpath-dev/core":
         specifier: workspace:*
         version: link:../core
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
       playwright-core:
@@ -281,19 +281,19 @@ importers:
 
   packages/cli:
     dependencies:
-      "@lightpath/browser":
+      "@lightpath-dev/browser":
         specifier: workspace:*
         version: link:../browser
-      "@lightpath/daemon":
+      "@lightpath-dev/daemon":
         specifier: workspace:*
         version: link:../daemon
-      "@lightpath/mcp":
+      "@lightpath-dev/mcp":
         specifier: workspace:*
         version: link:../mcp
-      "@lightpath/node-agent":
+      "@lightpath-dev/node-agent":
         specifier: workspace:*
         version: link:../node-agent
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
       cac:
@@ -312,16 +312,16 @@ importers:
       "@jridgewell/trace-mapping":
         specifier: 0.3.31
         version: 0.3.31
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
 
   packages/daemon:
     dependencies:
-      "@lightpath/core":
+      "@lightpath-dev/core":
         specifier: workspace:*
         version: link:../core
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
       ws:
@@ -334,7 +334,7 @@ importers:
 
   packages/mcp:
     dependencies:
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
       "@modelcontextprotocol/sdk":
@@ -346,7 +346,7 @@ importers:
 
   packages/node-agent:
     devDependencies:
-      "@lightpath/protocol":
+      "@lightpath-dev/protocol":
         specifier: workspace:*
         version: link:../protocol
 

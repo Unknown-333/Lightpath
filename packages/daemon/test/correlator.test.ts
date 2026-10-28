@@ -1,4 +1,4 @@
-import type { IngestMessage } from '@lightpath/protocol';
+import type { IngestMessage } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { Correlator } from '../src/correlator.js';
 import { MemoryStore } from '../src/store.js';

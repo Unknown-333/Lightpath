@@ -37,13 +37,13 @@ Add one whenever a change picks between real options: a new dependency, a new fi
 - How: The daemon binds to `127.0.0.1`; agents refuse non-loopback daemon URLs (D-021); the README states the slowdown.
 - Rejected: A hosted mode. It can come later if users ask.
 
-### D-003 Publish under the `@lightpath` npm scope and as `lightpath-agent` on PyPI
+### D-003 Publish under the `@lightpath-dev` npm scope and as `lightpath-agent` on PyPI
 
-- Date: 2026-10-28
-- Decision: npm packages are `@lightpath/*` with `@lightpath/cli` providing the `lightpath` command; the Python package is `lightpath-agent`.
-- Why: `lightpath` is already taken on both npm (a browser HTTP wrapper) and PyPI. The scope and `lightpath-agent` were free when checked.
-- How: Package names in each `package.json` and `agents/python/pyproject.toml`.
-- Rejected: Renaming the project. The name fits and only the bare package names were taken.
+- Date: 2026-10-28, revised 2026-10-29
+- Decision: npm packages are `@lightpath-dev/*` with `@lightpath-dev/cli` providing the `lightpath` command; the Python package is `lightpath-agent`.
+- Why: The bare name `lightpath` is taken on npm (a browser HTTP wrapper) and on PyPI. The plan was the `@lightpath` scope, but on 2026-10-29 npm reported the organization name `lightpath` as not available, even though no `@lightpath/*` packages exist. The `lightpath-dev` organization was created instead; the same name also works for a GitHub organization and social handles.
+- How: Package names in each `package.json`, every import, the docs, and `agents/python/pyproject.toml`. The command people type is still `lightpath`.
+- Rejected: Renaming the project (only package names were taken); `@lightpathjs` and `@getlightpath` (also free, but less readable).
 
 ---
 
@@ -142,7 +142,7 @@ Add one whenever a change picks between real options: a new dependency, a new fi
 - Date: 2026-10-28
 - Decision: The agent runs inside the user's Node process, loaded with `--import`, and uses only Node built-ins.
 - Why: Measured: an in-process inspector session answers synchronously, so a coverage read is a plain function call with clean boundaries. Any npm dependency could clash with the app's own versions.
-- How: `node:inspector`, `node:diagnostics_channel`, and the global `fetch`. `@lightpath/protocol` is a dev dependency used for types only.
+- How: `node:inspector`, `node:diagnostics_channel`, and the global `fetch`. `@lightpath-dev/protocol` is a dev dependency used for types only.
 - Rejected: `--inspect` with the daemon connecting over a debug port (security risk, port clashes, asynchronous and fuzzy boundaries), `NODE_V8_COVERAGE` (writes only at process exit).
 
 ### D-015 Load the agent with a quoted `file://` URL, appended to `NODE_OPTIONS`
@@ -327,7 +327,7 @@ Add one whenever a change picks between real options: a new dependency, a new fi
 ### D-037 One daemon client for every TypeScript client
 
 - Date: 2026-10-28
-- Decision: `DaemonClient` lives in `@lightpath/protocol` and uses the global `WebSocket`.
+- Decision: `DaemonClient` lives in `@lightpath-dev/protocol` and uses the global `WebSocket`.
 - Why: Measured: Node's and VS Code's built-in `WebSocket` sends no `Origin` header, so it passes the daemon's check. It also keeps the `ws` package out of the extension bundle.
 - How: `packages/protocol/src/client.ts`, used by the CLI tests, the MCP server, and the extension.
 

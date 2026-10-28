@@ -4,7 +4,7 @@ Click anything in your running app and watch the code that ran light up in your 
 
 ## Use it
 
-1. In your project, run `npx @lightpath/cli dev -- npm run dev` (or your own dev command).
+1. In your project, run `npx @lightpath-dev/cli dev -- npm run dev` (or your own dev command).
 2. Open the same folder in VS Code. The extension finds Lightpath through `.lightpath/daemon.json`.
 3. Click something in the browser window Lightpath opened. The lines that ran glow in the editor.
 
