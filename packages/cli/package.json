@@ -1,0 +1,38 @@
+{
+  "name": "@lightpath/cli",
+  "version": "0.0.0",
+  "description": "Click anything in your running app and see which frontend and backend lines ran",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "lightpath": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p test"
+  },
+  "dependencies": {
+    "@lightpath/browser": "workspace:*",
+    "@lightpath/daemon": "workspace:*",
+    "@lightpath/mcp": "workspace:*",
+    "@lightpath/node-agent": "workspace:*",
+    "@lightpath/protocol": "workspace:*",
+    "cac": "7.1.0",
+    "picocolors": "1.1.1"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2"
+  }
+}
