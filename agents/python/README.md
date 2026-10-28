@@ -1,6 +1,6 @@
 # lightpath-agent
 
-Python agent for [Lightpath](../../README.md). It records which lines of your code each HTTP request ran and sends them to the Lightpath daemon, so they light up in your editor next to the frontend code that made the request.
+Python agent for [Lightpath](https://github.com/Unknown-333/Lightpath). It records which lines of your code each HTTP request ran and sends them to the Lightpath daemon, so they light up in your editor next to the frontend code that made the request.
 
 - Python 3.12+ (uses `sys.monitoring`). Standard library only.
 - Does nothing unless the process was started by `lightpath dev`.

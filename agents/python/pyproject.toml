@@ -4,12 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "lightpath-agent"
-version = "0.0.0"
+version = "0.0.1"
 description = "Python agent for Lightpath: see which lines each HTTP request ran, live in your editor."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"
 dependencies = []
+keywords = ["coverage", "tracing", "debugging", "sys.monitoring", "flask", "django", "fastapi"]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Framework :: Django",
@@ -18,6 +19,11 @@ classifiers = [
   "Programming Language :: Python :: 3 :: Only",
   "Topic :: Software Development :: Debuggers",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Unknown-333/Lightpath"
+Source = "https://github.com/Unknown-333/Lightpath/tree/main/agents/python"
+Issues = "https://github.com/Unknown-333/Lightpath/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/lightpath_agent"]

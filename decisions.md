@@ -562,3 +562,11 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: Every meaningful decision during a code change gets an entry here; big ones also get an ADR.
 - Why: Future contributors, and interviewers, should be able to see why the code is the way it is.
 - How: This file, plus the rule in CONTRIBUTING.md.
+
+### D-065 Claim lightpath-agent on PyPI with a real 0.0.1 release
+
+- Date: 2026-10-29
+- Decision: Publish the working Python agent as `0.0.1` (pre-alpha) to claim the name, instead of an empty placeholder.
+- Why: PyPI has no way to reserve a name; the first upload claims it. PyPI removes packages that exist only to hold a name.
+- How: Version set in `agents/python/pyproject.toml` and `__version__`; added keywords and `[project.urls]`; the README now links to GitHub with an absolute URL so it works on PyPI. Built with `python -m build`, checked with `twine check`, and installed into a clean virtual environment before uploading. The upload uses an account-wide token once; afterwards it's replaced with a token scoped to the `lightpath-agent` project.
+- Rejected: An empty placeholder package.

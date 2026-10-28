@@ -14,7 +14,7 @@ from .agent import Agent
 from .config import read_config
 
 __all__ = ["Agent", "LightpathASGIMiddleware", "LightpathMiddleware", "get_agent"]
-__version__ = "0.0.0"
+__version__ = "0.0.1"
 
 _lock = threading.Lock()
 _agent: Agent | None = None
