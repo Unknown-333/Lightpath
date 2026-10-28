@@ -34,7 +34,8 @@ The VS Code extension: open this folder in VS Code and press F5 ("Lightpath exte
 2. **The Node agent runs inside other people's apps.** It has no npm dependencies, never throws into the app, never keeps the process alive, and only talks to localhost.
 3. **Measure, then write it down.** If you learn how V8, Chrome, or Python actually behaves, add it to the relevant ADR or `docs/ARCHITECTURE.md` and mark it **(measured)**.
 4. **Protocol changes** go in `packages/protocol` and `docs/PROTOCOL.md` in the same commit.
-5. **Big decisions** get an ADR in `docs/adr/`.
+5. **Log every meaningful decision** in [decisions.md](decisions.md) in the same commit as the change: what was chosen, why, how, and what was rejected. Adding a dependency always counts. Big decisions also get an ADR in `docs/adr/`.
+6. **Keep [flow.md](flow.md) true.** If a change adds an entry point or changes which function calls which, update it.
 
 ## Layout
 
