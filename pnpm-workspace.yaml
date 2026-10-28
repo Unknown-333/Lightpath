@@ -1,0 +1,15 @@
+packages:
+  - packages/*
+  - extensions/*
+  - examples/*
+
+# pnpm blocks dependency install scripts by default. These two need theirs:
+# esbuild verifies its platform binary; vsce-sign installs its signing tool.
+allowBuilds:
+  "@vscode/vsce-sign": true
+  esbuild: true
+
+# pnpm holds back packages published in the last few days (supply-chain policy).
+# vsce 4.1.0 was too new when this was set up; remove this once it ages past the window.
+minimumReleaseAgeExclude:
+  - "@vscode/vsce@4.1.0"

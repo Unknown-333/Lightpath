@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/protocol" },
+    { "path": "packages/core" },
+    { "path": "packages/daemon" },
+    { "path": "packages/node-agent" },
+    { "path": "packages/browser" },
+    { "path": "packages/mcp" },
+    { "path": "packages/cli" }
+  ]
+}
