@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lightpath-agent"
+version = "0.0.0"
+description = "Python agent for Lightpath: see which lines each HTTP request ran, live in your editor."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = []
+classifiers = [
+  "Development Status :: 2 - Pre-Alpha",
+  "Framework :: Django",
+  "Framework :: FastAPI",
+  "Framework :: Flask",
+  "Programming Language :: Python :: 3 :: Only",
+  "Topic :: Software Development :: Debuggers",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lightpath_agent"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
