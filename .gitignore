@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.tsbuildinfo
+*.vsix
+coverage/
+
+# Lightpath writes its daemon discovery file and token here
+.lightpath/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+
+# OS and editors
+.DS_Store
+Thumbs.db
+*.log
+
+# Personal notes kept next to the repo, not part of it
+project-ideas-research.md
