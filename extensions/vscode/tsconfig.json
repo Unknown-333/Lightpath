@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "lib": ["es2023", "dom"],
+    "types": ["node", "vscode"]
+  },
+  "include": ["src"],
+  "references": [{ "path": "../../packages/protocol" }, { "path": "../../packages/core" }]
+}

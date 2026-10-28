@@ -1,0 +1,115 @@
+{
+  "name": "lightpath-vscode",
+  "displayName": "Lightpath",
+  "description": "Click anything in your running app and watch the code that ran light up in your editor.",
+  "version": "0.0.0",
+  "publisher": "lightpath",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "vscode": "^1.100.0"
+  },
+  "categories": [
+    "Debuggers",
+    "Visualization"
+  ],
+  "keywords": [
+    "coverage",
+    "runtime",
+    "trace",
+    "debug",
+    "heatmap"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [
+    "workspaceContains:.lightpath/daemon.json",
+    "onView:lightpath.traces"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "lightpath",
+          "title": "Lightpath",
+          "icon": "$(flame)"
+        }
+      ]
+    },
+    "views": {
+      "lightpath": [
+        {
+          "id": "lightpath.traces",
+          "name": "Actions"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "lightpath.replay",
+        "title": "Lightpath: Replay Last Action",
+        "icon": "$(play)"
+      },
+      {
+        "command": "lightpath.clear",
+        "title": "Lightpath: Clear Highlights",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "lightpath.toggleLive",
+        "title": "Lightpath: Pause or Resume Live Highlighting"
+      },
+      {
+        "command": "lightpath.togglePin",
+        "title": "Lightpath: Keep Highlights (Don't Fade)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "lightpath.replay",
+          "when": "view == lightpath.traces",
+          "group": "navigation"
+        },
+        {
+          "command": "lightpath.clear",
+          "when": "view == lightpath.traces",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "lightpath.replay",
+          "when": "view == lightpath.traces && viewItem == trace",
+          "group": "inline"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Lightpath",
+      "properties": {
+        "lightpath.fadeSeconds": {
+          "type": "number",
+          "default": 10,
+          "minimum": 0,
+          "description": "Seconds before highlights fade out. 0 keeps them until the next action."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "bundle": "node esbuild.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p . && tsc -p test",
+    "package": "node esbuild.mjs --production && vsce package --no-dependencies"
+  },
+  "dependencies": {
+    "@lightpath/core": "workspace:*",
+    "@lightpath/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/vscode": "1.100.0",
+    "@vscode/vsce": "4.1.0",
+    "esbuild": "0.28.2"
+  }
+}
