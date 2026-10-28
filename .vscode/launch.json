@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Lightpath extension (example shop)",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": [
+        "--extensionDevelopmentPath=${workspaceFolder}/extensions/vscode",
+        "${workspaceFolder}/examples/shop"
+      ],
+      "outFiles": ["${workspaceFolder}/extensions/vscode/dist/**/*.cjs"],
+      "preLaunchTask": "bundle extension"
+    }
+  ]
+}
