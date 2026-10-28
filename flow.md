@@ -8,15 +8,15 @@ Paths are relative to the repo root. `#name` means a private method on a class.
 
 Lightpath isn't one program. A normal session has up to five processes:
 
-| Process | Entry point | Started by |
-|---|---|---|
-| **CLI + daemon + browser collector** (one process) | `packages/cli/src/bin.ts` | You, with `lightpath dev -- <command>` |
-| **Your dev command** (for example `node dev.mjs`, `npm run dev`) | your own script | the CLI, with `spawn` |
-| **Your Node backend**, with the agent inside it | `packages/node-agent/src/register.ts` (loaded before your code by `--import`) | your dev command, inheriting `NODE_OPTIONS` |
-| **Your Python backend**, with the agent inside it | `agents/python/src/lightpath_agent/wsgi.py` or `asgi.py` middleware | you, by adding the middleware |
-| **Chrome** | the init script `HOOK_SOURCE` in `packages/browser/src/collector.ts` runs in every page | the browser collector, through Playwright |
-| **VS Code extension** | `activate()` in `extensions/vscode/src/extension.ts` | VS Code, when `.lightpath/daemon.json` exists |
-| **MCP server** | `packages/cli/src/bin.ts` with `lightpath mcp` | your coding agent |
+| Process                                                          | Entry point                                                                             | Started by                                    |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------- |
+| **CLI + daemon + browser collector** (one process)               | `packages/cli/src/bin.ts`                                                               | You, with `lightpath dev -- <command>`        |
+| **Your dev command** (for example `node dev.mjs`, `npm run dev`) | your own script                                                                         | the CLI, with `spawn`                         |
+| **Your Node backend**, with the agent inside it                  | `packages/node-agent/src/register.ts` (loaded before your code by `--import`)           | your dev command, inheriting `NODE_OPTIONS`   |
+| **Your Python backend**, with the agent inside it                | `agents/python/src/lightpath_agent/wsgi.py` or `asgi.py` middleware                     | you, by adding the middleware                 |
+| **Chrome**                                                       | the init script `HOOK_SOURCE` in `packages/browser/src/collector.ts` runs in every page | the browser collector, through Playwright     |
+| **VS Code extension**                                            | `activate()` in `extensions/vscode/src/extension.ts`                                    | VS Code, when `.lightpath/daemon.json` exists |
+| **MCP server**                                                   | `packages/cli/src/bin.ts` with `lightpath mcp`                                          | your coding agent                             |
 
 How they talk:
 
@@ -190,16 +190,16 @@ Every `send` here is `ingestLocal()` in `packages/cli/src/dev.ts`, so it goes st
 
 `packages/daemon/src/correlator.ts`, `ingest()` switches on `message.type`:
 
-| Message | What happens |
-|---|---|
-| `hello` | Records the agent's kind and pid |
-| `scripts` | Stores script info (URL, hash, inline source map) by script ID, per agent |
-| `source` | Caches the script source by hash |
-| `traceStart` | Opens a browser trace, or merges into one a backend delta already opened |
-| `delta` (background) | Ignored for now |
-| `delta` (action) | `#onDelta()`, below |
-| `lines` (Python) | `#onLines()`: each path through `resolveFile()`, then `#addFile()` with count 1 per line |
-| `traceEnd` | Sets `endedAt` and publishes |
+| Message              | What happens                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `hello`              | Records the agent's kind and pid                                                         |
+| `scripts`            | Stores script info (URL, hash, inline source map) by script ID, per agent                |
+| `source`             | Caches the script source by hash                                                         |
+| `traceStart`         | Opens a browser trace, or merges into one a backend delta already opened                 |
+| `delta` (background) | Ignored for now                                                                          |
+| `delta` (action)     | `#onDelta()`, below                                                                      |
+| `lines` (Python)     | `#onLines()`: each path through `resolveFile()`, then `#addFile()` with count 1 per line |
+| `traceEnd`           | Sets `endedAt` and publishes                                                             |
 
 `#onDelta()`:
 
@@ -317,17 +317,17 @@ The daemon handles it in `#onLines()` (section 6.2).
 
 ## 11. Commands: what runs, in order
 
-| Command | Order |
-|---|---|
-| `pnpm build` | `tsc -b` → `protocol`, `core`, `daemon`, `node-agent`, `browser`, `mcp`, `cli`, each into its `dist/` |
-| `pnpm typecheck` | `pnpm build`, then each package's `typecheck` (`tsc -p test`; the extension also checks `src`; the shop checks itself) |
-| `pnpm lint` | `biome check .` |
-| `pnpm test` | `vitest run` in every package that has a `test` script |
-| `pnpm test:py` | `python -m unittest discover` in `agents/python/tests` |
-| `pnpm check` | `typecheck` → `lint` → `test` → `test:py` (what CI runs) |
-| `pnpm bundle` | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs` |
-| `pnpm e2e` | `pnpm build`, then `scripts/e2e-shop.mjs` (below) |
-| `pnpm --filter shop lightpath` | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder |
+| Command                        | Order                                                                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| `pnpm build`                   | `tsc -b` → `protocol`, `core`, `daemon`, `node-agent`, `browser`, `mcp`, `cli`, each into its `dist/`                  |
+| `pnpm typecheck`               | `pnpm build`, then each package's `typecheck` (`tsc -p test`; the extension also checks `src`; the shop checks itself) |
+| `pnpm lint`                    | `biome check .`                                                                                                        |
+| `pnpm test`                    | `vitest run` in every package that has a `test` script                                                                 |
+| `pnpm test:py`                 | `python -m unittest discover` in `agents/python/tests`                                                                 |
+| `pnpm check`                   | `typecheck` → `lint` → `test` → `test:py` (what CI runs)                                                               |
+| `pnpm bundle`                  | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs`                                           |
+| `pnpm e2e`                     | `pnpm build`, then `scripts/e2e-shop.mjs` (below)                                                                      |
+| `pnpm --filter shop lightpath` | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder                                                 |
 
 `scripts/e2e-shop.mjs`, in order:
 
