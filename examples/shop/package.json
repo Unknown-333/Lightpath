@@ -1,0 +1,23 @@
+{
+  "name": "shop",
+  "private": true,
+  "type": "module",
+  "description": "Example app for Lightpath: React + Vite frontend, Express API in type-stripped TypeScript",
+  "scripts": {
+    "dev": "node dev.mjs",
+    "lightpath": "node ../../packages/cli/dist/bin.js dev -- node dev.mjs",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "express": "5.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "vite": "8.3.5"
+  }
+}
