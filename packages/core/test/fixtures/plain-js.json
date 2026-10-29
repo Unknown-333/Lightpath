@@ -1,0 +1,107 @@
+{
+  "name": "plain-js",
+  "note": "Plain JavaScript run as-is.",
+  "capturedWith": {
+    "node": "v24.13.0",
+    "loader": "none"
+  },
+  "sampleSha256": "8f25479085fa20b5063b42995ce0b972c7ab4fd28ca20c29b9f8fb536c67f4c9",
+  "coverage": {
+    "scriptId": "1",
+    "url": "file:///repo/samples/plain-js.mjs",
+    "functions": [
+      {
+        "functionName": "shippingCents",
+        "ranges": [
+          {
+            "startOffset": 134,
+            "endOffset": 348,
+            "count": 2
+          },
+          {
+            "startOffset": 211,
+            "endOffset": 230,
+            "count": 0
+          },
+          {
+            "startOffset": 287,
+            "endOffset": 347,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "<instance_members_initializer>",
+        "ranges": [
+          {
+            "startOffset": 372,
+            "endOffset": 383,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "add",
+        "ranges": [
+          {
+            "startOffset": 388,
+            "endOffset": 569,
+            "count": 3
+          },
+          {
+            "startOffset": 487,
+            "endOffset": 507,
+            "count": 1
+          },
+          {
+            "startOffset": 507,
+            "endOffset": 548,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "",
+        "ranges": [
+          {
+            "startOffset": 446,
+            "endOffset": 466,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "total",
+        "ranges": [
+          {
+            "startOffset": 573,
+            "endOffset": 711,
+            "count": 1
+          },
+          {
+            "startOffset": 642,
+            "endOffset": 691,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "run",
+        "ranges": [
+          {
+            "startOffset": 761,
+            "endOffset": 1119,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      }
+    ]
+  },
+  "source": "// Plain JavaScript, run by Node as-is. V8's offsets match this file exactly.\nconst RATES = { standard: 500, express: 1500 };\n\nexport function shippingCents(method, subtotalCents) {\n  if (subtotalCents >= 5000) {\n    return 0;\n  }\n  const rate = RATES[method];\n  if (rate === undefined) throw new Error(`unknown method ${method}`);\n  return rate;\n}\n\nexport class Cart {\n  #lines = [];\n\n  add(sku, qty = 1) {\n    const existing = this.#lines.find((l) => l.sku === sku);\n    if (existing) existing.qty += qty;\n    else this.#lines.push({ sku, qty });\n    return this;\n  }\n\n  total(prices) {\n    let sum = 0;\n    for (const line of this.#lines) {\n      sum += prices[line.sku] * line.qty;\n    }\n    return sum;\n  }\n\n  clear() {\n    this.#lines = [];\n  }\n}\n\nexport async function run() {\n  const cart = new Cart().add('mug').add('tea', 2).add('mug');\n  const subtotal = cart.total({ mug: 1200, tea: 800 });\n  const shipping = shippingCents('standard', subtotal);\n  try {\n    shippingCents('drone', 0);\n  } catch {\n    // Expected: drone delivery doesn't exist.\n  }\n  await Promise.resolve();\n  return subtotal + shipping;\n}\n"
+}

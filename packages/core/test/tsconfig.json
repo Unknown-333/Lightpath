@@ -8,5 +8,6 @@
     "sourceMap": false
   },
   "include": ["**/*.ts"],
+  "exclude": ["fixtures/samples"],
   "references": [{ "path": ".." }]
 }

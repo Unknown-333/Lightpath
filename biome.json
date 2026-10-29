@@ -9,7 +9,8 @@
       "!**/.lightpath",
       "!**/*.vsix",
       "!agents/python",
-      "!pnpm-lock.yaml"
+      "!pnpm-lock.yaml",
+      "!packages/core/test/fixtures/*.json"
     ]
   },
   "formatter": {

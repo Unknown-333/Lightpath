@@ -20,5 +20,8 @@
   "dependencies": {
     "@jridgewell/trace-mapping": "0.3.31",
     "@lightpath-dev/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "tsx": "4.23.15"
   }
 }

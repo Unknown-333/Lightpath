@@ -1,0 +1,95 @@
+{
+  "name": "tsx-transform",
+  "note": "TypeScript with an enum and parameter properties, compiled by tsx (esbuild) with an inline map.",
+  "capturedWith": {
+    "node": "v24.13.0",
+    "loader": "tsx"
+  },
+  "sampleSha256": "0d8a4db0d8f75f6182307fd65081367ce6d81e800d56839bcc9749881a9270f2",
+  "coverage": {
+    "scriptId": "1",
+    "url": "file:///repo/samples/tsx-transform.ts",
+    "functions": [
+      {
+        "functionName": "Order",
+        "ranges": [
+          {
+            "startOffset": 256,
+            "endOffset": 319,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "<instance_members_initializer>",
+        "ranges": [
+          {
+            "startOffset": 319,
+            "endOffset": 328,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "pay",
+        "ranges": [
+          {
+            "startOffset": 357,
+            "endOffset": 483,
+            "count": 1
+          },
+          {
+            "startOffset": 430,
+            "endOffset": 482,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "get label",
+        "ranges": [
+          {
+            "startOffset": 483,
+            "endOffset": 592,
+            "count": 1
+          },
+          {
+            "startOffset": 539,
+            "endOffset": 590,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "run",
+        "ranges": [
+          {
+            "startOffset": 593,
+            "endOffset": 697,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      }
+    ]
+  },
+  "source": "var __defProp=Object.defineProperty;var __name=(target,value)=>__defProp(target,\"name\",{value,configurable:true});var Status=(Status2=>{Status2[\"Pending\"]=\"pending\";Status2[\"Paid\"]=\"paid\";Status2[\"Failed\"]=\"failed\";return Status2})(Status||{});class Order{constructor(id,status=\"pending\"){this.id=id;this.status=status}id;status;static{__name(this,\"Order\")}pay(ok){if(ok){this.status=\"paid\";return`\\u6CE8\\u6587 ${this.id} \\u2705`}this.status=\"failed\";return`order ${this.id} failed`}get label(){switch(this.status){case\"paid\":return\"paid\";case\"failed\":return\"failed\";default:return\"pending\"}}}async function run(){const order=new Order(7);const message=order.pay(true);return[message,order.label]}__name(run,\"run\");export{Order,Status,run};\n\n",
+  "sourceMap": {
+    "version": 3,
+    "mappings": "kHAEO,IAAK,QAAAA,SAAL,CACLA,QAAA,WAAU,UACVA,QAAA,QAAO,OACPA,QAAA,UAAS,SAHC,OAAAA,UAAA,YAML,MAAM,KAAM,CACjB,YACkB,GACR,OAAiB,UACzB,CAFgB,WACR,kBACP,CAFe,GACR,OAXZ,MAQmB,sBAMjB,IAAI,GAAqB,CACvB,GAAI,GAAI,CACN,KAAK,OAAS,OACd,MAAO,gBAAM,KAAK,EAAE,SACtB,CACA,KAAK,OAAS,SACd,MAAO,SAAS,KAAK,EAAE,SACzB,CAEA,IAAI,OAAgB,CAClB,OAAQ,KAAK,OAAQ,CACnB,IAAK,OACH,MAAO,OACT,IAAK,SACH,MAAO,SACT,QACE,MAAO,SACX,CACF,CACF,CAEA,eAAsB,KAAyB,CAC7C,MAAM,MAAQ,IAAI,MAAM,CAAC,EACzB,MAAM,QAAU,MAAM,IAAI,IAAI,EAC9B,MAAO,CAAC,QAAS,MAAM,KAAK,CAC9B,CAJsB",
+    "names": [
+      "Status"
+    ],
+    "ignoreList": [],
+    "sources": [
+      "file:///repo/samples/tsx-transform.ts"
+    ],
+    "sourcesContent": [
+      null
+    ]
+  }
+}

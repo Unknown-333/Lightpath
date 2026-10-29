@@ -316,6 +316,10 @@ importers:
       '@lightpath-dev/protocol':
         specifier: workspace:*
         version: link:../protocol
+    devDependencies:
+      tsx:
+        specifier: 4.23.15
+        version: 4.23.15
 
   packages/daemon:
     dependencies:
@@ -3330,7 +3334,6 @@ snapshots:
       esbuild: 0.28.2
     optionalDependencies:
       fsevents: 2.3.3
-    optional: true
 
   tunnel@0.0.6: {}
 

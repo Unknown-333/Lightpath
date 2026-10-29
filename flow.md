@@ -340,6 +340,13 @@ The daemon handles it in `#onLines()` (section 6.2).
 7. Presses "Checkout", waits for "Order #… placed", waits for a trace that has Node files, checks files, the request, a dark line, and a lit line.
 8. Stops the browser, kills the shop's process tree, closes the daemon, exits 0 or 1.
 
+`packages/core/scripts/capture-fixtures.mjs` (run by hand when a sample changes), in order:
+
+1. For each sample in `packages/core/test/fixtures/samples/`, spawns a child Node process running the same script with `--child <file>`. The `tsx` sample's child also gets `--import tsx`.
+2. In the child: opens an in-process inspector session, enables `Debugger` (to receive `scriptParsed`) and precise coverage, imports the sample, takes and discards the load-time coverage, awaits `run()`, takes the delta, reads the script source with `Debugger.getScriptSource`, and prints JSON.
+3. Back in the parent: `portable()` decodes the inline source map, swaps this machine's paths for `file:///repo/samples`, and cuts the trailing `//# sourceMappingURL` comment.
+4. Writes `<name>.json` with the sample's SHA-256. `test/fixtures.test.ts` runs each fixture through `mapScript()` and compares against hand-checked lines; it doesn't regenerate them.
+
 ## 12. Where to start reading
 
 1. `packages/core/src/flatten.ts` and `lines.ts`: the core idea in about 150 lines.

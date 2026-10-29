@@ -1,0 +1,48 @@
+{
+  "name": "non-ascii",
+  "note": "Emoji, Japanese, and Nepali text in and before code.",
+  "capturedWith": {
+    "node": "v24.13.0",
+    "loader": "none"
+  },
+  "sampleSha256": "9a9ecb26a43a968b12a9217f65b683226438a4a93863ae14e8134b192a390270",
+  "coverage": {
+    "scriptId": "1",
+    "url": "file:///repo/samples/non-ascii.mjs",
+    "functions": [
+      {
+        "functionName": "greet",
+        "ranges": [
+          {
+            "startOffset": 151,
+            "endOffset": 303,
+            "count": 3
+          },
+          {
+            "startOffset": 233,
+            "endOffset": 265,
+            "count": 1
+          },
+          {
+            "startOffset": 265,
+            "endOffset": 302,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "run",
+        "ranges": [
+          {
+            "startOffset": 312,
+            "endOffset": 401,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      }
+    ]
+  },
+  "source": "// Non-ASCII text: 🛒 カート 购物车 कार्ट. V8 counts UTF-16 code units, so each emoji is two.\nconst GREETINGS = { ne: 'नमस्ते 🙏', ja: 'こんにちは 👋' };\n\nexport function greet(lang, name) {\n  const greeting = GREETINGS[lang];\n  if (!greeting) {\n    return `👋👋 ${name}`;\n  }\n  return `${greeting}, ${name} 🎉`;\n}\n\nexport function run() {\n  return [greet('ne', 'आयुष'), greet('ja', '花子'), greet('xx', 'Sam')];\n}\n"
+}

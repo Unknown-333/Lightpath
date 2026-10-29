@@ -1,0 +1,74 @@
+{
+  "name": "ts-strip",
+  "note": "TypeScript run with Node's type stripping.",
+  "capturedWith": {
+    "node": "v24.13.0",
+    "loader": "strip-types"
+  },
+  "sampleSha256": "bddd2d7b450260140ed86b4bf1f4e742f8f5a81a999f3fe66c8c1dba7242d7d6",
+  "coverage": {
+    "scriptId": "1",
+    "url": "file:///repo/samples/ts-strip.ts",
+    "functions": [
+      {
+        "functionName": "priceLines",
+        "ranges": [
+          {
+            "startOffset": 183,
+            "endOffset": 461,
+            "count": 1
+          },
+          {
+            "startOffset": 298,
+            "endOffset": 443,
+            "count": 3
+          },
+          {
+            "startOffset": 385,
+            "endOffset": 408,
+            "count": 1
+          },
+          {
+            "startOffset": 408,
+            "endOffset": 443,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "applyCoupon",
+        "ranges": [
+          {
+            "startOffset": 470,
+            "endOffset": 673,
+            "count": 1
+          },
+          {
+            "startOffset": 549,
+            "endOffset": 567,
+            "count": 0
+          },
+          {
+            "startOffset": 612,
+            "endOffset": 615,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "run",
+        "ranges": [
+          {
+            "startOffset": 682,
+            "endOffset": 958,
+            "count": 1
+          }
+        ],
+        "isBlockCoverage": true
+      }
+    ]
+  },
+  "source": "// TypeScript run with Node's type stripping. Types become spaces, so no offset moves.\n                \n              \n              \n \n\n                                     \n\nexport function priceLines(lines                 , prices        )         {\n  let total = 0;\n  for (const line of lines) {\n    const price                     = prices[line.sku];\n    if (price === undefined) {\n      continue;\n    }\n    total += price * line.qty;\n  }\n  return total;\n}\n\nexport function applyCoupon(totalCents        , code         )         {\n  if (!code) return totalCents;\n  const percent = code === 'WELCOME10' ? 10 : 0;\n  return Math.round(totalCents * (1 - percent / 100));\n}\n\nexport async function run()                  {\n  const lines         = [\n    { sku: 'mug', qty: 2 },\n    { sku: 'gone', qty: 1 },\n    { sku: 'tea', qty: 3 },\n  ];\n  const total = priceLines(lines, { mug: 1200, tea: 800 }                 );\n  return applyCoupon(total, 'WELCOME10');\n}\n\n\n//# sourceURL=file:///C:/Users/user/Desktop/Projects/Lightpath/packages/core/test/fixtures/samples/ts-strip.ts"
+}
