@@ -135,6 +135,8 @@ export class BrowserCollector {
   #cdp: CDPSession | undefined;
   #active: TraceId | undefined;
   #warnedNoWebpackMaps = false;
+  /** True from a `beforeunload` during an action until the next document's `load` (D-091). */
+  #navigating = false;
 
   /** Logs a message and shows it to the user once (the CLI prints notices in yellow). */
   #notify(message: string): void {
@@ -219,7 +221,13 @@ export class BrowserCollector {
     page.on('requestfailed', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
     // Page load compiles and runs most of the app. Reading that now keeps the first action's
     // pause as short as later ones (bench/README.md: 40 ms vs 8 ms at 12,000 functions).
-    page.on('load', () => this.#afterLoad());
+    page.on('load', () => {
+      if (this.#navigating) {
+        this.#navigating = false;
+        this.#settle.requestEnded();
+      }
+      this.#afterLoad();
+    });
 
     await page.goto(this.#opts.url);
     this.#log(`browser open at ${this.#opts.url}`);
@@ -290,6 +298,11 @@ export class BrowserCollector {
     });
 
     const reason = await settled;
+    // A navigation that never loaded (a download, a cancelled leave) mustn't hold later windows open.
+    if (this.#navigating) {
+      this.#navigating = false;
+      this.#settle.requestEnded();
+    }
     const coverage = await this.#take();
     await this.#emit('action', coverage, at, traceId);
     this.#opts.send({ type: 'traceEnd', traceId, at: Date.now(), settled: reason });
@@ -374,6 +387,12 @@ export class BrowserCollector {
    */
   async #onLeave(): Promise<void> {
     const traceId = this.#active;
+    // The page is leaving during an action: count the navigation as in flight until the next
+    // document's `load`, so a slow read here can't end the window before the new page runs (D-091).
+    if (traceId && !this.#navigating) {
+      this.#navigating = true;
+      this.#settle.requestStarted();
+    }
     try {
       const coverage = await this.#take();
       if (traceId) {

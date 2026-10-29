@@ -750,3 +750,10 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: When the clicked element isn't inside a button, link, input, label, ARIA role, or `data-testid` element, the hook uses its text for the label only if it has no child elements and isn't `html`, `body`, `script`, or `style`.
 - Why: A click on an empty area in tududi was labelled `html: (function () { function sanitize(value)…`: the target was the `html` element, whose `textContent` is the whole page, inline scripts included. A label should name what was clicked, and a container's text doesn't.
 - How: `describe()` in `HOOK_SOURCE` (`packages/browser/src/collector.ts`). Such clicks are now labelled by tag alone (`html`, `div`).
+
+### D-091 Hold a click's window open across a full-page navigation
+
+- Date: 2026-10-29
+- Decision: When the page pauses in `beforeunload` during an action, the collector counts the navigation as one request in flight until the next document's `load` event. If no `load` comes (a download, a cancelled leave), the count is cleared when the window ends.
+- Why: The navigation test failed once on Linux CI (PR #2) with the new page's `arrived` missing from the trace, and passed on rerun. A link click makes no request until after the `beforeunload` pause, so the 300 ms quiet timer was already running while the collector read coverage there. On a slow machine it could fire in that gap, and the closing read then ran before the new page's scripts. Waiting for `load` makes the window cover the whole navigation.
+- How: `#navigating` in `packages/browser/src/collector.ts`, set in `#onLeave`, cleared by the page's `load` listener or after `settled` in `#click`. The real-browser suite passed 3 runs in a row.
