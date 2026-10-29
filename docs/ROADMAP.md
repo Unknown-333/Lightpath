@@ -2,7 +2,7 @@
 
 Each milestone ends with something you can run and a post you can publish. Don't start a milestone until the previous one's exit check passes.
 
-**Status (October 29, 2026):** M1 and M2 are done (see below). The skeleton already passed the M3 exit check on the example shop. `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
+**Status (October 29, 2026):** M1, M2, and M3 are done (see below). `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
 
 | Milestone                     | Goal                                                                                                         | Exit check                                                                                                                                                    | Post                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -37,16 +37,28 @@ The original M2 steps (agent startup, daemon ingest, `lightpath dev`, the agent 
 | Fastify and Nest apps                                                                       | **Done.** `examples/backends` has the same checkout on Fastify 5 (type stripping) and NestJS 12 (decorators, built by tsc, ESM). `pnpm e2e:api` checks route, service, and shared files, dark and lit lines, and that Nest's shared checkout lines equal Fastify's. Nothing in Lightpath needed to change: both run on `node:http`, which publishes the `diagnostics_channel` events the agent uses |
 | Coverage read cost on a large app                                                           | **Done.** `bench/node-requests.mjs`, results in [bench/README.md](../bench/README.md): about 0.45 ms per 1,000 compiled functions per read, two reads per request. Express, Fastify, and Nest examples pay 4 to 6 ms per request; a 50,000-function app about 50 ms                                                                                                                                 |
 
+## M3 (done, October 29, 2026)
+
+The exit check (click Checkout, see `Cart.tsx` and the backend in one trace) passed in the skeleton. M3 hardened the browser side:
+
+| Step                  | Result                                                                                                                                                                        |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Keyboard boundary     | Enter and Space that activate something open a trace, labelled with the key; typing never does (D-079). Real-browser tests                                                    |
+| Full-page navigations | A `beforeunload` pause keeps the leaving page's code in the trace; the new page's startup joins it, and the page request is tagged (D-080)                                    |
+| Pause benchmark       | `bench/browser-pause.mjs`: under 12 ms p99 up to 3,000 React components. Above the 20 ms budget the boundary moves to the mouse release, where nothing is lost (D-081, D-082) |
+| Noise rules           | Files touched only by timers or polling are marked `background` and toned down in every client (D-083)                                                                        |
+| CSS-in-JS             | styled-components and Emotion interpolations map correctly; no change needed                                                                                                  |
+
 ## Open questions to answer during the build
 
-| Question                                                                                                  | Answer in                                                                                                                                                 |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                             | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003                                                                                           |
-| ~~How long is the boundary pause on a large React app, and does it ever exceed a human press?~~           | **Answered:** under 12 ms p99 up to 3,000 components; above the 20 ms budget the boundary moves to the release. See [bench/README.md](../bench/README.md) |
-| Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?           | **Answered for JSX/TSX: yes** (golden test). CSS-in-JS still to check in M3                                                                               |
-| ~~How many compiled functions does a real Express or Fastify app have, and what does a take cost there?~~ | **Answered:** 4,400 (Express), 6,000 (Fastify), 8,500 (Nest); about 2 to 3 ms per read. See [bench/README.md](../bench/README.md)                         |
-| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                                  | **Answered: yes** (core fixture with emoji and CJK text)                                                                                                  |
-| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                                 | M6 benchmark                                                                                                                                              |
+| Question                                                                                                  | Answer in                                                                                                                                                                              |
+| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                             | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003                                                                                                                        |
+| ~~How long is the boundary pause on a large React app, and does it ever exceed a human press?~~           | **Answered:** under 12 ms p99 up to 3,000 components; above the 20 ms budget the boundary moves to the release. See [bench/README.md](../bench/README.md)                              |
+| ~~Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?~~       | **Answered: yes.** JSX/TSX in the golden test; styled-components 6.6 and Emotion 11.14 (no Babel plugins) map interpolation functions and their branches to the right lines (M3 check) |
+| ~~How many compiled functions does a real Express or Fastify app have, and what does a take cost there?~~ | **Answered:** 4,400 (Express), 6,000 (Fastify), 8,500 (Nest); about 2 to 3 ms per read. See [bench/README.md](../bench/README.md)                                                      |
+| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                                  | **Answered: yes** (core fixture with emoji and CJK text)                                                                                                                               |
+| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                                 | M6 benchmark                                                                                                                                                                           |
 
 ## Later
 

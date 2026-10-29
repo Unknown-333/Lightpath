@@ -74,7 +74,8 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design, [docs/PRO
 - Chromium-based browsers only (precise coverage is a DevTools Protocol feature).
 - The app runs slower while Lightpath is on. Each backend request pays for two coverage reads: 4 to 6 ms on the Express, Fastify, and Nest examples, about 50 ms in an app with 50,000 functions ([bench/README.md](bench/README.md)). Fine for development, not for load tests.
 - Overlapping requests in one process can't be separated; their traces are marked "overlapped".
-- Next.js server components, worker threads, and keyboard-triggered actions aren't supported yet.
+- In very large apps (over about 3,000 React components in dev mode), clicks are traced from the mouse release, so `pointerdown` and `mousedown` handlers aren't included ([bench/README.md](bench/README.md)).
+- Next.js server components and worker threads aren't supported yet.
 
 ## Contributing
 
