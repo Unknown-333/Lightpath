@@ -1,0 +1,18 @@
+{
+  // Builds the API the classic way: tsc writes JavaScript plus a .map file next to each file.
+  // Lightpath's backend e2e runs `node dist/server/index.js` to test external source maps.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": "server",
+    "outDir": "dist/server",
+    "types": ["node"]
+  },
+  "include": ["server"]
+}

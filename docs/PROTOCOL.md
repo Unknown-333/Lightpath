@@ -49,7 +49,7 @@ interface ScriptInfo {
   url: string;
   hash: string; // from Debugger.scriptParsed
   length: number;
-  sourceMapURL?: string; // must be a data: URL; collectors inline external maps (the daemon never fetches)
+  sourceMapURL?: string; // must be a data: URL; the Node agent inlines external .map files from the workspace (the daemon never reads files)
 }
 ```
 

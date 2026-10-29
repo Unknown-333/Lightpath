@@ -4,13 +4,14 @@
 //   strip      node server/index.ts           Node's type stripping (positions unchanged, no map)
 //   tsx        tsx server/index.ts            esbuild rewrites the code; lines come from tsx's map
 //   tsx-watch  tsx watch server/index.ts      the same, through tsx's watcher process
+//   tsc        node dist/server/index.js      built by tsc first; lines come from external .map files
 //
 // For each, it POSTs one order and reads the trace from the daemon over its client WebSocket.
-// Type stripping keeps every offset, so its lines are the ground truth: the tsx runs must light
+// Type stripping keeps every offset, so its lines are the ground truth: the other runs must light
 // exactly the same lines in every file.
 //
 // Usage: pnpm build && node scripts/e2e-api.mjs
-import { execSync, spawn } from 'node:child_process';
+import { execFileSync, execSync, spawn } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
@@ -34,7 +35,16 @@ const RUNS = {
   strip: [process.execPath, ...stripFlag, 'server/index.ts'],
   tsx: [process.execPath, tsxBin, 'server/index.ts'],
   'tsx-watch': [process.execPath, tsxBin, 'watch', 'server/index.ts'],
+  // Built by tsc first (below): JavaScript in dist/ with an external .map file per script.
+  tsc: [process.execPath, 'dist/server/index.js'],
 };
+
+// tsc, resolved from the repo root like `pnpm exec tsc`.
+const tsPkgPath = createRequire(join(repo, 'package.json')).resolve('typescript/package.json');
+const tsPkg = JSON.parse(readFileSync(tsPkgPath, 'utf8'));
+const tscBin = join(dirname(tsPkgPath), typeof tsPkg.bin === 'string' ? tsPkg.bin : tsPkg.bin.tsc);
+rmSync(join(shop, 'dist', 'server'), { recursive: true, force: true });
+execFileSync(process.execPath, [tscBin, '-p', 'tsconfig.server.json'], { cwd: shop, stdio: 'inherit' });
 const API = 'http://127.0.0.1:3001';
 const ROUTE = 'server/routes/orders.ts';
 
@@ -154,7 +164,14 @@ try {
       `${name}: nothing dropped for a missing source or map (${JSON.stringify(trace.dropped)})`,
     );
     check(output.includes(ROUTE), `${name}: the terminal printed ${ROUTE}`);
-    if (name !== 'strip') {
+    if (name === 'tsc') {
+      // With the .map files read, every file shows as its TypeScript source, never as dist/*.js.
+      check(
+        !trace.files.some((f) => f.path.startsWith('dist/')),
+        `tsc: no compiled dist/ file in the trace (${trace.files.map((f) => f.path).join(', ')})`,
+      );
+    }
+    if (name.startsWith('tsx')) {
       // The tsx CLI (and its watcher) must be skipped; only the process running the app reports.
       check(
         /skipped tool process: .*tsx[\\/]dist[\\/]cli\./.test(output),
@@ -163,9 +180,10 @@ try {
     }
   }
 
-  // tsx's source maps must give exactly the lines that type stripping gives, in every file.
+  // Source maps (tsx's inline ones, tsc's .map files) must give exactly the lines type stripping
+  // gives, in every file.
   const truth = results.strip;
-  for (const name of ['tsx', 'tsx-watch']) {
+  for (const name of ['tsx', 'tsx-watch', 'tsc']) {
     const paths = [...new Set([...truth.files, ...results[name].files].map((f) => f.path))].sort();
     for (const path of paths) {
       const a = lineSet(truth.files.find((f) => f.path === path));

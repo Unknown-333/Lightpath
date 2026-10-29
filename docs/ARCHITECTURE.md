@@ -125,16 +125,18 @@ Algorithm: collect all ranges, sort by `start` ascending then `end` descending (
 - Use `@jridgewell/trace-mapping` (`originalPositionFor`). It's what Vite, Vitest, and c8 use.
 - Map each covered **segment** start and end rather than each line, then fill the original lines between them. Mapping only line starts misses code that moved during transpiling.
 - Where several generated lines map to one original line, keep the maximum count.
+- A mapping counts only if code starts in its generated span (up to the next mapping on that line). tsc adds a mapping just after each `}`, where V8 counts the enclosing code, so without this rule an untaken block's closing brace would light up.
 - Unmapped generated lines (helpers the compiler added, such as JSX runtime imports or HMR glue) are dropped. They aren't user code.
 
 Where the source map comes from:
 
-| Source                                        | How the map is found                                                                                                                                                                                  |
-| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vite dev server (browser)                     | `Debugger.scriptParsed` gives `sourceMapURL`. Vite 8.3 serves inline `data:` maps for transformed modules, and they map `.tsx` lines correctly **(measured in the golden end-to-end test)**           |
-| Node with type stripping (`.ts` run directly) | No map needed. Types are replaced with whitespace, so offsets match the original file                                                                                                                 |
-| Node with `tsx` or another loader             | In-process `Debugger.scriptParsed` gives `sourceMapURL` (inline `data:` URL) **(measured: the shop API under `tsx` and `tsx watch` maps to the same lines as type stripping, `scripts/e2e-api.mjs`)** |
-| Plain `.js`                                   | Identity mapping                                                                                                                                                                                      |
+| Source                                              | How the map is found                                                                                                                                                                                                                                                             |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vite dev server (browser)                           | `Debugger.scriptParsed` gives `sourceMapURL`. Vite 8.3 serves inline `data:` maps for transformed modules, and they map `.tsx` lines correctly **(measured in the golden end-to-end test)**                                                                                      |
+| Node with type stripping (`.ts` run directly)       | No map needed. Types are replaced with whitespace, so offsets match the original file                                                                                                                                                                                            |
+| Node with `tsx` or another loader                   | In-process `Debugger.scriptParsed` gives `sourceMapURL` (inline `data:` URL) **(measured: the shop API under `tsx` and `tsx watch` maps to the same lines as type stripping, `scripts/e2e-api.mjs`)**                                                                            |
+| Node running `tsc` output (`dist/*.js` + `.js.map`) | `scriptParsed` gives the relative `.map` URL. The agent reads the file once (only `file:` URLs inside the workspace roots, at most 3 MB, version 3) and forwards it as a `data:` URL with absolute `sources` **(measured: same lines as type stripping, `scripts/e2e-api.mjs`)** |
+| Plain `.js`                                         | Identity mapping                                                                                                                                                                                                                                                                 |
 
 ### 4.5 `resolveFile`: URLs to workspace paths
 

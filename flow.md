@@ -112,9 +112,12 @@ http.server.response.finish ─► Agent.onResponseFinish(req, res)
                                  └─ #emit('action', coverage, …)
                                        ├─ #keep(): drop node:, node_modules, and the agent's own files
                                        ├─ #pushSources(): first time a workspace script appears,
-                                       │     queue 'scripts' + 'source' (Debugger.getScriptSource)
+                                       │     queue 'scripts' + 'source' (Debugger.getScriptSource);
+                                       │     an external .map is read by readExternalSourceMap()
+                                       │     (sourcemap-file.ts) and sent inline as a data: URL
                                        └─ queue 'delta' with traceId, request, coverage
-Transport.send() ──► #schedule(50 ms, unref'd timer) ──► flush() ──► #post()
+Transport.send() ──► #schedule(50 ms, unref'd timer) ──► flush() ──► #nextBatch() ──► #post()
+                     #nextBatch(): up to 200 messages and 7 MB; a single larger message is dropped
                      POST http://127.0.0.1:<port>/v1/ingest  { protocolVersion, agentId, messages }
 ```
 
@@ -353,13 +356,13 @@ The daemon handles it in `#onLines()` (section 6.2).
 
 `scripts/e2e-api.mjs`, in order:
 
-1. Resolves tsx's CLI from the shop's dependencies, like `npx tsx` would.
-2. For each way of starting the shop's API (`node server/index.ts`, `tsx server/index.ts`, `tsx watch server/index.ts`): spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in `examples/shop`, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
+1. Resolves tsx's CLI from the shop's dependencies, like `npx tsx` would, and builds the API with `tsc -p tsconfig.server.json` into `examples/shop/dist/server` (JavaScript plus `.map` files).
+2. For each way of starting the shop's API (`node server/index.ts`, `tsx server/index.ts`, `tsx watch server/index.ts`, `node dist/server/index.js`): spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in `examples/shop`, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
 3. Waits for "listening on port", reads `.lightpath/daemon.json` (checking its `pid` is this CLI), and connects a `DaemonClient`.
 4. POSTs one order to `http://127.0.0.1:3001/api/orders`, then polls `listTraces()` and `getTrace()` until a finished trace contains `server/routes/orders.ts`.
 5. Checks the request, the files, a dark and a lit line, that nothing was dropped for a missing source or map, that the terminal printed the route, and (for tsx) that the agent skipped tsx's own CLI process.
 6. Stops the process tree, removes the discovery file, and waits for port 3001 to be free.
-7. Compares every file's lines and counts from both tsx runs with the type-stripping run, which has no source map and so is the reference.
+7. Compares every file's lines and counts from the tsx and tsc runs with the type-stripping run, which has no source map and so is the reference.
 
 `packages/core/scripts/capture-fixtures.mjs` (run by hand when a sample changes), in order:
 

@@ -2,6 +2,7 @@ import type { IngestMessage, RequestInfo, ScriptCoverage } from '@lightpath-dev/
 import type { AgentConfig } from './config.js';
 import { normalizeRoot } from './config.js';
 import type { InspectorSession } from './inspector.js';
+import { readExternalSourceMap } from './sourcemap-file.js';
 
 const TRACE_HEADER = 'x-lightpath-trace';
 const TRACE_ID = /^t_[a-z0-9]{12}$/;
@@ -110,6 +111,9 @@ export class Agent {
       } catch {
         continue;
       }
+      const sourceMapURL = script.sourceMapURL.startsWith('data:')
+        ? script.sourceMapURL
+        : readExternalSourceMap(script.url, script.sourceMapURL, (u) => this.#inWorkspace(u));
       this.#send({
         type: 'scripts',
         scripts: [
@@ -118,9 +122,8 @@ export class Agent {
             url: script.url,
             hash: script.hash,
             length: script.length,
-            // External map files would need the daemon to read agent-supplied paths. Only inline
-            // maps are forwarded for now; reading .map files next to the script is an M2 task.
-            ...(script.sourceMapURL.startsWith('data:') ? { sourceMapURL: script.sourceMapURL } : {}),
+            // Inline maps as V8 reported them; external .map files read once, as data: URLs.
+            ...(sourceMapURL ? { sourceMapURL } : {}),
           },
         ],
       });
