@@ -46,7 +46,7 @@ corepack pnpm --filter shop lightpath
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Browser        | V8 precise coverage over the Chrome DevTools Protocol. Reading coverage resets V8's counters, so a read just before a click and one after it give exactly that click's code |
 | Click boundary | A capture `pointerdown` listener pauses the page for about 5 ms before your handlers run ([ADR 0003](docs/adr/0003-click-boundary.md))                                      |
-| Node backend   | An in-process agent loaded with `--import` brackets each HTTP request with coverage reads, using `diagnostics_channel`                                                      |
+| Node backend   | An in-process agent preloaded with `--require` brackets each HTTP request with coverage reads, using `diagnostics_channel`                                                      |
 | Python backend | `sys.monitoring` with per-line `DISABLE` and `restart_events()`: one callback per line per request                                                                          |
 | Correlation    | Requests from the click carry an `x-lightpath-trace` header                                                                                                                 |
 | Mapping        | Byte offsets → lines → source maps → your files, in a pure, tested pipeline                                                                                                 |

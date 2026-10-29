@@ -34,7 +34,7 @@ This document describes the system as designed. Facts marked **(measured)** come
   Chrome (Playwright)    │   Node backend(s)                      Python backend              │
   ┌──────────────────┐   │   ┌────────────────────────┐          ┌──────────────────────┐    │
   │ @lightpath-dev/browser│   │   │ @lightpath-dev/node-agent  │          │ lightpath-agent (py) │    │
-  │ CDP session:      │   │   │ --import register      │          │ sys.monitoring LINE  │    │
+  │ CDP session:      │   │   │ --require register     │          │ sys.monitoring LINE  │    │
   │  Profiler (cov)   │   │   │ node:inspector Session │          │ WSGI/ASGI middleware │    │
   │  Debugger (maps)  │   │   │ diagnostics_channel    │          └──────────┬───────────┘    │
   │  click boundary   │   │   └───────────┬────────────┘                     │ HTTP POST      │
@@ -53,7 +53,7 @@ This document describes the system as designed. Facts marked **(measured)** come
                          │      trace list, replay                                            │
                          │                                                                    │
                          │      lightpath CLI: starts daemon + browser, spawns `npm run dev`  │
-                         │      with NODE_OPTIONS=--import=<agent>, prints each click's path  │
+                         │      with NODE_OPTIONS=--require=<agent>, prints each click's path  │
                          └────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -179,7 +179,7 @@ Three rules, applied in order:
 
 ### 5.2 Node agent (`@lightpath-dev/node-agent`)
 
-Loaded with `NODE_OPTIONS=--import=<file URL of register.js>`. On Windows the path **must** be a `file://` URL; a raw `C:\...` path fails with `ERR_UNSUPPORTED_ESM_URL_SCHEME` **(measured)**. Quoted URLs with `%20` for spaces work **(measured)**.
+Loaded with `NODE_OPTIONS=--require="<path of register.js>"` (D-085). `--import` broke `ts-node`: it makes Node load the main file as an ES module, skipping `require` hooks **(measured)**. On Windows the path uses forward slashes, because `NODE_OPTIONS` drops backslashes inside quotes **(measured)**; quotes handle spaces.
 
 What it does at startup, in order:
 

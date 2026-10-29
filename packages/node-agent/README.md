@@ -1,6 +1,6 @@
 # @lightpath-dev/node-agent
 
-Runs inside your Node.js process and reports which code ran for each HTTP request. You don't use this package directly: `lightpath dev` loads it with `NODE_OPTIONS=--import=<file URL>`.
+Runs inside your Node.js process and reports which code ran for each HTTP request. You don't use this package directly: `lightpath dev` loads it with `NODE_OPTIONS=--require=<path>`.
 
 - No runtime dependencies. It uses `node:inspector`, `node:diagnostics_channel`, and the global `fetch`.
 - Does nothing unless `LIGHTPATH_URL` and `LIGHTPATH_TOKEN` are set.
