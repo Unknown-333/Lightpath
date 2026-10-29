@@ -35,16 +35,23 @@ describe('readConfig', () => {
     ['C:\\repo\\node_modules\\vite\\bin\\vite.js'],
     ['C:\\Users\\me\\AppData\\Local\\node\\corepack\\v1\\pnpm\\12.16.1\\bin\\pnpm.cjs install'],
     ['/repo/node_modules/tsx/dist/cli.mjs server.ts'],
+    ['C:\\repo\\node_modules\\webpack\\bin\\webpack.js serve --config webpack.config.js'],
+    ['/repo/node_modules/webpack-cli/bin/cli.js serve'],
+    ['/repo/node_modules/nodemon/bin/nodemon.js app.js'],
+    ['C:\\repo\\node_modules\\concurrently\\dist\\bin\\concurrently.js -k npm:dev:*'],
   ])('skips tool process %s', (cmd) => {
     expect(readConfig(base, ['node', cmd])).toMatchObject({ ok: false });
   });
 
-  it.each([['/repo/server/index.ts'], ['C:\\repo\\dist\\main.js'], ['/repo/npm-scripts/serve.js']])(
-    'instruments app process %s',
-    (cmd) => {
-      expect(readConfig(base, ['node', cmd])).toMatchObject({ ok: true });
-    },
-  );
+  it.each([
+    ['/repo/server/index.ts'],
+    ['C:\\repo\\dist\\main.js'],
+    ['/repo/npm-scripts/serve.js'],
+    // ts-node runs the app inside its own process (D-088).
+    ['/repo/node_modules/ts-node/dist/bin.js -r dotenv/config server.ts'],
+  ])('instruments app process %s', (cmd) => {
+    expect(readConfig(base, ['node', cmd])).toMatchObject({ ok: true });
+  });
 
   it('honors LIGHTPATH_SKIP and ignores an invalid regex', () => {
     expect(readConfig({ ...base, LIGHTPATH_SKIP: 'worker\\.js' }, ['node', 'worker.js'])).toMatchObject({

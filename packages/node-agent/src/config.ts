@@ -14,8 +14,10 @@ export const ENV = {
 /** Processes that inherit NODE_OPTIONS but aren't the user's app: package managers and dev tools. */
 const DEFAULT_SKIP = [
   // Installed as a package: .../node_modules/vite/bin/vite.js, .../node_modules/npm/bin/npm-cli.js.
-  // tsx's CLI process is skipped; the child it spawns to run your file is instrumented.
-  /[\\/]node_modules[\\/](?:(?:npm|pnpm|yarn|corepack|vite|typescript|esbuild|vitest|playwright(?:-core)?|@biomejs[\\/]biome)[\\/]|tsx[\\/]dist[\\/]cli\.)/,
+  // tsx's CLI process is skipped; the child it spawns to run your file is instrumented. Webpack's
+  // CLI runs the dev server in its own process, so it's skipped like Vite; nodemon and concurrently
+  // only start other processes (D-088). ts-node is NOT skipped: it runs your app in its process.
+  /[\\/]node_modules[\\/](?:(?:npm|pnpm|yarn|corepack|vite|typescript|esbuild|vitest|playwright(?:-core)?|@biomejs[\\/]biome|webpack|webpack-cli|webpack-dev-server|nodemon|concurrently)[\\/]|tsx[\\/]dist[\\/]cli\.)/,
   // Standalone shims and corepack caches: .../corepack/v1/pnpm/12.16.1/bin/pnpm.cjs
   /[\\/](npm|npx|pnpm|pnpx|yarn|corepack)(-cli)?(\.c?js)?(\s|$)/,
 ];
