@@ -66,7 +66,10 @@ const PRESS_BUDGET_MS = 20;
  */
 const HOOK_SOURCE = `(() => {
   const describe = (el) => {
-    const hit = el && el.closest && el.closest('button, a, [role], input, select, textarea, label, summary, [data-testid]');
+    // The nearest control names the click; a data-testid only when no control encloses it. A
+    // test id inside a link (a balance span in Actual's sidebar) must not win over the link (D-098).
+    const hit = el && el.closest &&
+      (el.closest('button, a, [role], input, select, textarea, label, summary') || el.closest('[data-testid]'));
     const t = hit || el;
     if (!t || !t.tagName) return {};
     // Outside any control, only a leaf element's own text is a fair label: a container's
