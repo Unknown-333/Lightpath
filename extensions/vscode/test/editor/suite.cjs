@@ -92,4 +92,28 @@ exports.run = async () => {
     () => !api.drawnLines(cart) && !api.drawnLines(orders),
   );
   console.log('[lightpath test] Clear Highlights removed them');
+
+  // Replay walks the trace's files in the order the collectors saw them and lights each one.
+  // The command resolves when the walk ends, so the last file is the one left in front.
+  const order = [...trace.files].sort(
+    (a, b) => a.firstSeenAt - b.firstSeenAt || a.path.localeCompare(b.path),
+  );
+  const opened = [];
+  const watch = vscode.window.onDidChangeActiveTextEditor((e) => {
+    if (e) opened.push(e.document.uri.fsPath);
+  });
+  await vscode.commands.executeCommand('lightpath.replay');
+  watch.dispose();
+  const norm = (p) => p.replace(/\\/g, '/').toLowerCase();
+  const want = order.map((f) => norm(join(shop, f.path)));
+  const seen = opened.map(norm).filter((p, i, all) => want.includes(p) && p !== all[i - 1]);
+  assert.deepEqual(seen, want, 'replay opens every file of the trace, in order');
+  const last = order.at(-1);
+  const lastPath = join(shop, last.path);
+  assert.equal(
+    describe(api.drawnLines(lastPath)),
+    describe(new Map(last.lines.map((h) => [h.line, bucket(h.count)]))),
+    `replay lights ${last.path}`,
+  );
+  console.log(`[lightpath test] Replay walked ${order.length} files in order`);
 };

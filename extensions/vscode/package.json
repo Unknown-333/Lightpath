@@ -108,6 +108,7 @@
     "bundle": "node esbuild.mjs",
     "test": "vitest run",
     "test:editor": "node test/editor/run.mjs",
+    "demo": "node scripts/record-demo.mjs",
     "typecheck": "tsc -p . && tsc -p test",
     "package": "node esbuild.mjs --production && vsce package --no-dependencies"
   },

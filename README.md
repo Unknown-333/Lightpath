@@ -2,7 +2,7 @@
 
 Click anything in your running app and watch the code that ran light up in your editor: frontend and backend, line by line, brighter the more times it ran.
 
-<!-- TODO before launch: a 30-second GIF of clicking "Checkout" in examples/shop. -->
+![Clicking Add to cart and Checkout in the example shop lights up Cart.tsx and the order route in VS Code, then Replay walks through every file the click ran](docs/media/demo.gif)
 
 ```
 ◆ button: Checkout 419 ms
