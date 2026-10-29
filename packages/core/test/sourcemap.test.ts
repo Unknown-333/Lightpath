@@ -78,6 +78,44 @@ describe('mapToOriginal with Windows absolute sources', () => {
   });
 });
 
+describe('mapToOriginal with mappings over whitespace', () => {
+  it("doesn't light an untaken block's closing brace from tsc's end-of-node mapping", () => {
+    // tsc writes two mappings for a `}`: one on it, one just after it (at the line's end).
+    const js = ['if (a) {', '    b();', '}', 'c();'].join('\n');
+    const gen = new LineIndex(js);
+    const at = (line: number, col: number) => gen.lineStart(line - 1) + col;
+    const mapped: DecodedSourceMap = {
+      version: 3,
+      sources: ['a.ts'],
+      names: [],
+      mappings: [
+        [[0, 0, 0, 0]], // `if (a) {` → line 1
+        [[4, 0, 1, 4]], // `b();` → line 2
+        [
+          [0, 0, 2, 0], // `}` → line 3
+          [1, 0, 2, 1], // just after `}`: nothing but the line's end
+        ],
+        [[0, 0, 3, 0]], // `c();` → line 4
+      ],
+    };
+    // The block didn't run: V8 counts its span, including the `}`, as 0. Right after it is 1 again.
+    const segments = [
+      { start: 0, end: at(1, 7), count: 1 },
+      { start: at(1, 7), end: at(3, 1), count: 0 },
+      { start: at(3, 1), end: js.length, count: 1 },
+    ];
+    const lines = mapToOriginal(segments, gen, mapped, 'file:///repo/a.js').get('file:///repo/a.ts');
+    expect(lines && Object.fromEntries(lines)).toEqual({ 1: 1, 2: 0, 3: 0, 4: 1 });
+  });
+
+  it('LineIndex.codeStart skips whitespace and stops at the range end', () => {
+    const idx = new LineIndex('a  \n  b');
+    expect(idx.codeStart(1, 7)).toBe(6);
+    expect(idx.codeStart(1, 5)).toBeUndefined();
+    expect(idx.codeStart(0, 1)).toBe(0);
+  });
+});
+
 describe('decodeDataUrlSourceMap', () => {
   it('decodes base64 UTF-8 maps', () => {
     const json = JSON.stringify({ version: 3, sources: ['ü.ts'], names: [], mappings: '' });

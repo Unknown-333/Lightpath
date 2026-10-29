@@ -3,6 +3,7 @@
  * which is what V8 coverage reports and what JavaScript string indexes use.
  */
 export class LineIndex {
+  readonly #source: string;
   /** Offset of the first character of each line. */
   readonly #starts: Uint32Array;
   /** Offset of the first non-whitespace character per line, or -1 for blank lines. */
@@ -11,6 +12,7 @@ export class LineIndex {
   readonly #contentEnd: Int32Array;
 
   constructor(source: string) {
+    this.#source = source;
     const starts = [0];
     for (let i = 0; i < source.length; i++) {
       if (source.charCodeAt(i) === 10 /* \n */) starts.push(i + 1);
@@ -59,6 +61,15 @@ export class LineIndex {
     const start = this.#contentStart[line] ?? -1;
     if (start < 0) return undefined;
     return [start, this.#contentEnd[line] as number];
+  }
+
+  /** First offset in `[from, to)` that isn't whitespace, or `undefined` if there is none. */
+  codeStart(from: number, to: number): number | undefined {
+    const end = Math.min(to, this.#source.length);
+    for (let i = Math.max(0, from); i < end; i++) {
+      if (!isSpace(this.#source.charCodeAt(i))) return i;
+    }
+    return undefined;
   }
 }
 

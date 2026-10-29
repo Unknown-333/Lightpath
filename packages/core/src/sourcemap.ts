@@ -9,9 +9,12 @@ export type OriginalCounts = Map<string, LineCounts>;
 /**
  * Maps flattened segments of a generated script back to original source lines.
  *
- * Walks every mapping in the source map. Each mapped generated position takes the count of the
- * segment containing it, and its original line keeps the maximum count seen. Generated code with
- * no mapping (compiler helpers, HMR glue) contributes nothing, which is what we want.
+ * Walks every mapping in the source map. A mapping covers the generated text up to the next
+ * mapping on the same line (or the line's end). It counts only if code starts in that span: the
+ * count is taken at the first non-whitespace character, and its original line keeps the maximum.
+ * Mappings over whitespace or the end of a line are skipped. tsc writes one just after every `}`,
+ * and V8 counts that position as the enclosing code, so an untaken block's closing brace would
+ * light up. Generated code with no mapping (compiler helpers, HMR glue) contributes nothing.
  *
  * Source map columns and V8 offsets are both UTF-16 code units, so they line up directly.
  */
@@ -23,20 +26,48 @@ export function mapToOriginal(
 ): OriginalCounts {
   const tracer = new TraceMap(withWindowsSourcesAsUrls(map), mapUrl);
   const out: OriginalCounts = new Map();
-  eachMapping(tracer, (m) => {
-    if (m.source == null || m.originalLine == null) return;
-    const offset = generated.lineStart(m.generatedLine - 1) + m.generatedColumn;
-    const count = countAt(segments, offset);
+
+  /** Credits one mapping whose generated span is `[span.offset, end)`. */
+  const credit = (span: OpenSpan, end: number) => {
+    const at = generated.codeStart(span.offset, end);
+    if (at === undefined) return; // only whitespace: nothing ran here
+    const count = countAt(segments, at);
     if (count === undefined) return;
-    let lines = out.get(m.source);
+    let lines = out.get(span.source);
     if (!lines) {
       lines = new Map();
-      out.set(m.source, lines);
+      out.set(span.source, lines);
     }
-    const prev = lines.get(m.originalLine);
-    if (prev === undefined || count > prev) lines.set(m.originalLine, count);
+    const prev = lines.get(span.originalLine);
+    if (prev === undefined || count > prev) lines.set(span.originalLine, count);
+  };
+
+  // eachMapping visits mappings in generated order, so each span ends where the next mapping
+  // starts, or at the end of its line (source map lines are independent).
+  let open: OpenSpan | undefined;
+  eachMapping(tracer, (m) => {
+    const offset = generated.lineStart(m.generatedLine - 1) + m.generatedColumn;
+    if (open) credit(open, open.line === m.generatedLine ? offset : lineEnd(generated, open.line));
+    open =
+      m.source != null && m.originalLine != null
+        ? { offset, line: m.generatedLine, source: m.source, originalLine: m.originalLine }
+        : undefined;
   });
+  if (open) credit(open, lineEnd(generated, open.line));
   return out;
+}
+
+interface OpenSpan {
+  offset: number;
+  /** 1-based generated line. */
+  line: number;
+  source: string;
+  originalLine: number;
+}
+
+/** Offset of the end of a 1-based generated line (its newline, or the end of the source). */
+function lineEnd(index: LineIndex, line: number): number {
+  return line < index.lineCount ? index.lineStart(line) : Number.POSITIVE_INFINITY;
 }
 
 const WINDOWS_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
