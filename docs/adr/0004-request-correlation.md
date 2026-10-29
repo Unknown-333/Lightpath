@@ -17,9 +17,9 @@ The backend delta for a request has to attach to the click that caused it.
 
 ## Decision
 
-Tag requests to the dev server origin (which proxies `/api` in Vite setups) and to any origin listed in `backendOrigins`. Leave all other requests unchanged. Requests with no header fall back to a time-window match, and the trace marks them `matchedBy: 'time'`.
+Tag requests to the dev server origin (which proxies `/api` in Vite setups), to any loopback origin (`localhost`, `127.0.0.1`, `[::1]` on any port; D-086), and to any origin listed in `backendOrigins`. Leave all other requests unchanged. Requests with no header fall back to a time-window match, and the trace marks them `matchedBy: 'time'`.
 
 ## Consequences
 
-- Apps that call a backend on another origin directly from the browser must list it in `backendOrigins`, and that backend's CORS policy must allow the header. `lightpath doctor` detects blocked preflights and explains.
+- Update (D-086): the header is added by request interception after Chrome has done its CORS checks, so it never triggers a preflight, even when the API's CORS policy allows no custom headers (measured, and covered by a real-browser test). An API on another local port (Vite on :5173, API on :3001) is therefore tagged with no setup. Only remote backends need `backendOrigins` (`--backend`).
 - `page.route` adds a little latency to every tagged request. Measure in M2.

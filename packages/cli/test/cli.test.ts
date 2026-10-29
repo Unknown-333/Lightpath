@@ -1,24 +1,68 @@
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { Trace } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { findLocalUrl, UrlWatcher } from '../src/detect.js';
-import { agentEnv, nodeVersionProblem, toShellCommand, withImport } from '../src/env.js';
+import { agentEnv, nodeVersionProblem, toShellCommand, withRequire } from '../src/env.js';
 import { formatTrace } from '../src/format.js';
 
-const url = 'file:///C:/Users/me/my%20tools/node-agent/dist/register.js';
+const url =
+  process.platform === 'win32'
+    ? 'file:///C:/Users/me/my%20tools/node-agent/dist/register.js'
+    : 'file:///home/me/my%20tools/node-agent/dist/register.js';
+const path =
+  process.platform === 'win32'
+    ? 'C:/Users/me/my tools/node-agent/dist/register.js'
+    : '/home/me/my tools/node-agent/dist/register.js';
 
-describe('withImport', () => {
-  it('adds a quoted --import flag', () => {
-    expect(withImport(undefined, url)).toBe(`--import="${url}"`);
+describe('withRequire', () => {
+  it('adds a quoted --require flag with a forward-slash path', () => {
+    expect(withRequire(undefined, url)).toBe(`--require="${path}"`);
   });
   it("keeps the user's own options", () => {
-    expect(withImport('--max-old-space-size=4096', url)).toBe(`--max-old-space-size=4096 --import="${url}"`);
+    expect(withRequire('--max-old-space-size=4096', url)).toBe(
+      `--max-old-space-size=4096 --require="${path}"`,
+    );
   });
   it('is idempotent', () => {
-    expect(withImport(withImport('', url), url)).toBe(`--import="${url}"`);
+    expect(withRequire(withRequire('', url), url)).toBe(`--require="${path}"`);
   });
 });
 
 describe('agentEnv', () => {
+  it('keeps require hooks working, like ts-node needs (D-085)', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'lightpath-require-'));
+    try {
+      const agent = join(dir, 'agent.mjs');
+      writeFileSync(agent, 'globalThis.agentLoaded = true;\n');
+      writeFileSync(
+        join(dir, 'hook.cjs'),
+        "require.extensions['.tsx-like'] = (m, f) => m._compile(require('node:fs').readFileSync(f, 'utf8'), f);\n",
+      );
+      writeFileSync(
+        join(dir, 'main.tsx-like'),
+        "console.log('main ran', globalThis.agentLoaded === true);\n",
+      );
+      const env = agentEnv(process.env, {
+        daemonUrl: 'http://127.0.0.1:9',
+        token: 'tok',
+        roots: [dir],
+        registerUrl: pathToFileURL(agent).href,
+      });
+      const out = execFileSync(process.execPath, ['-r', './hook.cjs', 'main.tsx-like'], {
+        cwd: dir,
+        env,
+        encoding: 'utf8',
+      });
+      expect(out.trim()).toBe('main ran true');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('sets everything the agent reads', () => {
     const env = agentEnv(
       { PATH: '/bin' },
@@ -37,7 +81,7 @@ describe('agentEnv', () => {
       LIGHTPATH_ROOTS: 'C:\\a,C:\\b',
       LIGHTPATH_DEBUG: '1',
     });
-    expect(env.NODE_OPTIONS).toContain('--import=');
+    expect(env.NODE_OPTIONS).toContain('--require=');
     expect(env.LIGHTPATH_SKIP).toBeUndefined();
   });
 });

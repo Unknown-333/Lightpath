@@ -1,13 +1,20 @@
+import { fileURLToPath } from 'node:url';
 import { AgentEnv } from '@lightpath-dev/protocol';
 
 /**
- * Adds `--import="<url>"` to NODE_OPTIONS without dropping the user's own options (ARCHITECTURE 10).
- * The URL must be a file:// URL on Windows (measured); quoting handles spaces in paths.
+ * Adds `--require="<path>"` to NODE_OPTIONS without dropping the user's own options (ARCHITECTURE 10).
+ *
+ * `--require`, not `--import` (D-085): any `--import` makes Node run the main file through its ES
+ * module loader, which skips `require` hooks, so `ts-node` (and other tools that call
+ * `Module.runMain`) failed to start. Node 22.12+ can `--require` the agent's ES module file.
+ * NODE_OPTIONS eats backslashes inside quotes on Windows (measured), so the path uses forward
+ * slashes; quoting handles spaces.
  */
-export function withImport(existing: string | undefined, importUrl: string): string {
-  const flag = `--import="${importUrl}"`;
+export function withRequire(existing: string | undefined, registerUrl: string): string {
+  const path = fileURLToPath(registerUrl).replace(/\\/g, '/');
+  const flag = `--require="${path}"`;
   const current = existing?.trim() ?? '';
-  if (current.includes(importUrl)) return current;
+  if (current.includes(path)) return current;
   return current ? `${current} ${flag}` : flag;
 }
 
@@ -24,7 +31,7 @@ export interface AgentEnvInput {
 export function agentEnv(base: NodeJS.ProcessEnv, input: AgentEnvInput): NodeJS.ProcessEnv {
   return {
     ...base,
-    NODE_OPTIONS: withImport(base.NODE_OPTIONS, input.registerUrl),
+    NODE_OPTIONS: withRequire(base.NODE_OPTIONS, input.registerUrl),
     [AgentEnv.url]: input.daemonUrl,
     [AgentEnv.token]: input.token,
     [AgentEnv.roots]: input.roots.join(','),

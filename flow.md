@@ -12,7 +12,7 @@ Lightpath isn't one program. A normal session has up to five processes:
 | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------- |
 | **CLI + daemon + browser collector** (one process)               | `packages/cli/src/bin.ts`                                                               | You, with `lightpath dev -- <command>`        |
 | **Your dev command** (for example `node dev.mjs`, `npm run dev`) | your own script                                                                         | the CLI, with `spawn`                         |
-| **Your Node backend**, with the agent inside it                  | `packages/node-agent/src/register.ts` (loaded before your code by `--import`)           | your dev command, inheriting `NODE_OPTIONS`   |
+| **Your Node backend**, with the agent inside it                  | `packages/node-agent/src/register.ts` (loaded before your code by `--require`)          | your dev command, inheriting `NODE_OPTIONS`   |
 | **Your Python backend**, with the agent inside it                | `agents/python/src/lightpath_agent/wsgi.py` or `asgi.py` middleware                     | you, by adding the middleware                 |
 | **Chrome**                                                       | the init script `HOOK_SOURCE` in `packages/browser/src/collector.ts` runs in every page | the browser collector, through Playwright     |
 | **VS Code extension**                                            | `activate()` in `extensions/vscode/src/extension.ts`                                    | VS Code, when `.lightpath/daemon.json` exists |
@@ -67,7 +67,7 @@ Starting point: `packages/cli/src/bin.ts`.
       4. Listens on `127.0.0.1` on a free port.
       5. `writeDiscovery()` in `discovery.ts` writes `.lightpath/daemon.json` and `.lightpath/.gitignore`.
    3. Subscribes to the store: each finished trace is printed with `formatTrace()` from `format.ts`.
-   4. `agentEnv()` from `env.ts` builds the child environment: `NODE_OPTIONS` gets `--import="<registerUrl>"` (from `packages/node-agent/src/index.ts`), plus `LIGHTPATH_URL`, `LIGHTPATH_TOKEN`, and `LIGHTPATH_ROOTS`.
+   4. `agentEnv()` from `env.ts` builds the child environment: `NODE_OPTIONS` gets `--require="<path of registerUrl>"` (`withRequire()`) (from `packages/node-agent/src/index.ts`), plus `LIGHTPATH_URL`, `LIGHTPATH_TOKEN`, and `LIGHTPATH_ROOTS`.
    5. Spawns your command. On Windows it goes through the shell as one string from `toShellCommand()`.
    6. Pipes the child's output to your terminal and feeds it to `UrlWatcher` (`detect.ts`). The first local URL triggers `openBrowser(url)`.
    7. **`openBrowser()`**:
@@ -85,7 +85,7 @@ Starting point: `packages/cli/src/bin.ts`.
 
 ## 4. Inside your Node backend
 
-Starting point: Node loads `packages/node-agent/dist/register.js` before your code, because of `NODE_OPTIONS=--import=…`.
+Starting point: Node loads `packages/node-agent/dist/register.js` before your code, because of `NODE_OPTIONS=--require=…`.
 
 ### 4.1 Startup (once per process)
 

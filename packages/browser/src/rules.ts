@@ -7,8 +7,12 @@
 const TAGGABLE = new Set(['fetch', 'xhr', 'navigation']);
 
 /**
- * Tags only fetch/XHR requests to configured backend origins. Never touches other origins:
- * a custom header on a cross-origin request triggers a CORS preflight and changes app behavior.
+ * Tags fetch/XHR requests to configured backend origins and to any loopback origin (D-086).
+ *
+ * The header is added by request interception after the browser has done its CORS checks, so it
+ * never triggers a preflight, even when the API's CORS policy doesn't allow custom headers
+ * (measured in Chrome). Loopback is the common dev setup: Vite on :5173 calling an API on :3001.
+ * Remote origins (a payment provider, a CDN) are never tagged: the trace ID is no business of theirs.
  */
 export function shouldTag(
   requestUrl: string,
@@ -16,14 +20,17 @@ export function shouldTag(
   backendOrigins: readonly string[],
 ): boolean {
   if (!TAGGABLE.has(resourceType)) return false;
-  let origin: string;
+  let url: URL;
   try {
-    origin = new URL(requestUrl).origin;
+    url = new URL(requestUrl);
   } catch {
     return false;
   }
-  return backendOrigins.includes(origin);
+  if (backendOrigins.includes(url.origin)) return true;
+  return /^https?:$/.test(url.protocol) && LOOPBACK.has(url.hostname);
 }
+
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /** Requests that count toward the settle window. Long-lived streams would keep a click open forever. */
 export function countsTowardSettle(resourceType: string): boolean {
