@@ -142,5 +142,6 @@ try {
   await daemon.close();
 }
 
-console.log(failures.length === 0 ? '\nE2E PASSED' : `\nE2E FAILED (${failures.length})`);
+if (failures.length === 0) console.log('\nE2E PASSED');
+else console.log(`\nE2E FAILED (${failures.length})\n${failures.map((f) => `- ${f}`).join('\n')}`);
 process.exit(failures.length === 0 ? 0 : 1);
