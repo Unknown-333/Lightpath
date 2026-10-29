@@ -78,6 +78,10 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design, [docs/PRO
 - Next.js server components and worker threads aren't supported yet.
 - webpack apps need source maps in development. webpack's default dev setting (`devtool: 'eval'`) has none, so frontend files can't be shown; Lightpath says so and suggests `devtool: 'eval-cheap-module-source-map'`. Vite needs nothing.
 - Service workers are turned off in the browser Lightpath opens, so requests stay visible to it. Offline mode and push notifications won't work there.
+- Code running in Web Workers isn't traced yet.
+- Backend code is traced per HTTP request. Messages over WebSockets (socket.io and similar) don't open a backend trace yet.
+
+[docs/tested-apps.md](docs/tested-apps.md) lists the real open-source apps Lightpath has been run on, and what each one found.
 
 ## Contributing
 
