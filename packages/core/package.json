@@ -1,8 +1,21 @@
 {
   "name": "@lightpath-dev/core",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Pure mapping pipeline: V8 coverage ranges to original source lines",
+  "keywords": [
+    "coverage",
+    "v8",
+    "source-map",
+    "trace"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/Unknown-333/Lightpath#readme",
+  "bugs": "https://github.com/Unknown-333/Lightpath/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unknown-333/Lightpath.git",
+    "directory": "packages/core"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -11,8 +24,16 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo",
+    "!dist/**/*.map"
   ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p test"

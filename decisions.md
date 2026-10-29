@@ -813,3 +813,18 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - How: Two `closest()` calls in `HOOK_SOURCE` (`packages/browser/src/collector.ts`). A real-browser test presses five shapes: a link with an inner test-id span (`a: All accounts 1,234.00`), a button with one (`button: Save *`), a `div` with a test id and no control around it (`div: card-total`), a link that carries the test id itself (`a: nav-home`), and `role="button"` around a test-id span (`button: Open 3`). The first, second and fifth failed on the old `describe()` (`span: …`).
 - Note: An ARIA role on a large container (`role="main"`) now also wins over a test id inside it, and is labelled with its first 80 characters of text, as a plain click inside it already was.
 - Rejected: Preferring a test id when it is closer than the control: it is exactly the Actual case. Dropping `data-testid` from labels: it is the best name for clickable `div`s that have no role.
+
+### D-099 What each npm package ships in 0.0.1
+
+- Date: 2026-10-29
+- Decision: Every `@lightpath-dev/*` package is 0.0.1 and ships `dist/` without `dist/.tsbuildinfo` and without `*.map` files, plus `package.json`, the repo `LICENSE` (pnpm adds it), and a short README (the CLI also ships `lightpath.config.schema.json`). Each manifest gains `keywords`, `homepage`, `bugs`, `repository` (with `directory`), `engines.node >=22.12`, and `publishConfig.access: public`. The node-agent description now says `--require` (D-085).
+- Why: The build cache is not code. The `.js.map` and `.d.ts.map` files point at `src/`, which isn't shipped, so they would only add size and dead links. Node 22.12 is the floor for every package, not just the CLI: the node-agent is loaded with `--require` on an ES module file, which needs 22.12 (ADR 0002). A scoped package is private by default on npm, so the first publish would fail without `access: public`. READMEs fill the npm page; relative links in the node-agent README pointed into the repo and break on npmjs.com, so they are absolute now.
+- How: `files` negations in each `packages/*/package.json`; checked with `pnpm pack --dry-run` in each package. The JSON schema the README's `$schema` line points at is in the CLI tarball.
+- Rejected: Shipping `src/` so the maps resolve: doubles the size for a debugging aid no user of 0.0.1 needs.
+
+### D-100 The extension's bundled packages are dev dependencies, and `vsce package` builds the bundle
+
+- Date: 2026-10-29
+- Decision: `@lightpath-dev/core` and `@lightpath-dev/protocol` move to the extension's `devDependencies`, and a `vscode:prepublish` script runs `node esbuild.mjs --production`. Plain `vsce package` (and `pnpm --filter lightpath-vscode exec vsce package`) now gives a `.vsix` with only `dist/extension.cjs`, `package.json`, the README, and the license.
+- Why: esbuild inlines both packages into `dist/extension.cjs`, so the `.vsix` needs none of `node_modules`. As runtime dependencies they made `vsce package` run `npm list --production`, which fails in a pnpm workspace (ELSPROBLEMS on the `workspace:*` links). `vsce` runs `vscode:prepublish` before every package, so a `.vsix` can no longer hold a stale development bundle with source maps.
+- How: `extensions/vscode/package.json`; `pnpm-lock.yaml` moves the two links from `dependencies` to `devDependencies`. The `package` script keeps `--no-dependencies` as a second guard.

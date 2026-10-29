@@ -1,8 +1,23 @@
 {
   "name": "@lightpath-dev/node-agent",
-  "version": "0.0.0",
-  "description": "In-process Node.js agent for Lightpath. Load with --import; has no runtime dependencies.",
+  "version": "0.0.1",
+  "description": "In-process Node.js agent for Lightpath. Loaded with --require; has no runtime dependencies.",
+  "keywords": [
+    "coverage",
+    "v8",
+    "inspector",
+    "http",
+    "trace",
+    "node"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/Unknown-333/Lightpath#readme",
+  "bugs": "https://github.com/Unknown-333/Lightpath/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unknown-333/Lightpath.git",
+    "directory": "packages/node-agent"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -12,8 +27,16 @@
     "./register": "./dist/register.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo",
+    "!dist/**/*.map"
   ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p test"
