@@ -21,7 +21,7 @@ export function mapToOriginal(
   map: SourceMapInput,
   mapUrl?: string,
 ): OriginalCounts {
-  const tracer = new TraceMap(map, mapUrl);
+  const tracer = new TraceMap(withWindowsSourcesAsUrls(map), mapUrl);
   const out: OriginalCounts = new Map();
   eachMapping(tracer, (m) => {
     if (m.source == null || m.originalLine == null) return;
@@ -37,6 +37,38 @@ export function mapToOriginal(
     if (prev === undefined || count > prev) lines.set(m.originalLine, count);
   });
   return out;
+}
+
+const WINDOWS_ABSOLUTE = /^[a-zA-Z]:[\\/]/;
+
+/**
+ * Rewrites Windows absolute paths in `sources` (and `sourceRoot`) as `file:///C:/...` URLs.
+ *
+ * Some tools write them as-is: tsx on Windows emits `C:\repo\src\a.ts`. trace-mapping only knows
+ * URLs and POSIX paths, so it treats `C:\...` as relative and appends it to the map URL, which
+ * yields a path that exists nowhere. POSIX absolute paths and URLs already resolve correctly.
+ */
+function withWindowsSourcesAsUrls(map: SourceMapInput): SourceMapInput {
+  if (map instanceof TraceMap) return map;
+  const parsed =
+    typeof map === 'string' ? (JSON.parse(map) as Exclude<SourceMapInput, string | TraceMap>) : map;
+  const root = parsed.sourceRoot;
+  const rootIsWindows = typeof root === 'string' && WINDOWS_ABSOLUTE.test(root);
+  if (!rootIsWindows && !parsed.sources.some((s) => s != null && WINDOWS_ABSOLUTE.test(s))) return parsed;
+  return {
+    ...parsed,
+    ...(rootIsWindows ? { sourceRoot: `${windowsPathToUrl(root)}/` } : {}),
+    sources: parsed.sources.map((s) => (s != null && WINDOWS_ABSOLUTE.test(s) ? windowsPathToUrl(s) : s)),
+  };
+}
+
+/** `C:\a b\c#.ts` → `file:///C:/a%20b/c%23.ts`. Only characters that would break URL parsing are escaped. */
+function windowsPathToUrl(path: string): string {
+  const escaped = path
+    .replace(/\\/g, '/')
+    .replace(/\/+$/, '')
+    .replace(/[%#? ]/g, (c) => encodeURIComponent(c));
+  return `file:///${escaped}`;
 }
 
 /**

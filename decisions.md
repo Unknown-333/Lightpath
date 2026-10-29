@@ -585,3 +585,10 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: Exclude `pnpm-lock.yaml` from Biome and keep it in the format pnpm writes.
 - Why: Biome formatted the lockfile once (double quotes), and every later `pnpm add` rewrote it back to single quotes. One new dependency showed up as a 3,309-line diff, which hides the real change in review. The lockfile is generated, so its owner (pnpm) decides the format.
 - How: Added `!pnpm-lock.yaml` to `files.includes` in `biome.json` and let pnpm rewrite the file. Checked that both versions resolve the same 372 packages and that `pnpm install --frozen-lockfile` passes.
+
+### D-068 Treat Windows absolute paths in source map sources as file URLs
+
+- Date: 2026-10-29
+- Decision: Before handing a source map to trace-mapping, rewrite `sources` entries (and `sourceRoot`) that look like `C:\...` or `C:/...` as `file:///C:/...` URLs.
+- Why: The tsx fixture showed that tsx on Windows writes `sources: ["C:\\Users\\...\\a.ts"]`. trace-mapping treats that as a relative path and appends it to the map URL, giving `file:///C:/.../samples/C:\Users\...` and a file that resolves nowhere. Every line of a tsx-loaded file was lost. POSIX paths and URLs already resolve correctly, so only the Windows form needs help.
+- How: `withWindowsSourcesAsUrls` in `packages/core/src/sourcemap.ts` returns the map unchanged unless a Windows path is present. Spaces, `#`, `?`, and `%` are percent-encoded so URL parsing keeps them. Unit tests cover backslashes with a space, forward slashes, a Windows `sourceRoot`, and a POSIX path.

@@ -54,6 +54,30 @@ describe('mapToOriginal', () => {
   });
 });
 
+describe('mapToOriginal with Windows absolute sources', () => {
+  // One mapping: generated line 2, column 0 → original line 3.
+  const encoded = (sources: string[], sourceRoot?: string) => ({
+    version: 3 as const,
+    sources,
+    names: [],
+    mappings: ';AAEA',
+    ...(sourceRoot ? { sourceRoot } : {}),
+  });
+  const segments = [{ start: 0, end: 100, count: 1 }];
+  const gen = new LineIndex('a\nb\n');
+
+  it.each([
+    [['C:\\Users\\me\\my app\\src\\a.ts'], undefined, 'file:///C:/Users/me/my%20app/src/a.ts'],
+    [['C:/Users/me/app/src/a.ts'], undefined, 'file:///C:/Users/me/app/src/a.ts'],
+    [['src/a.ts'], 'C:\\Users\\me\\app\\', 'file:///C:/Users/me/app/src/a.ts'],
+    [['/home/me/app/src/a.ts'], undefined, 'file:///home/me/app/src/a.ts'],
+  ])('resolves %j (root %s) to %s', (sources, root, expected) => {
+    // tsx on Windows writes sources like the first case; the map URL is the script's file:// URL.
+    const result = mapToOriginal(segments, gen, encoded(sources, root), 'file:///C:/Users/me/app/dist/a.js');
+    expect([...result.keys()]).toEqual([expected]);
+  });
+});
+
 describe('decodeDataUrlSourceMap', () => {
   it('decodes base64 UTF-8 maps', () => {
     const json = JSON.stringify({ version: 3, sources: ['ü.ts'], names: [], mappings: '' });
