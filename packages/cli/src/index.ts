@@ -1,3 +1,11 @@
+export {
+  CONFIG_FILE,
+  ConfigError,
+  configJsonSchema,
+  LightpathConfig,
+  type LoadedConfig,
+  loadConfig,
+} from './config.js';
 export { findLocalUrl, UrlWatcher } from './detect.js';
 export { type DevOptions, dev } from './dev.js';
 export { doctor } from './doctor.js';

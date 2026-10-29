@@ -10,8 +10,11 @@ import { agentEnv, nodeVersionProblem, toShellCommand } from './env.js';
 import { formatTrace } from './format.js';
 
 export interface DevOptions {
-  /** The user's dev command and its arguments, e.g. ['npm', 'run', 'dev']. */
-  command: string[];
+  /**
+   * The user's dev command and its arguments, e.g. ['npm', 'run', 'dev'], or one string that runs in
+   * a shell (the `command` key in lightpath.config.json).
+   */
+  command: string[] | string;
   /** App URL; detected from the command's output when omitted. */
   url?: string | undefined;
   /** Directory Vite (or another dev server) serves from. Defaults to cwd. */
@@ -19,6 +22,10 @@ export interface DevOptions {
   /** Extra origins to tag with the trace header, besides the app's own. */
   backend?: string[] | undefined;
   roots?: string[] | undefined;
+  /** Globs for workspace files to leave out of traces. */
+  ignore?: string[] | undefined;
+  settleMs?: number | undefined;
+  maxSettleMs?: number | undefined;
   browser?: boolean | undefined;
   headless?: boolean | undefined;
   debug?: boolean | undefined;
@@ -34,15 +41,24 @@ export async function dev(options: DevOptions): Promise<number> {
     say(pc.red(problem));
     return 1;
   }
-  const [cmd, ...args] = options.command;
-  if (!cmd) {
-    say(pc.red('missing command. Usage: lightpath dev -- npm run dev'));
+  const shellLine = typeof options.command === 'string' ? options.command.trim() : undefined;
+  const [cmd, ...args] = typeof options.command === 'string' ? [] : options.command;
+  if (!cmd && !shellLine) {
+    say(
+      pc.red(
+        'missing command. Usage: lightpath dev -- npm run dev (or set "command" in lightpath.config.json)',
+      ),
+    );
     return 1;
   }
 
   const cwd = resolve(options.cwd ?? process.cwd());
   const roots = (options.roots?.length ? options.roots : [cwd]).map((r) => resolve(cwd, r));
-  const daemon = await startDaemon({ workspaceRoots: roots, ...(options.debug ? { log: say } : {}) });
+  const daemon = await startDaemon({
+    workspaceRoots: roots,
+    ...(options.ignore?.length ? { ignore: options.ignore } : {}),
+    ...(options.debug ? { log: say } : {}),
+  });
   say(`daemon on ${pc.dim(daemon.url)}`);
   const unsubscribe = daemon.store.subscribe((trace) => {
     if (trace.endedAt !== undefined) process.stdout.write(`\n${formatTrace(trace)}\n`);
@@ -57,10 +73,11 @@ export async function dev(options: DevOptions): Promise<number> {
   });
   const spawnOptions = { cwd, env, stdio: ['inherit', 'pipe', 'pipe'] as ['inherit', 'pipe', 'pipe'] };
   // Windows needs a shell so `npm`, `pnpm`, and other `.cmd` shims resolve.
-  const child =
-    process.platform === 'win32'
-      ? spawn(toShellCommand([cmd, ...args]), { ...spawnOptions, shell: true })
-      : spawn(cmd, args, spawnOptions);
+  const child = shellLine
+    ? spawn(shellLine, { ...spawnOptions, shell: true })
+    : process.platform === 'win32'
+      ? spawn(toShellCommand([cmd as string, ...args]), { ...spawnOptions, shell: true })
+      : spawn(cmd as string, args, spawnOptions);
 
   let collector: BrowserCollector | undefined;
   const openBrowser = async (url: string) => {
@@ -70,6 +87,8 @@ export async function dev(options: DevOptions): Promise<number> {
     collector = new BrowserCollector({
       url,
       backendOrigins: [origin, ...(options.backend ?? [])],
+      ...(options.settleMs !== undefined ? { settleMs: options.settleMs } : {}),
+      ...(options.maxSettleMs !== undefined ? { maxSettleMs: options.maxSettleMs } : {}),
       ...(options.headless !== undefined ? { headless: options.headless } : {}),
       send: (m) => ingestLocal(daemon, m),
       notice: (m) => say(pc.yellow(m)),

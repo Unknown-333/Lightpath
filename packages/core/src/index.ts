@@ -1,5 +1,6 @@
 export { countAt, flattenRanges, type Segment } from './flatten.js';
 export { HEAT_BUCKETS, heatBucket, newTraceId } from './ids.js';
+export { compileIgnore } from './ignore.js';
 export { LineIndex } from './line-index.js';
 export { coveredLines, type LineCounts, rangesToLines } from './lines.js';
 export { PERIODIC_WINDOWS, PeriodicFunctions } from './noise.js';

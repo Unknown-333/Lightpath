@@ -139,11 +139,13 @@ interface Trace {
     overlapped: boolean;
   }[];
   dropped: {
-    reason: 'node_modules' | 'outside-workspace' | 'no-source' | 'no-source-map' | 'internal';
+    reason: 'node_modules' | 'outside-workspace' | 'no-source' | 'no-source-map' | 'internal' | 'ignored';
     count: number;
   }[];
 }
 ```
+
+`ignored` counts files that match an `ignore` glob in `lightpath.config.json`.
 
 ## Versioning
 

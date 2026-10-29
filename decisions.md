@@ -772,3 +772,25 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: A new `editor` CI job runs `pnpm test:vscode` on Ubuntu under `xvfb-run`, with the downloaded VS Code cached. The suite now also checks Replay: it opens every file of the Checkout trace in `replayOrder`, and the last one is lit with the trace's lines.
 - Why: The extension was only tested by hand. The in-editor test is the only check that the decorations, the Actions view, and the commands work in a real VS Code, so it should run on every change. A reversed replay order now fails the test (measured).
 - How: `.github/workflows/ci.yml` and `extensions/vscode/test/editor/suite.cjs`.
+
+### D-094 `lightpath.config.json`, validated strictly, flags win
+
+- Date: 2026-10-29
+- Decision: `lightpath dev` and `lightpath doctor` read `lightpath.config.json` from the current folder (or `--config <file>`). Keys: `command`, `url`, `webRoot`, `backend`, `roots`, `ignore`, `settleMs`, `maxSettleMs`, `browser`, `headless`, and `$schema`. All optional. A flag on the command line wins over the file; `ignore` globs from both are combined. Unknown keys and bad values stop the CLI with every problem listed.
+- Why: The trials needed the same flags on every run (D-086 still needs `--backend` for remote APIs), and generated code had no way out of traces. Typos in a config file that pass silently are worse than no file, so the schema is strict. A `command` key means a project can be started with plain `npx @lightpath-dev/cli dev`. Only the current folder is read, so a file never applies by surprise from a parent.
+- How: `packages/cli/src/config.ts` (zod schema `LightpathConfig`, `loadConfig()`); paths in `webRoot` and `roots` resolve against the file's folder, `backend` entries become origins. `packages/cli/lightpath.config.schema.json` is the JSON Schema for editors, generated from the same zod schema; a test fails when they differ (`UPDATE_SCHEMA=1` rewrites it). `pnpm e2e:api` has a run that takes its command, `browser: false`, and an `ignore` glob from a config file.
+- Rejected: JavaScript config files (`lightpath.config.ts`): loading user code before the daemon starts adds a loader and a security question for no need here. Looking in parent folders: surprising in monorepos.
+
+### D-095 `ignore` globs match workspace paths and count as `ignored`
+
+- Date: 2026-10-29
+- Decision: `ResolveContext.ignore` holds globs, checked after a file resolves to a workspace path. A match is dropped with the new drop reason `ignored`. `*` and `?` stay inside a folder, `**` crosses folders, a pattern with no `/` matches at any depth, a match on a folder hides its contents, and matching ignores case.
+- Why: Users think in project paths (`src/generated/**`), not script URLs, and the same rule then covers browser, Node, and Python files. The old `ignore` (URL substrings) was never set by anything. A separate reason tells a user their own rule hid a file, rather than "internal". Case is ignored because Windows paths reach the daemon in more than one casing.
+- How: `packages/core/src/ignore.ts` (`compileIgnore`, no dependency; compiled once per context), `inWorkspace()` in `resolve.ts`, `DropReason` in `packages/protocol/src/model.ts`. All clients ship together in 0.0.1, so the new enum value needs no protocol bump.
+
+### D-096 The M5 exit check runs through the real MCP server, and it finds the daemon from below
+
+- Date: 2026-10-29
+- Decision: `pnpm e2e` now ends by starting `lightpath mcp` as a coding agent would (MCP SDK client over stdio), calling `find_code_for_action("Checkout")`, and checking that the answer is the trace the click just made, with every file's exact line ranges. The MCP server also looks for `.lightpath/daemon.json` in each parent of its root, and reports its package version instead of `0.0.0`.
+- Why: The integration test only read a hand-made trace. The exit check ("an agent answers which code handles Checkout from a real trace") needs the whole path: browser, agent, daemon, MCP. Editors don't all start MCP servers in the project folder; walking up makes the one-line setup work from a subfolder.
+- How: `scripts/e2e-shop.mjs` (the daemon now writes its discovery file there), `connect()` in `packages/mcp/src/server.ts`, a CLI test that starts the server in a subfolder. The CLI's `--version` reads its package.json the same way.

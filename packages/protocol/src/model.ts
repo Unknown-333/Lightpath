@@ -72,6 +72,7 @@ export const DropReason = z.enum([
   'no-source',
   'no-source-map',
   'internal',
+  'ignored',
 ]);
 export type DropReason = z.infer<typeof DropReason>;
 

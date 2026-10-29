@@ -8,13 +8,14 @@
 //   shop: tsc         node dist/server/index.js    built by tsc; lines from external .map files
 //   fastify           node fastify/server.ts       Fastify 5, type stripping
 //   nest              node dist/nest/main.js       NestJS 12 (decorators), built by tsc with .map files
+//   shop: config      lightpath dev --config ...   the command, browser: false, and ignore from a config file
 //
 // Type stripping keeps every offset, so a stripped run is the reference: runs that go through a
 // source map must light exactly the same lines in the files they share with it.
 //
 // Usage: pnpm build && node scripts/e2e-api.mjs [run-name ...]
 import { execFileSync, execSync, spawn } from 'node:child_process';
-import { readFileSync, rmSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -128,7 +129,24 @@ const RUNS = [
     sameAs: 'fastify',
     noDist: true,
   },
+  {
+    // Everything comes from the config file: no `--` command and no `--no-browser` flag.
+    name: 'shop: config',
+    cwd: shop,
+    config: {
+      command: [node, ...strip, 'server/index.ts'].map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' '),
+      browser: false,
+      ignore: ['server/services/payment.ts'],
+    },
+    order: shopOrder,
+    files: shopFiles.filter((f) => f !== 'server/services/payment.ts'),
+    lines: shopLines,
+    ignored: ['server/services/payment.ts'],
+    sameAs: 'shop: strip',
+  },
 ];
+
+const CONFIG_NAME = 'lightpath.e2e.config.json';
 
 function tsc(cwd, project, outDir) {
   rmSync(join(cwd, outDir), { recursive: true, force: true });
@@ -154,7 +172,11 @@ async function until(what, fn, timeoutMs = 20_000) {
 
 /** Runs one app through the real CLI and returns its order trace and the CLI's output. */
 async function traceOrder(run) {
-  const cli = spawn(node, [cliBin, 'dev', '--no-browser', '--debug', '--', ...run.command], {
+  if (run.config) writeFileSync(join(run.cwd, CONFIG_NAME), JSON.stringify(run.config));
+  const args = run.config
+    ? ['dev', '--config', CONFIG_NAME, '--debug']
+    : ['dev', '--no-browser', '--debug', '--', ...run.command];
+  const cli = spawn(node, [cliBin, ...args], {
     cwd: run.cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     // On POSIX, a process group lets us stop the CLI, tsx, and the server together.
@@ -215,6 +237,7 @@ async function traceOrder(run) {
     if (cli.exitCode === null && cli.signalCode === null) await exited;
     // A forced stop skips the daemon's cleanup; remove the discovery file it would have removed.
     rmSync(join(run.cwd, DISCOVERY_FILE), { force: true });
+    if (run.config) rmSync(join(run.cwd, CONFIG_NAME), { force: true });
     await until(`${run.name}: port 3001 to be free`, () =>
       fetch(API).then(
         () => false,
@@ -236,7 +259,11 @@ const results = {};
 try {
   for (const run of RUNS) {
     if (only.length > 0 && !only.includes(run.name)) continue;
-    console.log(`\n--- ${run.name}: lightpath dev --no-browser -- ${run.command.slice(1).join(' ')}`);
+    console.log(
+      run.config
+        ? `\n--- ${run.name}: lightpath dev --config ${JSON.stringify(run.config)}`
+        : `\n--- ${run.name}: lightpath dev --no-browser -- ${run.command.slice(1).join(' ')}`,
+    );
     run.build?.();
     const { trace, output } = await traceOrder(run);
     results[run.name] = trace;
@@ -252,6 +279,13 @@ try {
       check(
         trace.files.some((f) => f.path === path),
         `${run.name}: the trace includes ${path}`,
+      );
+    }
+    for (const path of run.ignored ?? []) {
+      check(!trace.files.some((f) => f.path === path), `${run.name}: ${path} is left out (ignore)`);
+      check(
+        trace.dropped.some((d) => d.reason === 'ignored' && d.count > 0),
+        `${run.name}: the trace counts it as ignored (${JSON.stringify(trace.dropped)})`,
       );
     }
     for (const [path, { dark, lit }] of Object.entries(run.lines)) {

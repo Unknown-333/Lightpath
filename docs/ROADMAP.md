@@ -2,7 +2,7 @@
 
 Each milestone ends with something you can run and a post you can publish. Don't start a milestone until the previous one's exit check passes.
 
-**Status (October 29, 2026):** M1 to M4 are done (see below). `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark, and `pnpm test:vscode` checks that VS Code draws exactly those lines. Four real apps have been run under Lightpath ([tested-apps.md](tested-apps.md)).
+**Status (October 29, 2026):** M1 to M5 are done (see below). `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark, and `pnpm test:vscode` checks that VS Code draws exactly those lines. Four real apps have been run under Lightpath ([tested-apps.md](tested-apps.md)).
 
 | Milestone                     | Goal                                                                                                         | Exit check                                                                                                                                                    | Post                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -60,6 +60,18 @@ The exit check is the demo video: [docs/media/demo.gif](media/demo.gif), recorde
 | Trace list       | The Actions view lists recent clicks and requests, each with its files; background files are marked                                                          |
 | Replay           | Walks a trace's files in the order the collectors saw them. Tested: every file opens in order and the last is lit (D-093)                                    |
 | Real VS Code     | `pnpm test:vscode` passes on VS Code 1.144 (Windows), and runs in CI on Ubuntu under `xvfb-run` (D-093). 1.101 is the oldest supported (Node 22 in the host) |
+
+## M5 (done, October 29, 2026)
+
+The exit check, "an agent answers 'which code handles Checkout?' from a real trace", runs at the end of `pnpm e2e`: it starts `lightpath mcp` like a coding agent would and checks the answer against the trace the click made (D-096).
+
+| Step        | Result                                                                                                                            |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| MCP tools   | `find_code_for_action`, `list_traces`, `get_trace`, `diff_traces`. Setup for Claude Code, Cursor, VS Code, and Kiro in the README |
+| Doctor      | `lightpath doctor` checks Node, the browser, the agent file, the config file, and the daemon                                      |
+| Config file | `lightpath.config.json` with a JSON Schema; strict, flags win (D-094). `ignore` globs leave files out of traces (D-095)           |
+| Benchmarks  | `bench/`: Node per-request cost, browser click pause, and a real large app (Actual)                                               |
+| README      | Quick start, config, MCP, how it works, limits                                                                                    |
 
 ## Open questions to answer during the build
 
