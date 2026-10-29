@@ -129,12 +129,12 @@ Algorithm: collect all ranges, sort by `start` ascending then `end` descending (
 
 Where the source map comes from:
 
-| Source                                        | How the map is found                                                                                                                                                                        |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vite dev server (browser)                     | `Debugger.scriptParsed` gives `sourceMapURL`. Vite 8.3 serves inline `data:` maps for transformed modules, and they map `.tsx` lines correctly **(measured in the golden end-to-end test)** |
-| Node with type stripping (`.ts` run directly) | No map needed. Types are replaced with whitespace, so offsets match the original file                                                                                                       |
-| Node with `tsx` or another loader             | In-process `Debugger.scriptParsed` gives `sourceMapURL` (inline `data:` URL) **(measured on a data URL module)**                                                                            |
-| Plain `.js`                                   | Identity mapping                                                                                                                                                                            |
+| Source                                        | How the map is found                                                                                                                                                                                  |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vite dev server (browser)                     | `Debugger.scriptParsed` gives `sourceMapURL`. Vite 8.3 serves inline `data:` maps for transformed modules, and they map `.tsx` lines correctly **(measured in the golden end-to-end test)**           |
+| Node with type stripping (`.ts` run directly) | No map needed. Types are replaced with whitespace, so offsets match the original file                                                                                                                 |
+| Node with `tsx` or another loader             | In-process `Debugger.scriptParsed` gives `sourceMapURL` (inline `data:` URL) **(measured: the shop API under `tsx` and `tsx watch` maps to the same lines as type stripping, `scripts/e2e-api.mjs`)** |
+| Plain `.js`                                   | Identity mapping                                                                                                                                                                                      |
 
 ### 4.5 `resolveFile`: URLs to workspace paths
 

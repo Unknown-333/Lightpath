@@ -336,6 +336,7 @@ The daemon handles it in `#onLines()` (section 6.2).
 | `pnpm check`                   | `typecheck` → `lint` → `test` → `test:py` (what CI runs)                                                               |
 | `pnpm bundle`                  | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs`                                           |
 | `pnpm e2e`                     | `pnpm build`, then `scripts/e2e-shop.mjs` (below)                                                                      |
+| `pnpm e2e:api`                 | `pnpm build`, then `scripts/e2e-api.mjs` (below)                                                                       |
 | `pnpm test:vscode`             | `pnpm build`, `pnpm bundle`, then `extensions/vscode/test/editor/run.mjs` (section 8)                                  |
 | `pnpm --filter shop lightpath` | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder                                                 |
 
@@ -349,6 +350,16 @@ The daemon handles it in `#onLines()` (section 6.2).
 6. Presses "Add to cart" (press, hold 80 ms, release), waits for its trace, checks it.
 7. Presses "Checkout", waits for "Order #… placed", waits for a trace that has Node files, checks files, the request, a dark line, and a lit line.
 8. Stops the browser, kills the shop's process tree, closes the daemon, exits 0 or 1.
+
+`scripts/e2e-api.mjs`, in order:
+
+1. Resolves tsx's CLI from the shop's dependencies, like `npx tsx` would.
+2. For each way of starting the shop's API (`node server/index.ts`, `tsx server/index.ts`, `tsx watch server/index.ts`): spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in `examples/shop`, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
+3. Waits for "listening on port", reads `.lightpath/daemon.json` (checking its `pid` is this CLI), and connects a `DaemonClient`.
+4. POSTs one order to `http://127.0.0.1:3001/api/orders`, then polls `listTraces()` and `getTrace()` until a finished trace contains `server/routes/orders.ts`.
+5. Checks the request, the files, a dark and a lit line, that nothing was dropped for a missing source or map, that the terminal printed the route, and (for tsx) that the agent skipped tsx's own CLI process.
+6. Stops the process tree, removes the discovery file, and waits for port 3001 to be free.
+7. Compares every file's lines and counts from both tsx runs with the type-stripping run, which has no source map and so is the reference.
 
 `packages/core/scripts/capture-fixtures.mjs` (run by hand when a sample changes), in order:
 

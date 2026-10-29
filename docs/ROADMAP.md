@@ -21,16 +21,21 @@ Each milestone ends with something you can run and a post you can publish. Don't
 
 What M1 found:
 
-- tsx on Windows writes source map `sources` as `C:\...` paths, which trace-mapping resolved to a path that doesn't exist. Every tsx-loaded file was lost. Fixed in `mapToOriginal` (D-068). The Node agent already forwards inline `data:` maps like tsx's, but no app has run under `tsx` with the agent yet; that's an M2 check.
+- tsx on Windows writes source map `sources` as `C:\...` paths, which trace-mapping resolved to a path that doesn't exist. Every tsx-loaded file was lost. Fixed in `mapToOriginal` (D-068), and confirmed end to end in M2 with a real Express app under `tsx` (D-073).
 - Vite's React transform puts the absolute file path into the served code, so the capture redacts it with a same-length placeholder.
 - Line granularity has two visible effects, both now pinned by the fixture: a line like `} catch (err) {` is lit when the `try` block ran, and `onChange={(e) => …}` is lit when the element rendered even if the handler never ran.
 
-## M2 in detail
+## M2 (in progress)
 
-1. Agent: wire `register.ts` startup steps 1 to 7 (ARCHITECTURE section 5.2).
-2. Daemon: `POST /v1/ingest` with token check and schema validation, source cache by hash, pipeline, `MemoryStore`.
-3. CLI: `lightpath dev` spawns the child with `NODE_OPTIONS` extended and prints traces.
-4. Integration test in `packages/node-agent/test/` against a fake daemon.
+The original M2 steps (agent startup, daemon ingest, `lightpath dev`, the agent integration test) were done in the skeleton. M2 is now about real Node setups.
+
+| Step                                                                                        | Status                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exit check: `lightpath dev -- <api>`, POST an order, see `routes/orders.ts` in the terminal | **Done.** `pnpm e2e:api` runs it through the real CLI with `--no-browser`, in CI on Linux, macOS, and Windows with Node 22 and 24                                                                                    |
+| `tsx` and `tsx watch`                                                                       | **Done.** Same e2e: the shop's Express API under `tsx` and `tsx watch` lights exactly the lines type stripping does, in every file. Without the D-068 fix, no `tsx` trace had any file. tsx's CLI process is skipped |
+| External `.map` files (`tsc` output, bundlers)                                              | Next                                                                                                                                                                                                                 |
+| Fastify and Nest apps                                                                       | To do                                                                                                                                                                                                                |
+| Coverage read cost on a large app                                                           | To do (`bench/`)                                                                                                                                                                                                     |
 
 ## Open questions to answer during the build
 

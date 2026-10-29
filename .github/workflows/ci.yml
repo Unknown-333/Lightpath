@@ -42,3 +42,21 @@ jobs:
       # GitHub's Ubuntu images ship Google Chrome, which the collector launches with channel "chrome".
       - run: pnpm e2e
       - run: LIGHTPATH_BROWSER_TESTS=1 pnpm --filter @lightpath-dev/browser test
+
+  e2e-api:
+    name: backend end-to-end (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # The shop's API under type stripping, tsx, and tsx watch, through the real CLI. No browser.
+      - run: pnpm e2e:api
