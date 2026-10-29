@@ -736,3 +736,17 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: Add `webpack`, `webpack-cli`, `webpack-dev-server`, `nodemon`, and `concurrently` (when run from `node_modules`) to the agent's tool skip list. `ts-node` stays instrumented.
 - Why: In tududi, `webpack serve` loaded the agent, and its own config file showed up as backend code (`webpack.config.js` lines in many traces, including the dev server's static file responses, which became backend-only traces). The webpack dev server is a tool like Vite, which was already skipped. nodemon and concurrently only start other processes, so instrumenting them costs an inspector session and catches nothing. ts-node is different: it runs the app in its own process, so skipping it would lose the backend (D-085).
 - How: `DEFAULT_SKIP` in `packages/node-agent/src/config.ts`; test cases for each tool and a ts-node command line that must stay instrumented.
+
+### D-089 Block service workers in the browser Lightpath opens
+
+- Date: 2026-10-29
+- Decision: The collector creates its browser context with `serviceWorkers: 'block'`.
+- Why: tududi registers a service worker that answers the app's `/api` fetches. Requests a worker sends come from its own context, so `page.route` didn't see them and couldn't add the trace header: clicking "Add" and saving a task produced a browser trace with no backend, and `POST /api/inbox` as a separate backend-only trace. The browser Lightpath opens is a dev profile thrown away on exit, so offline caching isn't something to keep there, and Playwright's own guidance is to block workers when routing requests.
+- How: One option in `packages/browser/src/collector.ts`. A real-browser test serves a page that registers a pass-through worker, reloads so the worker would control it, and presses a button. With the option the registration is refused and the request carries the trace header. With `serviceWorkers: 'allow'` the page is controlled and the request reaches the server with no header (measured). Trade-off, for the README: an app whose behavior depends on its service worker (offline mode, push) behaves as if the browser had none while traced.
+
+### D-090 Only a control's or a leaf element's text labels a click
+
+- Date: 2026-10-29
+- Decision: When the clicked element isn't inside a button, link, input, label, ARIA role, or `data-testid` element, the hook uses its text for the label only if it has no child elements and isn't `html`, `body`, `script`, or `style`.
+- Why: A click on an empty area in tududi was labelled `html: (function () { function sanitize(value)…`: the target was the `html` element, whose `textContent` is the whole page, inline scripts included. A label should name what was clicked, and a container's text doesn't.
+- How: `describe()` in `HOOK_SOURCE` (`packages/browser/src/collector.ts`). Such clicks are now labelled by tag alone (`html`, `div`).

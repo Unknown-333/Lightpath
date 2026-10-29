@@ -77,6 +77,7 @@ Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full design, [docs/PRO
 - In very large apps (over about 3,000 React components in dev mode), clicks are traced from the mouse release, so `pointerdown` and `mousedown` handlers aren't included ([bench/README.md](bench/README.md)).
 - Next.js server components and worker threads aren't supported yet.
 - webpack apps need source maps in development. webpack's default dev setting (`devtool: 'eval'`) has none, so frontend files can't be shown; Lightpath says so and suggests `devtool: 'eval-cheap-module-source-map'`. Vite needs nothing.
+- Service workers are turned off in the browser Lightpath opens, so requests stay visible to it. Offline mode and push notifications won't work there.
 
 ## Contributing
 

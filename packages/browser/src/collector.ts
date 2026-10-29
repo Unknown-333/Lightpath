@@ -66,9 +66,13 @@ const PRESS_BUDGET_MS = 20;
  */
 const HOOK_SOURCE = `(() => {
   const describe = (el) => {
-    const t = (el && el.closest && el.closest('button, a, [role], input, select, textarea, label, summary, [data-testid]')) || el;
+    const hit = el && el.closest && el.closest('button, a, [role], input, select, textarea, label, summary, [data-testid]');
+    const t = hit || el;
     if (!t || !t.tagName) return {};
-    const text = (t.textContent || '').trim().slice(0, 80);
+    // Outside any control, only a leaf element's own text is a fair label: a container's
+    // textContent includes every descendant, inline scripts too (seen on a real app, D-090).
+    const leaf = hit || (t.childElementCount === 0 && !/^(HTML|BODY|SCRIPT|STYLE)$/.test(t.tagName));
+    const text = leaf ? (t.textContent || '').trim().slice(0, 80) : '';
     return {
       tag: t.tagName.toLowerCase(),
       role: t.getAttribute('role') || undefined,
@@ -160,7 +164,9 @@ export class BrowserCollector {
       ...(this.#opts.headless !== undefined ? { headless: this.#opts.headless } : {}),
       ...(this.#opts.channel ? { channel: this.#opts.channel } : {}),
     });
-    this.#context = await this.#browser.newContext({ viewport: null });
+    // Service workers are blocked (D-089): a worker that answers the app's fetches sends them from
+    // its own context, where page.route never sees them, so no API call would join the click.
+    this.#context = await this.#browser.newContext({ viewport: null, serviceWorkers: 'block' });
     const page = await this.#context.newPage();
     this.#page = page;
 
