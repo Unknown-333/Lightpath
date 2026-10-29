@@ -3,7 +3,7 @@ import type { DropReason, ScriptCoverage } from '@lightpath-dev/protocol';
 import { flattenRanges } from './flatten.js';
 import { LineIndex } from './line-index.js';
 import { type LineCounts, rangesToLines } from './lines.js';
-import { type ResolveContext, resolveFile } from './resolve.js';
+import { type ResolveContext, resolveFile, webpackModulePath } from './resolve.js';
 import { mapToOriginal } from './sourcemap.js';
 
 export interface ScriptInput {
@@ -42,6 +42,9 @@ export function mapScript(input: ScriptInput, ctx: ResolveContext): ScriptResult
 
   if (!input.sourceMap) {
     if (scriptTarget.kind === 'dropped') drop(scriptTarget.reason);
+    // A webpack module's code is loader output (swc, Babel, ts-loader), not the file on disk, so
+    // without a map its offsets would light the wrong lines (D-087).
+    else if (webpackModulePath(input.coverage.url) !== undefined) drop('no-source-map');
     else result.files.set(scriptTarget.path, rangesToLines(segments, index));
     return result;
   }

@@ -32,6 +32,34 @@ describe('resolveFile', () => {
     expect(resolveFile(url, win)).toEqual({ kind: 'dropped', reason });
   });
 
+  // Webpack module paths are relative to webpack's context, the dev server's root (D-087).
+  it.each([
+    ['webpack://tududi/./frontend/components/Login.tsx?33d7', 'web/frontend/components/Login.tsx'],
+    ['webpack-internal:///./frontend/App.tsx', 'web/frontend/App.tsx'],
+    ['webpack:///./src/a.js', 'web/src/a.js'],
+    ['webpack://app/../shared/money.ts', 'shared/money.ts'],
+    [
+      'webpack-internal:///./node_modules/css-loader/dist/cjs.js!./frontend/styles/app.css',
+      'web/frontend/styles/app.css',
+    ],
+  ])('%s → %s', (url, path) => {
+    expect(resolveFile(url, win)).toMatchObject({ kind: 'workspace', path });
+  });
+
+  it.each([
+    ['webpack://tududi/webpack/runtime/jsonp chunk loading', 'internal'],
+    ['webpack://tududi/(webpack)/hot/dev-server.js', 'internal'],
+    ['webpack-internal:///./node_modules/react/index.js', 'node_modules'],
+    ['webpack://tududi/external "react"', 'internal'],
+    ['webpack://app/../../elsewhere/a.ts', 'outside-workspace'],
+  ])('%s is dropped as %s', (url, reason) => {
+    expect(resolveFile(url, win)).toEqual({ kind: 'dropped', reason });
+  });
+
+  it('resolves webpack paths against the first workspace root without a dev server', () => {
+    expect(resolveFile('webpack://app/./src/a.ts', posix)).toMatchObject({ path: 'src/a.ts' });
+  });
+
   it('resolves POSIX file URLs case-sensitively', () => {
     expect(resolveFile('file:///home/me/shop/a.ts', posix)).toMatchObject({ path: 'a.ts' });
     expect(resolveFile('file:///home/me/Shop/a.ts', posix)).toEqual({

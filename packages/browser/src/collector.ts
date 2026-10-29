@@ -1,4 +1,4 @@
-import { newTraceId } from '@lightpath-dev/core';
+import { newTraceId, webpackModulePath } from '@lightpath-dev/core';
 import { type IngestMessage, type ScriptCoverage, TRACE_HEADER, type TraceId } from '@lightpath-dev/protocol';
 import type { Browser, BrowserContext, CDPSession, Page, Request, Route } from 'playwright-core';
 import { launchBrowser } from './launch.js';
@@ -66,9 +66,13 @@ const PRESS_BUDGET_MS = 20;
  */
 const HOOK_SOURCE = `(() => {
   const describe = (el) => {
-    const t = (el && el.closest && el.closest('button, a, [role], input, select, textarea, label, summary, [data-testid]')) || el;
+    const hit = el && el.closest && el.closest('button, a, [role], input, select, textarea, label, summary, [data-testid]');
+    const t = hit || el;
     if (!t || !t.tagName) return {};
-    const text = (t.textContent || '').trim().slice(0, 80);
+    // Outside any control, only a leaf element's own text is a fair label: a container's
+    // textContent includes every descendant, inline scripts too (seen on a real app, D-090).
+    const leaf = hit || (t.childElementCount === 0 && !/^(HTML|BODY|SCRIPT|STYLE)$/.test(t.tagName));
+    const text = leaf ? (t.textContent || '').trim().slice(0, 80) : '';
     return {
       tag: t.tagName.toLowerCase(),
       role: t.getAttribute('role') || undefined,
@@ -130,6 +134,15 @@ export class BrowserCollector {
   #page: Page | undefined;
   #cdp: CDPSession | undefined;
   #active: TraceId | undefined;
+  #warnedNoWebpackMaps = false;
+  /** True from a `beforeunload` during an action until the next document's `load` (D-091). */
+  #navigating = false;
+
+  /** Logs a message and shows it to the user once (the CLI prints notices in yellow). */
+  #notify(message: string): void {
+    this.#log(message);
+    this.#opts.notice?.(message);
+  }
   #clickChain: Promise<void> = Promise.resolve();
   /** True once the boundary has moved to pointer release (see PRESS_BUDGET_MS). */
   #release = false;
@@ -153,7 +166,9 @@ export class BrowserCollector {
       ...(this.#opts.headless !== undefined ? { headless: this.#opts.headless } : {}),
       ...(this.#opts.channel ? { channel: this.#opts.channel } : {}),
     });
-    this.#context = await this.#browser.newContext({ viewport: null });
+    // Service workers are blocked (D-089): a worker that answers the app's fetches sends them from
+    // its own context, where page.route never sees them, so no API call would join the click.
+    this.#context = await this.#browser.newContext({ viewport: null, serviceWorkers: 'block' });
     const page = await this.#context.newPage();
     this.#page = page;
 
@@ -166,6 +181,18 @@ export class BrowserCollector {
         length: s.length ?? 0,
         sourceMapURL: s.sourceMapURL ?? '',
       });
+      if (
+        !this.#warnedNoWebpackMaps &&
+        !s.sourceMapURL &&
+        !isNoiseScript(s.url) &&
+        webpackModulePath(s.url)
+      ) {
+        this.#warnedNoWebpackMaps = true;
+        this.#notify(
+          "webpack is serving your code without source maps (devtool 'eval'), so browser files can't be shown. " +
+            "Set devtool: 'eval-cheap-module-source-map' in your webpack config for development.",
+        );
+      }
     });
     cdp.on('Debugger.paused', (e) => {
       // CallFrame.url is empty for init scripts (measured); resolve the URL via scriptParsed.
@@ -194,7 +221,13 @@ export class BrowserCollector {
     page.on('requestfailed', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
     // Page load compiles and runs most of the app. Reading that now keeps the first action's
     // pause as short as later ones (bench/README.md: 40 ms vs 8 ms at 12,000 functions).
-    page.on('load', () => this.#afterLoad());
+    page.on('load', () => {
+      if (this.#navigating) {
+        this.#navigating = false;
+        this.#settle.requestEnded();
+      }
+      this.#afterLoad();
+    });
 
     await page.goto(this.#opts.url);
     this.#log(`browser open at ${this.#opts.url}`);
@@ -265,6 +298,11 @@ export class BrowserCollector {
     });
 
     const reason = await settled;
+    // A navigation that never loaded (a download, a cancelled leave) mustn't hold later windows open.
+    if (this.#navigating) {
+      this.#navigating = false;
+      this.#settle.requestEnded();
+    }
     const coverage = await this.#take();
     await this.#emit('action', coverage, at, traceId);
     this.#opts.send({ type: 'traceEnd', traceId, at: Date.now(), settled: reason });
@@ -349,6 +387,12 @@ export class BrowserCollector {
    */
   async #onLeave(): Promise<void> {
     const traceId = this.#active;
+    // The page is leaving during an action: count the navigation as in flight until the next
+    // document's `load`, so a slow read here can't end the window before the new page runs (D-091).
+    if (traceId && !this.#navigating) {
+      this.#navigating = true;
+      this.#settle.requestStarted();
+    }
     try {
       const coverage = await this.#take();
       if (traceId) {

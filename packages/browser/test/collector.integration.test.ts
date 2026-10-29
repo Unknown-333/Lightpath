@@ -68,6 +68,21 @@ beforeAll(async () => {
     if (req.url === '/app.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(appJs);
     if (req.url === '/two.js')
       return res.writeHead(200, { 'content-type': 'text/javascript' }).end(pageTwoJs);
+    if (req.url === '/sw.js')
+      return res
+        .writeHead(200, { 'content-type': 'text/javascript' })
+        .end("self.addEventListener('fetch', (e) => e.respondWith(fetch(e.request)));");
+    if (req.url === '/sw-page')
+      return res
+        .writeHead(200, { 'content-type': 'text/html' })
+        .end(
+          '<!doctype html><button id="buy">Checkout</button><p id="out"></p><form id="coupon"><input id="code"></form>' +
+            '<a id="next" href="/two">Next</a><button id="remote">Remote</button>' +
+            `<script>window.API = ${JSON.stringify(apiOrigin)}; window.swRegistered = Promise.race([` +
+            "Promise.resolve().then(() => navigator.serviceWorker.register('/sw.js')).then(() => navigator.serviceWorker.ready).then(() => 'yes')," +
+            " new Promise((r) => setTimeout(() => r('blocked'), 2000))]).catch(() => 'blocked');</script>" +
+            '<script type="module" src="/app.js"></script>',
+        );
     if (req.url === '/two') {
       traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
       return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
@@ -142,11 +157,16 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
   }, 30_000);
 
   /** Starts a collector, runs `act`, waits for `traces` traceEnd messages, and returns everything. */
-  async function record(act: (c: BrowserCollector) => Promise<void>, traces = 1, pressBudgetMs?: number) {
+  async function record(
+    act: (c: BrowserCollector) => Promise<void>,
+    traces = 1,
+    pressBudgetMs?: number,
+    path = '',
+  ) {
     const messages: IngestMessage[] = [];
     const logs: string[] = [];
     const collector = new BrowserCollector({
-      url: origin,
+      url: `${origin}${path}`,
       headless: true,
       settleMs: 200,
       ...(pressBudgetMs !== undefined ? { pressBudgetMs } : {}),
@@ -197,6 +217,34 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     expect(remote.label).toBe('button: Remote');
     expect(ran(remote.traceId)).toContain('/app.js#loadRemote');
     expect(apiSeen).toEqual([{ method: 'GET', trace: remote.traceId }]);
+  }, 30_000);
+
+  it('keeps API calls in the click on a page that registers a service worker (D-089)', async () => {
+    traceHeaders.length = 0;
+    let registered: unknown;
+    const { starts } = await record(
+      async (c) => {
+        const page = c.page;
+        if (!page) throw new Error('no page');
+        registered = await page.evaluate(
+          () => (window as unknown as { swRegistered: Promise<string> }).swRegistered,
+        );
+        // A worker controls the page from the next load; without blocking, the click's request
+        // then reaches the server with no trace header (measured).
+        await page.reload();
+        await page.waitForTimeout(500);
+        await page.focus('#buy');
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+      },
+      1,
+      undefined,
+      '/sw-page',
+    );
+    expect(registered).toBe('blocked');
+    const [buy] = starts;
+    if (!buy) throw new Error('no trace');
+    expect(traceHeaders).toContain(buy.traceId);
   }, 30_000);
 
   it('opens a trace for Enter on a button and for Enter in a form field', async () => {

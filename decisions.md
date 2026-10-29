@@ -721,3 +721,39 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: The first real app's frontend (Vite on :3000) calls its Fastify API directly on :3001, a common setup. Out of the box every click's trace had the frontend files but no backend, and each API call showed up as its own backend-only trace; it took `--backend http://localhost:3001` to join them. D-029 kept the header off other origins because a custom header causes a CORS preflight. That holds for headers the page sets, not for one added by `page.route`: Chrome has done its CORS checks before interception, so no preflight is sent. Measured in a spike against an API whose CORS policy allowed no custom headers (GET and a JSON POST both reached it with the header, no extra OPTIONS), and now in a real-browser test whose API rejects every preflight with 405. Loopback is the dev machine itself, so the trace ID doesn't leave it.
 - How: `LOOPBACK` set in `packages/browser/src/rules.ts`; unit cases for the three loopback forms, an image request (not tagged), `localhost.example.com`, and a LAN address (not tagged). The real-browser test adds a second server on another port. With the change, the stepful app's "Take quiz" trace has the React files and `backend/server.ts` lines 27-31 with no flags. ADR 0004 and ARCHITECTURE 3 and 6 updated; D-029 marked revised.
 - Rejected: Making the Node agent report its listening ports so the CLI can add them (more moving parts, and it misses servers in processes the agent skips); telling users to pass `--backend` (the first-run experience is the product).
+
+### D-087 Map webpack dev builds through webpack:// and webpack-internal:// module URLs
+
+- Date: 2026-10-29
+- Decision: `resolveFile` understands `webpack://<name>/./src/a.tsx?hash` and `webpack-internal:///./src/a.tsx`, resolving the module path against the dev server's root (webpack's `context`, which is the folder the dev command runs in), dropping webpack's runtime as internal and `node_modules` modules (loader chains included) as dependencies. The browser collector keeps those scripts instead of filtering every non-HTTP URL. A webpack module with no source map is dropped as `no-source-map`, never mapped by its own offsets, and the CLI says once how to turn maps on.
+- Why: The second real app (chrisvel/tududi, React 18 + webpack 5 + swc-loader) showed no frontend files at all. Chrome reports each webpack module as its own script: 1,279 `webpack://tududi/./frontend/…` scripts with webpack's default dev `devtool` (`eval`, no maps), and `webpack-internal:///./frontend/…` with an inline map under `eval-cheap-module-source-map` (measured). The collector dropped all of them because they aren't `http(s)` URLs. With the default `eval`, the module code is swc's output, so its line numbers don't match the `.tsx` on disk; lighting them would be wrong, so the honest result is no file plus a notice. With maps on, the login click showed 46 frontend files.
+- How: `webpackModulePath()` in `packages/core/src/resolve.ts`, checked before the generic `node_modules` rule so a loader chain like `css-loader!./src/a.css` resolves to the CSS file; `isNoiseScript` in `packages/browser/src/rules.ts` uses it; the pipeline drops unmapped webpack modules; the collector warns on the first unmapped app module ("Set devtool: 'eval-cheap-module-source-map'"). Unit tests for URL forms, runtime modules, loader chains, `..`, and the unmapped drop.
+- Rejected: Patching the user's webpack config (Lightpath doesn't change user code); fetching `.map` files over HTTP (webpack's `eval-*` maps are already inline, and production-style `source-map` builds aren't the dev case).
+
+### D-088 Skip webpack, nodemon, and concurrently processes in the Node agent
+
+- Date: 2026-10-29
+- Decision: Add `webpack`, `webpack-cli`, `webpack-dev-server`, `nodemon`, and `concurrently` (when run from `node_modules`) to the agent's tool skip list. `ts-node` stays instrumented.
+- Why: In tududi, `webpack serve` loaded the agent, and its own config file showed up as backend code (`webpack.config.js` lines in many traces, including the dev server's static file responses, which became backend-only traces). The webpack dev server is a tool like Vite, which was already skipped. nodemon and concurrently only start other processes, so instrumenting them costs an inspector session and catches nothing. ts-node is different: it runs the app in its own process, so skipping it would lose the backend (D-085).
+- How: `DEFAULT_SKIP` in `packages/node-agent/src/config.ts`; test cases for each tool and a ts-node command line that must stay instrumented.
+
+### D-089 Block service workers in the browser Lightpath opens
+
+- Date: 2026-10-29
+- Decision: The collector creates its browser context with `serviceWorkers: 'block'`.
+- Why: tududi registers a service worker that answers the app's `/api` fetches. Requests a worker sends come from its own context, so `page.route` didn't see them and couldn't add the trace header: clicking "Add" and saving a task produced a browser trace with no backend, and `POST /api/inbox` as a separate backend-only trace. The browser Lightpath opens is a dev profile thrown away on exit, so offline caching isn't something to keep there, and Playwright's own guidance is to block workers when routing requests.
+- How: One option in `packages/browser/src/collector.ts`. A real-browser test serves a page that registers a pass-through worker, reloads so the worker would control it, and presses a button. With the option the registration is refused and the request carries the trace header. With `serviceWorkers: 'allow'` the page is controlled and the request reaches the server with no header (measured). Trade-off, for the README: an app whose behavior depends on its service worker (offline mode, push) behaves as if the browser had none while traced.
+
+### D-090 Only a control's or a leaf element's text labels a click
+
+- Date: 2026-10-29
+- Decision: When the clicked element isn't inside a button, link, input, label, ARIA role, or `data-testid` element, the hook uses its text for the label only if it has no child elements and isn't `html`, `body`, `script`, or `style`.
+- Why: A click on an empty area in tududi was labelled `html: (function () { function sanitize(value)…`: the target was the `html` element, whose `textContent` is the whole page, inline scripts included. A label should name what was clicked, and a container's text doesn't.
+- How: `describe()` in `HOOK_SOURCE` (`packages/browser/src/collector.ts`). Such clicks are now labelled by tag alone (`html`, `div`).
+
+### D-091 Hold a click's window open across a full-page navigation
+
+- Date: 2026-10-29
+- Decision: When the page pauses in `beforeunload` during an action, the collector counts the navigation as one request in flight until the next document's `load` event. If no `load` comes (a download, a cancelled leave), the count is cleared when the window ends.
+- Why: The navigation test failed once on Linux CI (PR #2) with the new page's `arrived` missing from the trace, and passed on rerun. A link click makes no request until after the `beforeunload` pause, so the 300 ms quiet timer was already running while the collector read coverage there. On a slow machine it could fire in that gap, and the closing read then ran before the new page's scripts. Waiting for `load` makes the window cover the whole navigation.
+- How: `#navigating` in `packages/browser/src/collector.ts`, set in `#onLeave`, cleared by the page's `load` listener or after `settled` in `#click`. The real-browser suite passed 3 runs in a row.
