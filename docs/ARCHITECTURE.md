@@ -174,7 +174,8 @@ Three rules, applied in order:
 - Start coverage with `{ callCount: true, detailed: true }`. Detailed (block) coverage is required for line-level results. Starting coverage disables optimized code, so the page runs slower; the docs say so ("Enabling prevents running optimized code").
 - **Click boundary**: an init script registers the first capture `pointerdown` listener, stores the target's description (role, accessible name, `data-testid`, text), and runs `debugger;` (ADR 0003). The paused frame is identified by resolving its `scriptId` to `lightpath://hook.js`, because `CallFrame.url` is empty for init scripts **(measured)**. Keyboard activation (`keydown` Enter and Space) is an M3 task.
 - **Settle rule**: zero in-flight requests and 300 ms without new requests or long tasks, capped at 5 s.
-- **Navigations**: a full page load resets scripts. Coverage keeps running because the session belongs to the target, but script IDs change, so the collector re-reads `scriptParsed`.
+- **Navigations**: a full page load replaces the document and its scripts. Coverage keeps running because the session belongs to the target. The hook's `beforeunload` listener pauses so the collector can take the leaving page's coverage and sources while they exist (ADR 0003); the new page's startup code joins the same trace.
+- **Keyboard boundary**: the same hook pauses on Enter and Space when they activate something (ADR 0003).
 
 ### 5.2 Node agent (`@lightpath-dev/node-agent`)
 

@@ -18,9 +18,25 @@ export function checkout(total) {
 document.getElementById('buy').addEventListener('click', () => {
   checkout(20).then((t) => { document.getElementById('out').textContent = t; });
 });
+export function applyCoupon(event) {
+  event.preventDefault();
+  document.getElementById('out').textContent = 'coupon ' + document.getElementById('code').value;
+}
+document.getElementById('coupon').addEventListener('submit', applyCoupon);
+export function leaving() {
+  window.leftAt = Date.now();
+}
+document.getElementById('next').addEventListener('click', leaving);
+`;
+const pageTwoJs = `export function arrived() {
+  document.getElementById('here').textContent = 'arrived';
+}
+arrived();
 `;
 const html =
-  '<!doctype html><button id="buy">Checkout</button><p id="out"></p><script type="module" src="/app.js"></script>';
+  '<!doctype html><button id="buy">Checkout</button><form id="coupon"><input id="code" placeholder="Coupon"></form>' +
+  '<a id="next" href="/two">Next page</a><p id="out"></p><script type="module" src="/app.js"></script>';
+const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
 
 let server: http.Server;
 let origin = '';
@@ -29,6 +45,12 @@ const traceHeaders: (string | undefined)[] = [];
 beforeAll(async () => {
   server = http.createServer((req, res) => {
     if (req.url === '/app.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(appJs);
+    if (req.url === '/two.js')
+      return res.writeHead(200, { 'content-type': 'text/javascript' }).end(pageTwoJs);
+    if (req.url === '/two') {
+      traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
+      return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
+    }
     if (req.url === '/api/orders') {
       traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
       return res.writeHead(201).end('created');
@@ -95,5 +117,94 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     const app = action.coverage.find((s) => s.url === `${origin}/app.js`);
     expect(app?.functions.find((f) => f.functionName === 'checkout')?.ranges[0]?.count).toBe(1);
     expect(messages.some((m) => m.type === 'source' && m.url === `${origin}/app.js`)).toBe(true);
+  }, 30_000);
+
+  /** Starts a collector, runs `act`, waits for `traces` traceEnd messages, and returns everything. */
+  async function record(act: (c: BrowserCollector) => Promise<void>, traces = 1) {
+    const messages: IngestMessage[] = [];
+    const logs: string[] = [];
+    const collector = new BrowserCollector({
+      url: origin,
+      headless: true,
+      settleMs: 200,
+      send: (m) => messages.push(m),
+      log: (m) => logs.push(m),
+    });
+    await collector.start();
+    try {
+      await act(collector);
+      const deadline = Date.now() + 8000;
+      while (messages.filter((m) => m.type === 'traceEnd').length < traces && Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 50));
+      }
+    } catch (err) {
+      throw new Error(`${(err as Error).message}\ncollector log:\n${logs.join('\n')}`);
+    } finally {
+      await collector.stop();
+    }
+    /** Functions with count > 0 in this trace's action deltas, as `path#name`. */
+    const ran = (traceId: string) =>
+      messages.flatMap((m) =>
+        m.type === 'delta' && m.phase === 'action' && m.traceId === traceId
+          ? m.coverage.flatMap((s) =>
+              s.functions
+                .filter((f) => f.functionName && (f.ranges[0]?.count ?? 0) > 0)
+                .map((f) => `${new URL(s.url).pathname}#${f.functionName}`),
+            )
+          : [],
+      );
+    const starts = messages.flatMap((m) => (m.type === 'traceStart' ? [m] : []));
+    return { messages, starts, ran, logs };
+  }
+
+  it('opens a trace for Enter on a button and for Enter in a form field', async () => {
+    const { starts, ran } = await record(async (c) => {
+      const page = c.page;
+      if (!page) throw new Error('no page');
+      await page.focus('#buy');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+      await new Promise((r) => setTimeout(r, 400)); // let the first trace settle
+      await page.fill('#code', 'WELCOME10');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#out:has-text("coupon WELCOME10")', { timeout: 8000 });
+    }, 2);
+    expect(starts.map((s) => s.label)).toEqual(['button: Checkout (Enter)', 'input: Coupon (Enter)']);
+    const [buy, coupon] = starts;
+    if (!buy || !coupon) throw new Error('missing traces');
+    expect(ran(buy.traceId)).toContain('/app.js#checkout');
+    expect(traceHeaders).toContain(buy.traceId);
+    expect(ran(coupon.traceId)).toContain('/app.js#applyCoupon');
+    expect(ran(coupon.traceId)).not.toContain('/app.js#checkout');
+  }, 30_000);
+
+  it("doesn't open a trace for typing, including Space in a text field", async () => {
+    const { starts } = await record(async (c) => {
+      await c.page?.fill('#code', '');
+      await c.page?.focus('#code');
+      await c.page?.keyboard.type('two words');
+      await new Promise((r) => setTimeout(r, 400));
+    }, 0);
+    expect(starts).toEqual([]);
+  }, 30_000);
+
+  it('keeps the leaving page and the next page in one trace across a full navigation', async () => {
+    const { starts, ran } = await record(async (c) => {
+      const page = c.page;
+      const box = await page?.locator('#next').boundingBox();
+      if (!page || !box) throw new Error('link not found');
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await new Promise((r) => setTimeout(r, 80));
+      await page.mouse.up();
+      await page.waitForSelector('#here:has-text("arrived")', { timeout: 8000 });
+    });
+    expect(starts.map((s) => s.label)).toEqual(['a: Next page']);
+    const traceId = starts[0]?.traceId ?? '';
+    // The click handler on the old page, read in beforeunload before the document went away.
+    expect(ran(traceId)).toContain('/app.js#leaving');
+    // The new page's startup code, and the page request itself tagged with the trace.
+    expect(ran(traceId)).toContain('/two.js#arrived');
+    expect(traceHeaders).toContain(traceId);
   }, 30_000);
 });

@@ -53,6 +53,9 @@ describe('shouldTag', () => {
     ['http://localhost:3000/api/orders', 'xhr', true],
     ['http://localhost:5173/src/Cart.tsx', 'script', false],
     ['https://api.stripe.com/v1/charges', 'fetch', false],
+    ['http://localhost:3000/orders/7', 'navigation', true],
+    ['https://example.com/', 'navigation', false],
+    ['http://localhost:3000/page', 'document', false],
     ['not a url', 'fetch', false],
   ])('%s (%s) → %s', (url, type, expected) => {
     expect(shouldTag(url, type, origins)).toBe(expected);
@@ -67,6 +70,8 @@ describe('labelFor', () => {
     [{ tag: 'span' }, 'span'],
     [{}, 'element'],
     [{ tag: 'p', text: `  ${'x'.repeat(60)}  ` }, `p: ${'x'.repeat(39)}…`],
+    [{ tag: 'button', text: 'Checkout', key: 'Enter' }, 'button: Checkout (Enter)'],
+    [{ tag: 'input', name: 'Coupon', key: 'Enter' }, 'input: Coupon (Enter)'],
   ])('%j → %s', (target, label) => {
     expect(labelFor(target)).toBe(label);
   });

@@ -29,15 +29,24 @@ interface ScriptMeta {
 /** Script URL of the init script, so pauses inside it can be told apart from app pauses. */
 export const HOOK_URL = 'lightpath://hook.js';
 const LAST = '__lightpathLast';
+/** Function names of the hook's listeners, so the collector can tell which one paused. */
+const HOOK_ACTION = 'lightpathAction';
+const HOOK_LEAVE = 'lightpathLeave';
 
 /**
  * Runs in every page before any app script (an init script):
- * - registers the first capture `pointerdown` listener on window, so it runs before app handlers;
+ * - registers the first capture `pointerdown` and `keydown` listeners on window, so they run before
+ *   app handlers;
  * - records a description of the target, then pauses with `debugger;` so the collector can take
- *   coverage before any app code for this click runs (ADR 0003).
+ *   coverage before any app code for this action runs (ADR 0003).
  *
- * One pause per click, in our own frame only. The pause must stay short: Chrome drops the
- * pointerup, mouseup, and click events that arrive while the page is paused (measured).
+ * Keys: Enter on anything but a multi-line text field, and Space on buttons, links, checkboxes,
+ * radios, and ARIA widgets, which is what activates them. Space or Enter while typing is text, not
+ * an action. Held keys (`repeat`) and IME composition are ignored.
+ *
+ * One pause per action, in our own frame only. The pause must stay short: Chrome drops the
+ * pointerup, mouseup, and click events that arrive while the page is paused (measured). Key events
+ * aren't dropped: Enter and Space still activate every element after a 70 ms pause (measured).
  */
 const HOOK_SOURCE = `(() => {
   const describe = (el) => {
@@ -47,14 +56,34 @@ const HOOK_SOURCE = `(() => {
     return {
       tag: t.tagName.toLowerCase(),
       role: t.getAttribute('role') || undefined,
-      name: t.getAttribute('aria-label') || t.getAttribute('name') || undefined,
+      name: t.getAttribute('aria-label') || t.getAttribute('name') || t.getAttribute('placeholder') || undefined,
       testId: t.getAttribute('data-testid') || undefined,
       text: text || undefined,
     };
   };
-  window.addEventListener('pointerdown', (event) => {
+  const TEXT_INPUTS = /^(text|search|email|url|tel|password|number|date|datetime-local|month|week|time|)$/;
+  const isTyping = (el) =>
+    !!el && (el.isContentEditable || el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && TEXT_INPUTS.test(el.type)));
+  const isAction = (event) => {
+    if (event.repeat || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return false;
+    const el = event.target;
+    if (event.key === 'Enter') return !(el && (el.isContentEditable || el.tagName === 'TEXTAREA'));
+    if (event.key === ' ') return !isTyping(el) && !!(el && el.closest && el.closest('button, a, input, summary, [role]'));
+    return false;
+  };
+  window.addEventListener('pointerdown', function ${HOOK_ACTION}(event) {
     if (!event.isPrimary) return;
     window.${LAST} = describe(event.target);
+    debugger;
+  }, { capture: true });
+  window.addEventListener('keydown', function ${HOOK_ACTION}(event) {
+    if (!isAction(event)) return;
+    window.${LAST} = { ...describe(event.target), key: event.key === ' ' ? 'Space' : event.key };
+    debugger;
+  }, { capture: true });
+  // A full page load is about to replace this document: pause once more so its coverage can be
+  // read while it still exists. Never sets returnValue, so no "leave site?" prompt appears.
+  window.addEventListener('beforeunload', function ${HOOK_LEAVE}() {
     debugger;
   }, { capture: true });
 })();
@@ -116,7 +145,8 @@ export class BrowserCollector {
     cdp.on('Debugger.paused', (e) => {
       // CallFrame.url is empty for init scripts (measured); resolve the URL via scriptParsed.
       const frame = e.callFrames[0];
-      this.#onPaused(frame ? (this.#scripts.get(frame.location.scriptId)?.url ?? frame.url) : undefined);
+      const url = frame ? (this.#scripts.get(frame.location.scriptId)?.url ?? frame.url) : undefined;
+      this.#onPaused(url, frame?.functionName);
     });
     await cdp.send('Debugger.enable');
     await cdp.send('Profiler.enable');
@@ -148,10 +178,14 @@ export class BrowserCollector {
     await this.#browser?.close();
   }
 
-  #onPaused(url: string | undefined): void {
+  #onPaused(url: string | undefined, functionName: string | undefined): void {
     if (url !== HOOK_URL) {
       // A `debugger;` statement in app code. Lightpath isn't a debugger; keep the app running.
       void this.#resume();
+      return;
+    }
+    if (functionName === HOOK_LEAVE) {
+      void this.#onLeave();
       return;
     }
     // A new click ends the previous window early. The previous click's closing take still runs
@@ -218,11 +252,39 @@ export class BrowserCollector {
   }
 
   async #onRoute(route: Route, request: Request): Promise<void> {
-    if (this.#active && shouldTag(request.url(), request.resourceType(), this.#backendOrigins)) {
-      await route.continue({ headers: { ...request.headers(), [TRACE_HEADER]: this.#active } });
+    const traceId = this.#active;
+    // A main-frame page load started by this action (a link, a form post) is backend work for it.
+    const type =
+      request.isNavigationRequest() && request.frame() === this.#page?.mainFrame()
+        ? 'navigation'
+        : request.resourceType();
+    if (traceId && shouldTag(request.url(), type, this.#backendOrigins)) {
+      await route.continue({ headers: { ...request.headers(), [TRACE_HEADER]: traceId } });
       return;
     }
     await route.continue();
+  }
+
+  /**
+   * Runs while the page is paused in the hook's `beforeunload` listener: the current document is
+   * about to go, and its coverage and sources go with it. Taking coverage from a route handler
+   * instead deadlocks, because the renderer waits for the request the handler holds (measured).
+   */
+  async #onLeave(): Promise<void> {
+    const traceId = this.#active;
+    try {
+      const coverage = await this.#take();
+      if (traceId) {
+        await this.#emit('action', coverage, Date.now(), traceId);
+        this.#log(`page unloading during ${traceId}: kept its coverage`);
+      } else {
+        await this.#emit('background', coverage, Date.now());
+      }
+    } catch (err) {
+      this.#log(`could not read coverage before unload: ${(err as Error).message}`);
+    } finally {
+      await this.#resume();
+    }
   }
 
   async #take(): Promise<ScriptCoverage[]> {

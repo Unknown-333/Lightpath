@@ -128,16 +128,19 @@ Transport.send() ──► #schedule(50 ms, unref'd timer) ──► flush() ─
 This is the main flow. Times are from the end-to-end test.
 
 ```
- you press the mouse
+ you press the mouse (or Enter / Space on something that activates)
    │
    ▼
- page: HOOK_SOURCE's capture pointerdown listener (the first listener on window)
+ page: HOOK_SOURCE's capture pointerdown or keydown listener, function lightpathAction
+       (the first listener on window; keydown only for Enter/Space that activate, isAction())
    ├─ window.__lightpathLast = describe(event.target)
    └─ debugger;                                         ── page pauses ──
    │
    ▼
- CDP Debugger.paused ──► collector #onPaused(scriptUrl)
+ CDP Debugger.paused ──► collector #onPaused(scriptUrl, functionName)
    ├─ scriptUrl !== 'lightpath://hook.js' → #resume() and stop (an app `debugger;`)
+   ├─ functionName === 'lightpathLeave' (beforeunload) → #onLeave(): take the leaving page's
+   │     coverage, #emit it under the active trace (or as background), #resume()
    └─ else: settle.cancel() if a click is open; queue #click() on #clickChain
    │
    ▼
@@ -154,7 +157,8 @@ This is the main flow. Times are from the end-to-end test.
  your click handler runs: Cart.tsx checkout() → api.ts placeOrder() → fetch('/api/orders')
    │
    ▼
- page.route → #onRoute(): shouldTag() (rules.ts) is true for same-origin fetch/XHR
+ page.route → #onRoute(): shouldTag() (rules.ts) is true for same-origin fetch/XHR and
+               main-frame navigations (a link or form post that loads a new page)
    └─ adds header x-lightpath-trace: <traceId>
    │
    ▼
