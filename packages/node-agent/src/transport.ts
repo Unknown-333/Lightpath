@@ -5,6 +5,12 @@ const FLUSH_DELAY_MS = 50;
 const MAX_BATCH = 200;
 const MAX_QUEUE = 1000;
 const MAX_BACKOFF_MS = 5000;
+/**
+ * Largest request body the agent sends. The daemon rejects bodies over MAX_MESSAGE_BYTES (8 MB) in
+ * @lightpath-dev/protocol; the agent can't import it (ADR 0002), so test/transport.test.ts checks
+ * this stays below it with room for the envelope.
+ */
+export const MAX_BODY_BYTES = 7 * 1024 * 1024;
 
 export type Fetch = typeof fetch;
 
@@ -23,6 +29,7 @@ export class Transport {
   readonly #agentId: string;
   readonly #log: (msg: string) => void;
   readonly #fetch: Fetch;
+  readonly #maxBodyBytes: number;
 
   constructor(
     url: string,
@@ -30,12 +37,14 @@ export class Transport {
     agentId: string,
     log: (msg: string) => void,
     fetchImpl: Fetch = fetch,
+    maxBodyBytes = MAX_BODY_BYTES,
   ) {
     this.#url = url;
     this.#token = token;
     this.#agentId = agentId;
     this.#log = log;
     this.#fetch = fetchImpl;
+    this.#maxBodyBytes = maxBodyBytes;
   }
 
   send(message: IngestMessage): void {
@@ -57,14 +66,15 @@ export class Transport {
     this.#sending = true;
     try {
       while (this.#queue.length > 0) {
-        const batch = this.#queue.splice(0, MAX_BATCH);
-        const ok = await this.#post(batch);
+        const { count, body } = this.#nextBatch();
+        if (count === 0) continue; // the head message was too large and has been dropped
+        const ok = await this.#post(body, count);
         if (!ok) {
-          this.#queue.unshift(...batch);
           this.#backoff = Math.min(MAX_BACKOFF_MS, this.#backoff ? this.#backoff * 2 : 250);
           this.#schedule(this.#backoff);
           return;
         }
+        this.#queue.splice(0, count);
         this.#backoff = 0;
       }
     } finally {
@@ -72,17 +82,46 @@ export class Transport {
     }
   }
 
-  async #post(messages: IngestMessage[]): Promise<boolean> {
+  /**
+   * Takes messages from the head of the queue until the batch would exceed MAX_BATCH messages or
+   * the body size limit. Each message is serialized once, and the body is joined from those parts.
+   * A single message over the limit can never be sent, so it's dropped here.
+   */
+  #nextBatch(): { count: number; body: string } {
+    const head = `{"protocolVersion":${PROTOCOL_VERSION},"agentId":${JSON.stringify(this.#agentId)},"messages":[`;
+    const tail = ']}';
+    let bytes = Buffer.byteLength(head) + tail.length;
+    const parts: string[] = [];
+    while (parts.length < MAX_BATCH && parts.length < this.#queue.length) {
+      const json = JSON.stringify(this.#queue[parts.length]);
+      const size = Buffer.byteLength(json) + (parts.length > 0 ? 1 : 0); // comma
+      if (bytes + size > this.#maxBodyBytes) {
+        if (parts.length === 0) {
+          const [message] = this.#queue.splice(0, 1);
+          this.dropped++;
+          this.#log(`dropped a ${message?.type} message of ${size} bytes (limit ${this.#maxBodyBytes})`);
+        }
+        break;
+      }
+      parts.push(json);
+      bytes += size;
+    }
+    return { count: parts.length, body: `${head}${parts.join(',')}${tail}` };
+  }
+
+  /** True when the batch is done with: delivered, or rejected in a way a retry can't fix. */
+  async #post(body: string, count: number): Promise<boolean> {
     try {
       const res = await this.#fetch(`${this.#url}/v1/ingest`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.#token}` },
-        body: JSON.stringify({ protocolVersion: PROTOCOL_VERSION, agentId: this.#agentId, messages }),
+        body,
       });
-      if (res.status === 400) {
-        // The daemon rejected the batch as malformed. Retrying won't help; drop it.
-        this.dropped += messages.length;
-        this.#log(`daemon rejected a batch: ${await res.text()}`);
+      if (res.status === 400 || res.status === 413) {
+        // Malformed or too large: sending the same batch again would fail the same way. Drop it,
+        // or it would block everything queued behind it.
+        this.dropped += count;
+        this.#log(`daemon rejected a batch (${res.status}): ${await res.text()}`);
         return true;
       }
       return res.ok;
