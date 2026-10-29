@@ -197,4 +197,41 @@ describe('MemoryStore', () => {
     expect(store.list().map((t) => t.id)).toEqual(['t_000000000003', 't_000000000002']);
     expect(store.get('t_000000000001')).toBeUndefined();
   });
+
+  it('marks a file background when only periodic code ran in it, without removing its lines', () => {
+    const { store, send } = setup();
+    // A second script with a timer callback that runs while the app is idle.
+    const timerSrc = 'export function poll() {\n  return 1;\n}';
+    const timerUrl = 'file:///repo/server/poll.js';
+    send({
+      type: 'scripts',
+      scripts: [{ scriptId: '10', url: timerUrl, hash: 'h2', length: timerSrc.length }],
+    });
+    send({ type: 'source', scriptId: '10', hash: 'h2', url: timerUrl, source: timerSrc });
+    const pollCoverage = {
+      scriptId: '10',
+      url: timerUrl,
+      functions: [
+        {
+          functionName: 'poll',
+          isBlockCoverage: true,
+          ranges: [{ startOffset: 0, endOffset: timerSrc.length, count: 1 }],
+        },
+      ],
+    };
+    for (let i = 0; i < 3; i++) {
+      send({ type: 'delta', phase: 'background', startedAt: i, endedAt: i, coverage: [pollCoverage] });
+    }
+    const action = delta('t_aaaaaaaaaaaa');
+    if (action.type !== 'delta') throw new Error('bad fixture');
+    send({ ...action, coverage: [...action.coverage, pollCoverage] });
+    const trace = store.get('t_aaaaaaaaaaaa');
+    expect(trace?.files.find((f) => f.path === 'server/poll.js')).toMatchObject({ background: true });
+    expect(trace?.files.find((f) => f.path === 'server/poll.js')?.lines).toEqual([
+      { line: 1, count: 1 },
+      { line: 2, count: 1 },
+      { line: 3, count: 1 },
+    ]);
+    expect(trace?.files.find((f) => f.path === 'server/orders.js')?.background).toBeUndefined();
+  });
 });

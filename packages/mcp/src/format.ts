@@ -28,8 +28,9 @@ export function describeTrace(trace: Trace): string {
   if (trace.files.length === 0) out.push('  no workspace code ran');
   for (const f of trace.files) {
     const hottest = Math.max(...f.lines.map((l) => l.count));
+    const bg = f.background ? ' (background: only code that also runs while idle, likely unrelated)' : '';
     out.push(
-      `  ${f.path} [${f.collector}] lines ${lineRanges(f.lines)}${hottest > 1 ? ` (max ${hottest} hits)` : ''}`,
+      `  ${f.path} [${f.collector}] lines ${lineRanges(f.lines)}${hottest > 1 ? ` (max ${hottest} hits)` : ''}${bg}`,
     );
   }
   const dropped = trace.dropped.filter((d) => d.count > 0);

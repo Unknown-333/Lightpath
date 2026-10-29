@@ -98,6 +98,7 @@ export function activate(context: vscode.ExtensionContext): LightpathApi {
       const file = trace?.files.find((f) => f.path === path);
       if (!trace || !file) return;
       show(trace);
+      if (file.background) heat.showFile(file, absolute(path)); // asked for by name: light it
       const doc = await vscode.workspace.openTextDocument(absolute(path));
       const editor = await vscode.window.showTextDocument(doc, { preview: true });
       const first = Math.max(0, (file.lines[0]?.line ?? 1) - 1);

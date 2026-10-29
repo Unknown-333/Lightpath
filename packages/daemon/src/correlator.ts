@@ -4,6 +4,7 @@ import {
   mapScript,
   mergeLineCounts,
   newTraceId,
+  PeriodicFunctions,
   type ResolveContext,
   resolveFile,
 } from '@lightpath-dev/core';
@@ -27,11 +28,22 @@ interface AgentState {
   pid: number;
   /** scriptId → info. Script IDs are only unique per agent. */
   scripts: Map<string, ScriptInfo>;
+  /** Functions this agent keeps running while idle (ARCHITECTURE 4.6, rule 2). */
+  periodic: PeriodicFunctions;
 }
 
 interface PendingTrace {
   trace: Trace;
-  files: Map<string, { collector: CollectorKind; lines: LineCounts; firstSeenAt: number }>;
+  files: Map<
+    string,
+    {
+      collector: CollectorKind;
+      lines: LineCounts;
+      firstSeenAt: number;
+      /** True once any line ran from code that isn't periodic. */
+      foreground: boolean;
+    }
+  >;
   dropped: Map<DropReason, number>;
 }
 
@@ -65,7 +77,12 @@ export class Correlator {
   ingest(agentId: string, message: IngestMessage): void {
     switch (message.type) {
       case 'hello':
-        this.#agents.set(agentId, { kind: message.kind, pid: message.pid, scripts: new Map() });
+        this.#agents.set(agentId, {
+          kind: message.kind,
+          pid: message.pid,
+          scripts: new Map(),
+          periodic: new PeriodicFunctions(),
+        });
         return;
       case 'scripts': {
         const agent = this.#agent(agentId);
@@ -108,9 +125,12 @@ export class Correlator {
   }
 
   #onDelta(agentId: string, delta: Delta): void {
-    // Background deltas feed noise rules (ARCHITECTURE 4.6, M1); they never become traces.
-    if (delta.phase === 'background') return;
     const agent = this.#agent(agentId);
+    // Background deltas only feed the periodic-function rule (ARCHITECTURE 4.6); never traces.
+    if (delta.phase === 'background') {
+      agent.periodic.observeBackground(delta.coverage, (id) => agent.scripts.get(id)?.hash);
+      return;
+    }
     const pending = this.#pendingFor(
       delta.traceId,
       delta.request ? `${delta.request.method} ${delta.request.path}` : 'action',
@@ -133,10 +153,19 @@ export class Correlator {
         this.#drop(pending, 'no-source-map');
         continue;
       }
-      const result = mapScript({ coverage, source, ...(sourceMap ? { sourceMap } : {}) }, this.#ctx);
+      const map = (c: typeof coverage) =>
+        mapScript({ coverage: c, source, ...(sourceMap ? { sourceMap } : {}) }, this.#ctx);
+      const result = map(coverage);
       for (const [reason, n] of result.dropped) this.#drop(pending, reason, n);
-      for (const [path, lines] of result.files)
-        this.#addFile(pending, path, agent.kind, lines, delta.startedAt);
+      // Lines are never removed. A file whose lit lines all come from periodic code (a timer that
+      // happened to fire during the action) is marked background so clients can tone it down.
+      const fg = info ? agent.periodic.foreground(coverage, info.hash) : coverage;
+      const fgFiles = fg === coverage ? result.files : fg ? map(fg).files : new Map<string, LineCounts>();
+      for (const [path, lines] of result.files) {
+        const fgLines = fgFiles.get(path);
+        const foreground = fgLines !== undefined && [...fgLines.values()].some((c) => c > 0);
+        this.#addFile(pending, path, agent.kind, lines, delta.startedAt, foreground);
+      }
     }
 
     if (delta.request) {
@@ -167,7 +196,7 @@ export class Correlator {
         this.#drop(pending, r.reason);
         continue;
       }
-      this.#addFile(pending, r.path, 'python', new Map(file.lines.map((l) => [l, 1])), msg.startedAt);
+      this.#addFile(pending, r.path, 'python', new Map(file.lines.map((l) => [l, 1])), msg.startedAt, true);
     }
     if (msg.request) {
       pending.trace.requests.push({
@@ -189,7 +218,12 @@ export class Correlator {
     let a = this.#agents.get(agentId);
     if (!a) {
       // A batch can arrive before (or without) hello, for example after a daemon restart.
-      a = { kind: agentId.startsWith('py-') ? 'python' : 'node', pid: 0, scripts: new Map() };
+      a = {
+        kind: agentId.startsWith('py-') ? 'python' : 'node',
+        pid: 0,
+        scripts: new Map(),
+        periodic: new PeriodicFunctions(),
+      };
       this.#agents.set(agentId, a);
     }
     return a;
@@ -215,6 +249,7 @@ export class Correlator {
         collector: f.collector,
         lines: new Map(f.lines.map((l) => [l.line, l.count])),
         firstSeenAt: f.firstSeenAt,
+        foreground: !f.background,
       });
     }
     for (const d of trace.dropped) p.dropped.set(d.reason, d.count);
@@ -230,10 +265,19 @@ export class Correlator {
     };
   }
 
-  #addFile(p: PendingTrace, path: string, collector: CollectorKind, lines: LineCounts, at: number): void {
+  #addFile(
+    p: PendingTrace,
+    path: string,
+    collector: CollectorKind,
+    lines: LineCounts,
+    at: number,
+    foreground: boolean,
+  ): void {
     const existing = p.files.get(path);
-    if (existing) existing.lines = mergeLineCounts(existing.lines, lines);
-    else p.files.set(path, { collector, lines, firstSeenAt: at });
+    if (existing) {
+      existing.lines = mergeLineCounts(existing.lines, lines);
+      existing.foreground ||= foreground;
+    } else p.files.set(path, { collector, lines, firstSeenAt: at, foreground });
   }
 
   #drop(p: PendingTrace, reason: DropReason, n = 1): void {
@@ -247,7 +291,14 @@ export class Correlator {
         .filter(([, c]) => c > 0)
         .sort((a, b) => a[0] - b[0])
         .map(([line, count]) => ({ line, count }));
-      if (lines.length > 0) files.push({ path, collector: f.collector, lines, firstSeenAt: f.firstSeenAt });
+      if (lines.length === 0) continue;
+      files.push({
+        path,
+        collector: f.collector,
+        lines,
+        firstSeenAt: f.firstSeenAt,
+        ...(f.foreground ? {} : { background: true }),
+      });
     }
     files.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.path.localeCompare(b.path));
     p.trace.files = files;

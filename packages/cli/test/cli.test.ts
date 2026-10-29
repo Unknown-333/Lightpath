@@ -85,6 +85,32 @@ describe('findLocalUrl', () => {
   });
 });
 
+describe('formatTrace with background files', () => {
+  it('lists background files last, with a note', () => {
+    const file = (path: string, background?: boolean) => ({
+      path,
+      collector: 'browser' as const,
+      lines: [{ line: 3, count: 1 }],
+      firstSeenAt: 0,
+      ...(background ? { background } : {}),
+    });
+    const trace: Trace = {
+      id: 't_abc123def456',
+      label: 'button: Save',
+      origin: 'browser',
+      startedAt: 0,
+      endedAt: 10,
+      files: [file('src/clock.ts', true), file('src/Save.tsx')],
+      requests: [],
+      dropped: [],
+    };
+    const out = formatTrace(trace, false).split('\n');
+    expect(out[1]).toContain('src/Save.tsx');
+    expect(out[2]).toContain('src/clock.ts');
+    expect(out[2]).toContain('(background)');
+    expect(out[1]).not.toContain('(background)');
+  });
+});
 describe('formatTrace', () => {
   it('prints a readable tree without colors', () => {
     const trace: Trace = {

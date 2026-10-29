@@ -197,16 +197,16 @@ Every `send` here is `ingestLocal()` in `packages/cli/src/dev.ts`, so it goes st
 
 `packages/daemon/src/correlator.ts`, `ingest()` switches on `message.type`:
 
-| Message              | What happens                                                                             |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `hello`              | Records the agent's kind and pid                                                         |
-| `scripts`            | Stores script info (URL, hash, inline source map) by script ID, per agent                |
-| `source`             | Caches the script source by hash                                                         |
-| `traceStart`         | Opens a browser trace, or merges into one a backend delta already opened                 |
-| `delta` (background) | Ignored for now                                                                          |
-| `delta` (action)     | `#onDelta()`, below                                                                      |
-| `lines` (Python)     | `#onLines()`: each path through `resolveFile()`, then `#addFile()` with count 1 per line |
-| `traceEnd`           | Sets `endedAt` and publishes                                                             |
+| Message              | What happens                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `hello`              | Records the agent's kind and pid                                                                     |
+| `scripts`            | Stores script info (URL, hash, inline source map) by script ID, per agent                            |
+| `source`             | Caches the script source by hash                                                                     |
+| `traceStart`         | Opens a browser trace, or merges into one a backend delta already opened                             |
+| `delta` (background) | `agent.periodic.observeBackground()` counts which functions ran (core `PeriodicFunctions`); no trace |
+| `delta` (action)     | `#onDelta()`, below                                                                                  |
+| `lines` (Python)     | `#onLines()`: each path through `resolveFile()`, then `#addFile()` with count 1 per line             |
+| `traceEnd`           | Sets `endedAt` and publishes                                                                         |
 
 `#onDelta()`:
 
@@ -215,9 +215,10 @@ Every `send` here is `ingestLocal()` in `packages/cli/src/dev.ts`, so it goes st
    1. Looks up its info and cached source. Without a source the script is counted as `no-source` and skipped.
    2. `decodeDataUrlSourceMap()` if the script has an inline map.
    3. **`mapScript()`** from `packages/core/src/pipeline.ts` (section 7).
-   4. Drop counts go into the trace; files go through `#addFile()`, which merges with `mergeLineCounts()` (highest count wins).
+   4. `agent.periodic.foreground()` drops the functions seen in 3+ background windows; if any were dropped, `mapScript()` runs again on the rest. A file with no lit line in that second result is marked not foreground.
+   5. Drop counts go into the trace; files go through `#addFile()`, which merges with `mergeLineCounts()` (highest count wins) and ORs the foreground flag.
 3. Records the request (method, path, status, duration, overlapped).
-4. `#publish()`: turns the line maps into sorted `FileHits` (lines with count 0 removed), sorts files by when they were first seen, and calls `store.put()`.
+4. `#publish()`: turns the line maps into sorted `FileHits` (lines with count 0 removed), sets `background: true` on files that were never foreground, sorts files by when they were first seen, and calls `store.put()`.
 
 ### 6.3 Store and listeners
 

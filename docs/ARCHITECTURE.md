@@ -156,7 +156,7 @@ A file is shown only if the resolved path is inside a workspace root. Everything
 Three rules, applied in order:
 
 1. **Path rules.** Drop `node_modules`, Vite's `/@vite/client`, `/@react-refresh`, and the agent's own scripts. Users can add globs in `lightpath.config.json`.
-2. **Background subtraction.** Each collector keeps the set of functions that appeared in background deltas recently (timers, `requestAnimationFrame`, HMR pings). A function seen only in background windows and never in an action window is tagged `background` instead of being dropped, so the UI can hide it by default.
+2. **Background subtraction** (`PeriodicFunctions` in `core/src/noise.ts`). The daemon keeps, per collector, how many background deltas each function ran in (timers, `requestAnimationFrame`, polling, HMR pings), keyed by script hash and start offset. A function seen in 3 or more is periodic. When an action is mapped, a file whose lit lines all come from periodic functions is marked `background: true`; its lines are kept. The CLI lists such files last and dimmed, the editor doesn't light them unless you open one from the Actions view, and the MCP output labels them.
 3. **Count floor.** None in v0. Every line that ran is shown.
 
 ### 4.7 Identity and caching

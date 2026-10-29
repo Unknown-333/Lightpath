@@ -120,7 +120,7 @@ interface FileHits {
   collector: CollectorKind;
   lines: LineHit[]; // sorted by line
   firstSeenAt: number; // for replay ordering
-  background?: boolean; // seen only in background windows
+  background?: boolean; // every lit line came from code that also runs while idle (timers, polling)
 }
 interface Trace {
   id: TraceId;

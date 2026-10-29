@@ -36,9 +36,14 @@ export class Heat implements vscode.Disposable {
     });
   }
 
-  /** Shows a trace. `absolute` resolves a trace's workspace-relative path to a file system path. */
+  /**
+   * Shows a trace. `absolute` resolves a trace's workspace-relative path to a file system path.
+   * Background files (only periodic code ran) stay dark; opening one from the tree lights it.
+   */
   show(trace: Trace, absolute: (relative: string) => string): void {
-    this.#files = new Map(trace.files.map((f) => [pathKey(absolute(f.path)), f]));
+    this.#files = new Map(
+      trace.files.filter((f) => !f.background).map((f) => [pathKey(absolute(f.path)), f]),
+    );
     this.#fadeLevel = 0;
     this.refresh();
     this.#startFade();

@@ -16,12 +16,15 @@ export function formatTrace(trace: Trace, color = true): string {
       `  ${c.dim('→')} ${r.method} ${r.path}${status}${r.overlapped ? c.yellow(' (overlapped)') : ''}`,
     );
   }
-  trace.files.forEach((f, i) => {
-    const branch = i === trace.files.length - 1 ? '└─' : '├─';
-    const paint = color ? COLLECTOR_COLOR[f.collector] : (s: string) => s;
+  // Files where only periodic code ran (timers, polling) go last and dimmed; they're rarely the answer.
+  const files = [...trace.files.filter((f) => !f.background), ...trace.files.filter((f) => f.background)];
+  files.forEach((f, i) => {
+    const branch = i === files.length - 1 ? '└─' : '├─';
+    const paint = f.background ? c.dim : color ? COLLECTOR_COLOR[f.collector] : (s: string) => s;
     const hottest = Math.max(...f.lines.map((l) => l.count));
     const hot = hottest > 1 ? c.dim(` ×${hottest}`) : '';
-    lines.push(`  ${c.dim(branch)} ${paint(f.path)} ${c.dim(`:${lineRanges(f.lines)}`)}${hot}`);
+    const note = f.background ? c.dim(' (background)') : '';
+    lines.push(`  ${c.dim(branch)} ${paint(f.path)} ${c.dim(`:${lineRanges(f.lines)}`)}${hot}${note}`);
   });
   if (trace.files.length === 0) lines.push(`  ${c.dim('no workspace code ran')}`);
   const hidden = trace.dropped.reduce((n, d) => n + d.count, 0);

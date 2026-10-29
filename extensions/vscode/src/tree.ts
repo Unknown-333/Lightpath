@@ -53,7 +53,11 @@ export class TraceTree implements vscode.TreeDataProvider<Node> {
     }
     const { file } = node;
     const item = new vscode.TreeItem(file.path, vscode.TreeItemCollapsibleState.None);
-    item.description = `${file.lines.length} lines`;
+    item.description = file.background
+      ? `${file.lines.length} lines · background`
+      : `${file.lines.length} lines`;
+    if (file.background)
+      item.tooltip = 'Only code that also runs while the app is idle (timers, polling) ran here.';
     item.iconPath = new vscode.ThemeIcon(ICON[file.collector]);
     item.command = {
       command: 'lightpath.openFile',
