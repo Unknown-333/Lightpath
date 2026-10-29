@@ -2,7 +2,7 @@
 
 Each milestone ends with something you can run and a post you can publish. Don't start a milestone until the previous one's exit check passes.
 
-**Status (October 28, 2026):** the skeleton already passes the M2 and M3 exit checks on the example shop. `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M1 to M3 is hardening: fixtures from more real apps, `tsx` and external source maps, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
+**Status (October 29, 2026):** M1 is done (see below). The skeleton already passes the M2 and M3 exit checks on the example shop. `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
 
 | Milestone                     | Goal                                                                                                         | Exit check                                                                                                                                                    | Post                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -15,14 +15,15 @@ Each milestone ends with something you can run and a post you can publish. Don't
 | **M6** Python                 | `lightpath-agent` with WSGI/ASGI middleware; React + FastAPI example                                         | Same trace shows `.tsx` and `.py` files                                                                                                                       | r/Python launch                                                                  |
 | **Launch**                    | Show HN, Reddit, VS Code Marketplace                                                                         |                                                                                                                                                               |                                                                                  |
 
-## M1 in detail (next step)
+## M1 (done, October 29, 2026)
 
-1. Capture fixtures: a script in `packages/core/scripts/capture-fixture.ts` runs a sample file under the in-process inspector and writes `{ source, sourceMap?, delta, expectedLines }` JSON to `packages/core/test/fixtures/`.
-2. Implement `flattenRanges` (stack sweep) and its property test.
-3. Implement `LineIndex` and `rangesToLines` (max count per line, whitespace-only lines skipped).
-4. Implement `mapToOriginal` with `@jridgewell/trace-mapping`, mapping segment boundaries rather than line starts.
-5. Implement `resolveFile` for `file://`, Vite dev URLs, `/@fs/`, and source map `sources`.
-6. Hand-check every fixture's expected lines once, then lock them in.
+`pnpm --filter @lightpath-dev/core test` maps five real V8 captures through `mapScript()` and compares each against lines checked by hand: plain JS, type-stripped TS, TS compiled by `tsx`, non-ASCII text, and the shop's `Cart.tsx` as Vite served it to Chrome. The capture script is `packages/core/scripts/capture-fixtures.mjs` (see [flow.md](../flow.md)); decisions D-067 to D-070.
+
+What M1 found:
+
+- tsx on Windows writes source map `sources` as `C:\...` paths, which trace-mapping resolved to a path that doesn't exist. Every tsx-loaded file was lost. Fixed in `mapToOriginal` (D-068). The Node agent already forwards inline `data:` maps like tsx's, but no app has run under `tsx` with the agent yet; that's an M2 check.
+- Vite's React transform puts the absolute file path into the served code, so the capture redacts it with a same-length placeholder.
+- Line granularity has two visible effects, both now pinned by the fixture: a line like `} catch (err) {` is lit when the `try` block ran, and `onChange={(e) => …}` is lit when the element rendered even if the handler never ran.
 
 ## M2 in detail
 
