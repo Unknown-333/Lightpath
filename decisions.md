@@ -606,3 +606,10 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: Capture the Vite fixture from `examples/shop/src/Cart.tsx` during one real Checkout click in Chrome, instead of writing a separate sample. The capture reuses `playwright-core` from the browser package and the shop's own Vite setup.
 - Why: The shop is what the demo and the e2e test use, so its React transform output (HMR preamble, `jsxDEV` calls, StrictMode double renders) is exactly what users will see first. A second Vite project just for one fixture would add setup and drift from it. Borrowing `playwright-core` keeps core's dependencies unchanged.
 - How: `captureViteJsx()` in `packages/core/scripts/capture-fixtures.mjs` runs the shop without Lightpath, takes coverage around the click over CDP, and saves the served source and inline map. Vite's React transform writes the absolute path into the code (`_jsxFileName`), so `redactSameLength()` replaces it with a placeholder of the same length; changing the length would shift every offset after it. The fixture stores the SHA-256 of `Cart.tsx`, so editing the shop's cart makes the core test fail with a pointer to re-capture. That coupling is on purpose: the expected lines describe that file.
+
+### D-071 The extension requires VS Code 1.101 or newer
+
+- Date: 2026-10-29
+- Decision: Raise `engines.vscode` from `^1.100.0` to `^1.101.0` and `@types/vscode` to 1.101.0 to match.
+- Why: The in-editor test (D-072) failed on VS Code 1.100.0: the extension never connected. VS Code 1.100 runs extensions on Node 20.19, which has no global `WebSocket`, and `DaemonClient` uses the global one. VS Code 1.101 is the first on Node 22 (22.15.1), where it exists. The test passes on 1.101.0 and on 1.144.0 (current stable, Node 24.22). This replaces the `@types/vscode` 1.100.0 choice in the dependency table above.
+- How: Probed each downloaded VS Code with `ELECTRON_RUN_AS_NODE=1` for `process.versions.node` and `typeof WebSocket`. Bundling the `ws` package instead would keep 1.100 working, but it adds a dependency for one VS Code release from mid-2025, so raising the minimum is simpler.
