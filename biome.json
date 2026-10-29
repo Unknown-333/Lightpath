@@ -30,5 +30,12 @@
       "style": { "useNodejsImportProtocol": "error" }
     }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "overrides": [
+    {
+      "includes": ["examples/backends/nest/**"],
+      "javascript": { "parser": { "unsafeParameterDecoratorsEnabled": true } },
+      "linter": { "rules": { "style": { "useImportType": "off" } } }
+    }
+  ]
 }

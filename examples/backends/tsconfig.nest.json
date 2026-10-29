@@ -1,0 +1,13 @@
+{
+  // Builds the Nest app like `nest build`: JavaScript plus a .map file next to each file.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "sourceMap": true,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["nest", "shared"]
+}

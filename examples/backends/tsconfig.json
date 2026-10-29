@@ -1,0 +1,21 @@
+{
+  // Type checks both apps. Nest needs legacy decorators and parameter properties, which aren't
+  // erasable, so this example turns erasableSyntaxOnly off. The Fastify app still runs with type
+  // stripping, so the backend e2e catches it if Fastify code ever uses non-erasable syntax.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": false,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "types": ["node"]
+  },
+  "include": ["fastify", "nest", "shared"]
+}

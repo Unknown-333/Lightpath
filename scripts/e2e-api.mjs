@@ -1,16 +1,18 @@
-// Backend-only end-to-end test (docs/ROADMAP.md, M2): runs the real CLI as a user would,
-// `lightpath dev --no-browser -- <command>`, with the shop's Express API started three ways:
+// Backend-only end-to-end test (docs/ROADMAP.md, M2). Runs the real CLI as a user would,
+// `lightpath dev --no-browser -- <command>`, posts one order, and reads the trace from the daemon
+// over its client WebSocket, for each of these:
 //
-//   strip      node server/index.ts           Node's type stripping (positions unchanged, no map)
-//   tsx        tsx server/index.ts            esbuild rewrites the code; lines come from tsx's map
-//   tsx-watch  tsx watch server/index.ts      the same, through tsx's watcher process
-//   tsc        node dist/server/index.js      built by tsc first; lines come from external .map files
+//   shop: strip       node server/index.ts         Express, Node's type stripping (no map needed)
+//   shop: tsx         tsx server/index.ts          esbuild rewrites the code; lines from tsx's inline map
+//   shop: tsx-watch   tsx watch server/index.ts    the same, through tsx's watcher process
+//   shop: tsc         node dist/server/index.js    built by tsc; lines from external .map files
+//   fastify           node fastify/server.ts       Fastify 5, type stripping
+//   nest              node dist/nest/main.js       NestJS 12 (decorators), built by tsc with .map files
 //
-// For each, it POSTs one order and reads the trace from the daemon over its client WebSocket.
-// Type stripping keeps every offset, so its lines are the ground truth: the other runs must light
-// exactly the same lines in every file.
+// Type stripping keeps every offset, so a stripped run is the reference: runs that go through a
+// source map must light exactly the same lines in the files they share with it.
 //
-// Usage: pnpm build && node scripts/e2e-api.mjs
+// Usage: pnpm build && node scripts/e2e-api.mjs [run-name ...]
 import { execFileSync, execSync, spawn } from 'node:child_process';
 import { readFileSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -19,35 +21,121 @@ import { fileURLToPath } from 'node:url';
 
 const repo = join(dirname(fileURLToPath(import.meta.url)), '..');
 const shop = join(repo, 'examples', 'shop');
+const backends = join(repo, 'examples', 'backends');
 const cliBin = join(repo, 'packages', 'cli', 'dist', 'bin.js');
 const { DaemonClient, DaemonDiscovery, DISCOVERY_FILE } = await import(
   new URL('../packages/protocol/dist/index.js', import.meta.url).href
 );
 
-// tsx's bin field, resolved from the shop like `npx tsx` would.
-const tsxPkgPath = createRequire(join(shop, 'package.json')).resolve('tsx/package.json');
-const tsxPkg = JSON.parse(readFileSync(tsxPkgPath, 'utf8'));
-const tsxBin = join(dirname(tsxPkgPath), typeof tsxPkg.bin === 'string' ? tsxPkg.bin : tsxPkg.bin.tsx);
+/** A package's bin, resolved from `fromDir` like `npx` would. */
+function binOf(fromDir, pkg, name) {
+  const pkgPath = createRequire(join(fromDir, 'package.json')).resolve(`${pkg}/package.json`);
+  const json = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  return join(dirname(pkgPath), typeof json.bin === 'string' ? json.bin : json.bin[name]);
+}
+const tsxBin = binOf(shop, 'tsx', 'tsx');
+const tscBin = binOf(repo, 'typescript', 'tsc');
 const [major, minor] = process.versions.node.split('.').map(Number);
-const stripFlag = major === 22 && minor < 18 ? ['--experimental-strip-types'] : [];
+const strip = major === 22 && minor < 18 ? ['--experimental-strip-types'] : [];
+const node = process.execPath;
 
-const RUNS = {
-  strip: [process.execPath, ...stripFlag, 'server/index.ts'],
-  tsx: [process.execPath, tsxBin, 'server/index.ts'],
-  'tsx-watch': [process.execPath, tsxBin, 'watch', 'server/index.ts'],
-  // Built by tsc first (below): JavaScript in dist/ with an external .map file per script.
-  tsc: [process.execPath, 'dist/server/index.js'],
+const shopOrder = { lines: [{ productId: 'lamp', qty: 1 }] };
+const backendOrder = { lines: [{ sku: 'lamp', qty: 1 }] };
+const shopFiles = [
+  'server/routes/orders.ts',
+  'server/services/pricing.ts',
+  'server/services/payment.ts',
+  'server/db.ts',
+];
+const shopLines = {
+  'server/routes/orders.ts': { dark: ["'Your cart is empty.'"], lit: ['saveOrder('] },
+};
+const checkoutLines = {
+  'shared/checkout.ts': {
+    dark: ["'Your cart is empty.'", 'Unknown product'],
+    lit: ['subtotalCents += price'],
+  },
 };
 
-// tsc, resolved from the repo root like `pnpm exec tsc`.
-const tsPkgPath = createRequire(join(repo, 'package.json')).resolve('typescript/package.json');
-const tsPkg = JSON.parse(readFileSync(tsPkgPath, 'utf8'));
-const tscBin = join(dirname(tsPkgPath), typeof tsPkg.bin === 'string' ? tsPkg.bin : tsPkg.bin.tsc);
-rmSync(join(shop, 'dist', 'server'), { recursive: true, force: true });
-execFileSync(process.execPath, [tscBin, '-p', 'tsconfig.server.json'], { cwd: shop, stdio: 'inherit' });
-const API = 'http://127.0.0.1:3001';
-const ROUTE = 'server/routes/orders.ts';
+/**
+ * Each run: where to start it, the command, the body to POST, the route file the trace must contain,
+ * other files it must contain, lines that must be dark or lit (found by text), and the run whose
+ * lines it must match exactly.
+ */
+const RUNS = [
+  {
+    name: 'shop: strip',
+    cwd: shop,
+    command: [node, ...strip, 'server/index.ts'],
+    order: shopOrder,
+    files: shopFiles,
+    lines: shopLines,
+  },
+  {
+    name: 'shop: tsx',
+    cwd: shop,
+    command: [node, tsxBin, 'server/index.ts'],
+    order: shopOrder,
+    files: shopFiles,
+    lines: shopLines,
+    sameAs: 'shop: strip',
+    skipsTsxCli: true,
+  },
+  {
+    name: 'shop: tsx-watch',
+    cwd: shop,
+    command: [node, tsxBin, 'watch', 'server/index.ts'],
+    order: shopOrder,
+    files: shopFiles,
+    lines: shopLines,
+    sameAs: 'shop: strip',
+    skipsTsxCli: true,
+  },
+  {
+    name: 'shop: tsc',
+    cwd: shop,
+    build: () => tsc(shop, 'tsconfig.server.json', 'dist/server'),
+    command: [node, 'dist/server/index.js'],
+    order: shopOrder,
+    files: shopFiles,
+    lines: shopLines,
+    sameAs: 'shop: strip',
+    noDist: true,
+  },
+  {
+    name: 'fastify',
+    cwd: backends,
+    command: [node, ...strip, 'fastify/server.ts'],
+    order: backendOrder,
+    files: ['fastify/server.ts', 'shared/checkout.ts'],
+    lines: {
+      ...checkoutLines,
+      'fastify/server.ts': { dark: ['reply.code(result.status)'], lit: ['reply.code(201)'] },
+    },
+  },
+  {
+    name: 'nest',
+    cwd: backends,
+    build: () => tsc(backends, 'tsconfig.nest.json', 'dist'),
+    command: [node, 'dist/nest/main.js'],
+    order: backendOrder,
+    files: ['nest/orders.controller.ts', 'nest/orders.service.ts', 'shared/checkout.ts'],
+    lines: {
+      ...checkoutLines,
+      'nest/orders.controller.ts': { dark: ['throw new HttpException'], lit: ['return result.quote'] },
+    },
+    // Nest's own code runs from node_modules and is dropped; the shared checkout must match Fastify's.
+    sameAs: 'fastify',
+    noDist: true,
+  },
+];
 
+function tsc(cwd, project, outDir) {
+  rmSync(join(cwd, outDir), { recursive: true, force: true });
+  execFileSync(node, [tscBin, '-p', project], { cwd, stdio: 'inherit' });
+}
+
+const API = 'http://127.0.0.1:3001';
 const failures = [];
 const check = (ok, message) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${message}`);
@@ -64,10 +152,10 @@ async function until(what, fn, timeoutMs = 20_000) {
   throw new Error(`timed out waiting for ${what}`);
 }
 
-/** Runs one variant through the real CLI and returns its order trace and the CLI's output. */
-async function traceOrder(name, command) {
-  const cli = spawn(process.execPath, [cliBin, 'dev', '--no-browser', '--debug', '--', ...command], {
-    cwd: shop,
+/** Runs one app through the real CLI and returns its order trace and the CLI's output. */
+async function traceOrder(run) {
+  const cli = spawn(node, [cliBin, 'dev', '--no-browser', '--debug', '--', ...run.command], {
+    cwd: run.cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
     // On POSIX, a process group lets us stop the CLI, tsx, and the server together.
     detached: process.platform !== 'win32',
@@ -82,10 +170,14 @@ async function traceOrder(name, command) {
   const exited = new Promise((r) => cli.once('exit', r));
   let client;
   try {
-    await until(`${name}: the API to start`, () => output.includes('listening on port'));
-    const info = await until(`${name}: the discovery file`, () => {
+    await until(`${run.name}: the API to start`, () => {
+      if (cli.exitCode !== null) throw new Error(`${run.name}: lightpath dev exited with ${cli.exitCode}`);
+      return output.includes('listening on port');
+    });
+    const info = await until(`${run.name}: the discovery file`, () => {
       try {
-        const parsed = DaemonDiscovery.parse(JSON.parse(readFileSync(join(shop, DISCOVERY_FILE), 'utf8')));
+        const file = readFileSync(join(run.cwd, DISCOVERY_FILE), 'utf8');
+        const parsed = DaemonDiscovery.parse(JSON.parse(file));
         return parsed.pid === cli.pid ? parsed : undefined;
       } catch {
         return undefined;
@@ -96,27 +188,34 @@ async function traceOrder(name, command) {
     const res = await fetch(`${API}/api/orders`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ lines: [{ productId: 'lamp', qty: 1 }] }),
+      body: JSON.stringify(run.order),
     });
-    check(res.status === 201, `${name}: POST /api/orders answered 201 (got ${res.status})`);
+    check(res.status === 201, `${run.name}: POST /api/orders answered 201 (got ${res.status})`);
 
-    const trace = await until(`${name}: a finished trace with ${ROUTE}`, async () => {
+    const route = run.files[0];
+    const trace = await until(`${run.name}: a finished trace with ${route}`, async () => {
       for (const summary of await client.listTraces({ limit: 10 })) {
         const t = await client.getTrace(summary.id);
-        if (t?.endedAt !== undefined && t.files.some((f) => f.path === ROUTE)) return t;
+        if (t?.endedAt !== undefined && t.files.some((f) => f.path === route)) return t;
       }
       return undefined;
     });
     await sleep(300); // let the CLI print the trace
     return { trace, output };
+  } catch (err) {
+    console.log(output.slice(-3000));
+    throw err;
   } finally {
     client?.close();
-    if (process.platform === 'win32') execSync(`taskkill /pid ${cli.pid} /T /F`, { stdio: 'ignore' });
-    else process.kill(-cli.pid, 'SIGTERM');
-    await exited;
+    // The tree may already be gone (the app crashed); that must not hide the real error.
+    try {
+      if (process.platform === 'win32') execSync(`taskkill /pid ${cli.pid} /T /F`, { stdio: 'ignore' });
+      else process.kill(-cli.pid, 'SIGTERM');
+    } catch {}
+    if (cli.exitCode === null && cli.signalCode === null) await exited;
     // A forced stop skips the daemon's cleanup; remove the discovery file it would have removed.
-    rmSync(join(shop, DISCOVERY_FILE), { force: true });
-    await until(`${name}: port 3001 to be free`, () =>
+    rmSync(join(run.cwd, DISCOVERY_FILE), { force: true });
+    await until(`${run.name}: port 3001 to be free`, () =>
       fetch(API).then(
         () => false,
         () => true,
@@ -126,71 +225,84 @@ async function traceOrder(name, command) {
 }
 
 const lineSet = (file) => file?.lines.map((l) => `${l.line}:${l.count}`).join(' ') ?? '(missing)';
-const ordersSrc = readFileSync(join(shop, ROUTE), 'utf8').split('\n');
-const emptyLine = ordersSrc.findIndex((l) => l.includes("'Your cart is empty.'")) + 1;
-const saveLine = ordersSrc.findIndex((l) => l.includes('saveOrder(')) + 1;
+/** 1-based line of the first line containing `text`, or 0. */
+const lineOf = (cwd, path, text) =>
+  readFileSync(join(cwd, path), 'utf8')
+    .split('\n')
+    .findIndex((l) => l.includes(text)) + 1;
 
+const only = process.argv.slice(2);
 const results = {};
 try {
-  for (const [name, command] of Object.entries(RUNS)) {
-    console.log(`\n--- ${name}: lightpath dev --no-browser -- ${command.slice(1).join(' ')}`);
-    const { trace, output } = await traceOrder(name, command);
-    results[name] = trace;
-    const route = trace.files.find((f) => f.path === ROUTE);
+  for (const run of RUNS) {
+    if (only.length > 0 && !only.includes(run.name)) continue;
+    console.log(`\n--- ${run.name}: lightpath dev --no-browser -- ${run.command.slice(1).join(' ')}`);
+    run.build?.();
+    const { trace, output } = await traceOrder(run);
+    results[run.name] = trace;
     check(
       trace.requests.some((r) => r.method === 'POST' && r.path === '/api/orders' && r.status === 201),
-      `${name}: the trace records POST /api/orders 201`,
+      `${run.name}: the trace records POST /api/orders 201`,
     );
     check(
       trace.files.every((f) => f.collector === 'node'),
-      `${name}: every file came from the Node agent`,
+      `${run.name}: every file came from the Node agent`,
     );
-    for (const path of ['server/services/pricing.ts', 'server/services/payment.ts', 'server/db.ts']) {
+    for (const path of run.files) {
       check(
         trace.files.some((f) => f.path === path),
-        `${name}: the trace includes ${path}`,
+        `${run.name}: the trace includes ${path}`,
       );
     }
-    check(
-      !route?.lines.some((l) => l.line === emptyLine),
-      `${name}: ${ROUTE} line ${emptyLine} (empty cart) is dark`,
-    );
-    check(
-      Boolean(route?.lines.some((l) => l.line === saveLine)),
-      `${name}: ${ROUTE} line ${saveLine} is lit`,
-    );
+    for (const [path, { dark, lit }] of Object.entries(run.lines)) {
+      const file = trace.files.find((f) => f.path === path);
+      for (const text of dark) {
+        const n = lineOf(run.cwd, path, text);
+        check(n > 0 && !file?.lines.some((l) => l.line === n), `${run.name}: ${path}:${n} (${text}) is dark`);
+      }
+      for (const text of lit) {
+        const n = lineOf(run.cwd, path, text);
+        check(
+          n > 0 && Boolean(file?.lines.some((l) => l.line === n)),
+          `${run.name}: ${path}:${n} (${text}) is lit`,
+        );
+      }
+    }
     check(
       !trace.dropped.some((d) => d.reason === 'no-source' || d.reason === 'no-source-map'),
-      `${name}: nothing dropped for a missing source or map (${JSON.stringify(trace.dropped)})`,
+      `${run.name}: nothing dropped for a missing source or map (${JSON.stringify(trace.dropped)})`,
     );
-    check(output.includes(ROUTE), `${name}: the terminal printed ${ROUTE}`);
-    if (name === 'tsc') {
+    check(output.includes(run.files[0]), `${run.name}: the terminal printed ${run.files[0]}`);
+    if (run.noDist) {
       // With the .map files read, every file shows as its TypeScript source, never as dist/*.js.
       check(
         !trace.files.some((f) => f.path.startsWith('dist/')),
-        `tsc: no compiled dist/ file in the trace (${trace.files.map((f) => f.path).join(', ')})`,
+        `${run.name}: no compiled dist/ file in the trace (${trace.files.map((f) => f.path).join(', ')})`,
       );
     }
-    if (name.startsWith('tsx')) {
+    if (run.skipsTsxCli) {
       // The tsx CLI (and its watcher) must be skipped; only the process running the app reports.
       check(
         /skipped tool process: .*tsx[\\/]dist[\\/]cli\./.test(output),
-        `${name}: the agent skipped tsx's own CLI process`,
+        `${run.name}: the agent skipped tsx's own CLI process`,
       );
     }
   }
 
   // Source maps (tsx's inline ones, tsc's .map files) must give exactly the lines type stripping
-  // gives, in every file.
-  const truth = results.strip;
-  for (const name of ['tsx', 'tsx-watch', 'tsc']) {
-    const paths = [...new Set([...truth.files, ...results[name].files].map((f) => f.path))].sort();
-    for (const path of paths) {
+  // gives, in every file both runs share.
+  for (const run of RUNS) {
+    const truth = results[run.sameAs];
+    const mine = results[run.name];
+    if (!run.sameAs || !truth || !mine) continue;
+    const shared = mine.files.map((f) => f.path).filter((p) => truth.files.some((f) => f.path === p));
+    check(shared.length > 0, `${run.name}: shares files with ${run.sameAs}`);
+    for (const path of shared.sort()) {
       const a = lineSet(truth.files.find((f) => f.path === path));
-      const b = lineSet(results[name].files.find((f) => f.path === path));
+      const b = lineSet(mine.files.find((f) => f.path === path));
       check(
         a === b,
-        `${name}: ${path} lines match type stripping${a === b ? '' : `\n  strip ${a}\n  ${name} ${b}`}`,
+        `${run.name}: ${path} lines match ${run.sameAs}${a === b ? '' : `\n  ${run.sameAs}: ${a}\n  ${run.name}: ${b}`}`,
       );
     }
   }

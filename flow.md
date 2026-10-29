@@ -356,13 +356,13 @@ The daemon handles it in `#onLines()` (section 6.2).
 
 `scripts/e2e-api.mjs`, in order:
 
-1. Resolves tsx's CLI from the shop's dependencies, like `npx tsx` would, and builds the API with `tsc -p tsconfig.server.json` into `examples/shop/dist/server` (JavaScript plus `.map` files).
-2. For each way of starting the shop's API (`node server/index.ts`, `tsx server/index.ts`, `tsx watch server/index.ts`, `node dist/server/index.js`): spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in `examples/shop`, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
-3. Waits for "listening on port", reads `.lightpath/daemon.json` (checking its `pid` is this CLI), and connects a `DaemonClient`.
-4. POSTs one order to `http://127.0.0.1:3001/api/orders`, then polls `listTraces()` and `getTrace()` until a finished trace contains `server/routes/orders.ts`.
-5. Checks the request, the files, a dark and a lit line, that nothing was dropped for a missing source or map, that the terminal printed the route, and (for tsx) that the agent skipped tsx's own CLI process.
+1. Resolves tsx's and tsc's bins from the dependencies, like `npx` would. `RUNS` lists each app: the shop's Express API four ways (type stripping, `tsx`, `tsx watch`, a `tsc` build), and `examples/backends` on Fastify (type stripping) and NestJS (`tsc -p tsconfig.nest.json`).
+2. For each run: `build()` if it has one (tsc into `dist/`), then spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in the app's folder, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
+3. Waits for "listening on port" (failing early if the CLI exits), reads `.lightpath/daemon.json` (checking its `pid` is this CLI), and connects a `DaemonClient`.
+4. POSTs one order to `http://127.0.0.1:3001/api/orders`, then polls `listTraces()` and `getTrace()` until a finished trace contains the run's route file.
+5. Checks the request, the expected files, dark and lit lines (found by their text), that nothing was dropped for a missing source or map, that the terminal printed the route, no `dist/` paths for built runs, and that tsx's own CLI process was skipped.
 6. Stops the process tree, removes the discovery file, and waits for port 3001 to be free.
-7. Compares every file's lines and counts from the tsx and tsc runs with the type-stripping run, which has no source map and so is the reference.
+7. For runs with `sameAs`, compares every shared file's lines and counts with the reference run (a type-stripping run, which needs no source map).
 
 `packages/core/scripts/capture-fixtures.mjs` (run by hand when a sample changes), in order:
 
