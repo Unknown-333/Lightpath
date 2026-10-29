@@ -1,5 +1,5 @@
 import { readFileSync, statSync } from 'node:fs';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Largest .map file the agent forwards. Base64 adds a third, so a map at this limit plus a large
@@ -65,10 +65,23 @@ export function readExternalSourceMap(
   return `data:application/json;base64,${Buffer.from(JSON.stringify(map)).toString('base64')}`;
 }
 
-/** Resolves a path or URL against `base`. Windows paths like `C:\a\b.ts` become file URLs first. */
+/**
+ * Resolves a path or URL against `base`. Windows paths like `C:\a\b.ts` become file URLs first.
+ *
+ * A Windows absolute path is rewritten to a `file:` URL by hand rather than with `pathToFileURL`,
+ * because that function reads the HOST OS: on a non-Windows runner it treats `C:\a\b.ts` as a
+ * relative POSIX name, resolving it against the CWD and percent-encoding the backslashes. The map
+ * carries the app author's machine paths regardless of where the daemon runs, so the mapping must
+ * not depend on the OS running the test or the agent (CI runs this on Linux and macOS too).
+ */
 function toUrl(value: string, base: URL): URL | undefined {
   try {
-    return WINDOWS_ABSOLUTE.test(value) ? pathToFileURL(value) : new URL(value, base);
+    if (WINDOWS_ABSOLUTE.test(value)) {
+      const [drive, ...rest] = value.split(/[\\/]/);
+      const path = rest.map((segment) => encodeURIComponent(segment)).join('/');
+      return new URL(`file:///${drive}/${path}`);
+    }
+    return new URL(value, base);
   } catch {
     return undefined;
   }
