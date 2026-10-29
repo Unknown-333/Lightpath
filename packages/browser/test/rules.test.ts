@@ -57,6 +57,13 @@ describe('shouldTag', () => {
     ['https://example.com/', 'navigation', false],
     ['http://localhost:3000/page', 'document', false],
     ['not a url', 'fetch', false],
+    // Loopback APIs on another port are tagged without being listed (D-086).
+    ['http://localhost:3001/quizzes/1', 'fetch', true],
+    ['http://127.0.0.1:8080/api', 'xhr', true],
+    ['http://[::1]:4000/api', 'fetch', true],
+    ['http://localhost:3001/logo.png', 'image', false],
+    ['http://localhost.example.com/api', 'fetch', false],
+    ['http://192.168.1.5:3001/api', 'fetch', false],
   ])('%s (%s) → %s', (url, type, expected) => {
     expect(shouldTag(url, type, origins)).toBe(expected);
   });

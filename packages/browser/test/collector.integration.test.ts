@@ -27,22 +27,43 @@ export function leaving() {
   window.leftAt = Date.now();
 }
 document.getElementById('next').addEventListener('click', leaving);
+export function loadRemote() {
+  return fetch(window.API + '/remote').then((r) => r.text()).then((t) => {
+    document.getElementById('out').textContent = t;
+  });
+}
+document.getElementById('remote').addEventListener('click', loadRemote);
 `;
 const pageTwoJs = `export function arrived() {
   document.getElementById('here').textContent = 'arrived';
 }
 arrived();
 `;
-const html =
+const html = (api: string) =>
   '<!doctype html><button id="buy">Checkout</button><form id="coupon"><input id="code" placeholder="Coupon"></form>' +
-  '<a id="next" href="/two">Next page</a><p id="out"></p><script type="module" src="/app.js"></script>';
+  `<a id="next" href="/two">Next page</a><button id="remote">Remote</button><p id="out"></p>` +
+  `<script>window.API = ${JSON.stringify(api)};</script><script type="module" src="/app.js"></script>`;
 const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
 
 let server: http.Server;
 let origin = '';
 const traceHeaders: (string | undefined)[] = [];
+// An API on another loopback port whose CORS policy allows the page's origin but no custom headers,
+// and which refuses preflights: a tagged request must still reach it (D-086).
+let apiServer: http.Server;
+let apiOrigin = '';
+const apiSeen: { method: string | undefined; trace: string | undefined }[] = [];
 
 beforeAll(async () => {
+  apiServer = http.createServer((req, res) => {
+    apiSeen.push({ method: req.method, trace: req.headers['x-lightpath-trace'] as string | undefined });
+    if (req.method === 'OPTIONS') return res.writeHead(405).end();
+    res.writeHead(200, { 'access-control-allow-origin': origin }).end('remote ok');
+  });
+  apiServer.listen(0, '127.0.0.1');
+  await once(apiServer, 'listening');
+  apiOrigin = `http://127.0.0.1:${(apiServer.address() as AddressInfo).port}`;
+
   server = http.createServer((req, res) => {
     if (req.url === '/app.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(appJs);
     if (req.url === '/two.js')
@@ -55,7 +76,7 @@ beforeAll(async () => {
       traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
       return res.writeHead(201).end('created');
     }
-    res.writeHead(200, { 'content-type': 'text/html' }).end(html);
+    res.writeHead(200, { 'content-type': 'text/html' }).end(html(apiOrigin));
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -64,6 +85,7 @@ beforeAll(async () => {
 
 afterAll(() => {
   server?.close();
+  apiServer?.close();
 });
 
 describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
@@ -157,6 +179,25 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     const starts = messages.flatMap((m) => (m.type === 'traceStart' ? [m] : []));
     return { messages, starts, ran, logs };
   }
+
+  it("tags a call to an API on another loopback port without a preflight, even when CORS doesn't allow the header", async () => {
+    apiSeen.length = 0;
+    const { starts, ran } = await record(async (c) => {
+      const page = c.page;
+      const box = await page?.locator('#remote').boundingBox();
+      if (!page || !box) throw new Error('button not found');
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await new Promise((r) => setTimeout(r, 80));
+      await page.mouse.up();
+      await page.waitForSelector('#out:has-text("remote ok")', { timeout: 8000 });
+    });
+    const [remote] = starts;
+    if (!remote) throw new Error('no trace');
+    expect(remote.label).toBe('button: Remote');
+    expect(ran(remote.traceId)).toContain('/app.js#loadRemote');
+    expect(apiSeen).toEqual([{ method: 'GET', trace: remote.traceId }]);
+  }, 30_000);
 
   it('opens a trace for Enter on a button and for Enter in a form field', async () => {
     const { starts, ran } = await record(async (c) => {

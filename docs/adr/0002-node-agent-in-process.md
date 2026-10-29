@@ -9,11 +9,11 @@ The Node side must collect coverage from the user's backend without code changes
 
 ## Options
 
-| Option                                                              | Pros                                                                             | Cons                                                                                                                   |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Option                                                               | Pros                                                                             | Cons                                                                                                                   |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
 | **In-process `node:inspector` Session via `NODE_OPTIONS=--require`** | No debug port; synchronous takes; works for child processes that inherit the env | Runs inside the user's process, so it must be tiny and must never throw                                                |
-| `--inspect` and connect from the daemon over CDP                    | Agent-free                                                                       | Opens a debug port (security risk); port clashes with the user's own debugger; async round trips make boundaries fuzzy |
-| `NODE_V8_COVERAGE`                                                  | Built in                                                                         | Writes only at process exit; no per-request boundaries                                                                 |
+| `--inspect` and connect from the daemon over CDP                     | Agent-free                                                                       | Opens a debug port (security risk); port clashes with the user's own debugger; async round trips make boundaries fuzzy |
+| `NODE_V8_COVERAGE`                                                   | Built in                                                                         | Writes only at process exit; no per-request boundaries                                                                 |
 
 ## Decision
 

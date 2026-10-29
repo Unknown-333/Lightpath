@@ -81,7 +81,7 @@ This is the path the system is built around. Times are targets, not measurements
 
 1. **Pointer down.** The user presses the mouse on "Checkout". The collector's init script owns the first capture `pointerdown` listener on `window`; it records the target and runs `debugger;` (ADR 0003). Chrome pauses the page before any app handler runs.
 2. **Open the trace.** While the page is paused, the collector calls `Profiler.takePreciseCoverage` and files the result as _background_ (timers, animation frames since the last take). It creates trace `t_42` with the target's label ("button: Checkout") and resumes the page. Measured pause: 4.7 to 7.1 ms. Chrome drops `pointerup` and `click` events that arrive while the page is paused, so the pause must stay well under a human press (50 to 150 ms).
-3. **Tag requests.** For the next request window, `page.route` adds `x-lightpath-trace: t_42` to requests sent to the configured backend origins (ADR 0004). Cross-origin requests to other hosts are left untouched so no CORS preflight is triggered.
+3. **Tag requests.** For the next request window, `page.route` adds `x-lightpath-trace: t_42` to fetch and XHR requests sent to the dev server, to any loopback origin, and to configured backend origins (ADR 0004, D-086). Requests to remote hosts are left untouched.
 4. **Backend boundary.** In the Node API process, `http.server.request.start` fires before the route handler **(measured)**. The agent reads the header, takes coverage (filed as background for that process), and records the request start.
 5. **Handler runs.** Express routes, services, and the database client run.
 6. **Backend close.** `http.server.response.finish` fires after the response is written **(measured)**. The agent takes coverage again. That delta is the request's code. It sends `{traceId: t_42, delta, timing}` to the daemon.
@@ -212,8 +212,8 @@ The browser collector creates the trace and tags backend requests with `x-lightp
 
 ### 6.2 Request tagging rules (ADR 0004)
 
-- Tag only requests whose origin is in `backendOrigins` (default: the dev server origin, because Vite proxies `/api` to the backend, plus any origin the user configures).
-- Never add the header to other origins. A custom header on a cross-origin request triggers a CORS preflight that would change the app's behavior.
+- Tag requests whose origin is in `backendOrigins` (default: the dev server origin, because Vite proxies `/api` to the backend, plus any origin the user configures) or is a loopback origin on any port (D-086).
+- Never add the header to remote origins: the trace ID is no business of a payment provider or CDN. Adding it through `page.route` doesn't trigger a CORS preflight, because Chrome has already done its CORS checks (measured, D-086).
 - Server-to-server calls (Node `fetch` to another local service) carry the header forward through `http.client.request.start` and `undici:request:create` **(both channels measured; header injection unverified)**.
 
 ### 6.3 Concurrency (known limitation)
