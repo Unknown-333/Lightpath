@@ -1,0 +1,112 @@
+{
+  "name": "vite-jsx",
+  "note": "examples/shop/src/Cart.tsx as served by Vite (React JSX transform), one Checkout click in Chrome.",
+  "capturedWith": {
+    "browser": "156.0.8078.48",
+    "loader": "vite"
+  },
+  "sampleSha256": "5825da24797080a9ed12bccd08df67f2af2a699d67572904c2ecbdb5a6da2f8c",
+  "coverage": {
+    "scriptId": "1",
+    "url": "http://localhost:5173/src/Cart.tsx",
+    "functions": [
+      {
+        "functionName": "Cart",
+        "ranges": [
+          {
+            "startOffset": 665,
+            "endOffset": 2820,
+            "count": 4
+          },
+          {
+            "startOffset": 1656,
+            "endOffset": 1817,
+            "count": 2
+          },
+          {
+            "startOffset": 1818,
+            "endOffset": 1994,
+            "count": 2
+          },
+          {
+            "startOffset": 2500,
+            "endOffset": 2723,
+            "count": 2
+          },
+          {
+            "startOffset": 2582,
+            "endOffset": 2591,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "",
+        "ranges": [
+          {
+            "startOffset": 884,
+            "endOffset": 1030,
+            "count": 2
+          },
+          {
+            "startOffset": 1022,
+            "endOffset": 1025,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "",
+        "ranges": [
+          {
+            "startOffset": 933,
+            "endOffset": 963,
+            "count": 2
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "checkout",
+        "ranges": [
+          {
+            "startOffset": 1037,
+            "endOffset": 1429,
+            "count": 1
+          },
+          {
+            "startOffset": 1313,
+            "endOffset": 1393,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": true
+      },
+      {
+        "functionName": "onChange",
+        "ranges": [
+          {
+            "startOffset": 2106,
+            "endOffset": 2138,
+            "count": 0
+          }
+        ],
+        "isBlockCoverage": false
+      }
+    ]
+  },
+  "source": "import { createHotContext as __vite__createHotContext } from \"/@vite/client\";import.meta.hot = __vite__createHotContext(\"/src/Cart.tsx\");const useState = __vite__cjsImport0_react[\"useState\"];const _jsxDEV = __vite__cjsImport3_react_jsxDevRuntime[\"jsxDEV\"];import __vite__cjsImport0_react from \"/node_modules/.vite/deps/react.js?v=b43c9c38\";\nimport { placeOrder } from \"/src/api.ts\";\nimport { formatCents } from \"/src/money.ts\";\nvar _jsxFileName = \"/repo____________________________________________/shop/src/Cart.tsx\";\nimport __vite__cjsImport3_react_jsxDevRuntime from \"/node_modules/.vite/deps/react_jsx-dev-runtime.js?v=b43c9c38\";\nvar _s = $RefreshSig$();\nexport function Cart({ lines, products, onCheckedOut }) {\n\t_s();\n\tconst [coupon, setCoupon] = useState(\"\");\n\tconst [status, setStatus] = useState(null);\n\tconst [busy, setBusy] = useState(false);\n\tconst subtotal = lines.reduce((sum, line) => {\n\t\tconst product = products.find((p) => p.id === line.productId);\n\t\treturn sum + (product ? product.priceCents * line.qty : 0);\n\t}, 0);\n\tasync function checkout() {\n\t\tsetBusy(true);\n\t\tsetStatus(null);\n\t\ttry {\n\t\t\tconst result = await placeOrder(lines, coupon || undefined);\n\t\t\tsetStatus({\n\t\t\t\tkind: \"ok\",\n\t\t\t\ttext: `Order #${result.orderId} placed: ${formatCents(result.totalCents)}`\n\t\t\t});\n\t\t\tonCheckedOut();\n\t\t} catch (err) {\n\t\t\tsetStatus({\n\t\t\t\tkind: \"error\",\n\t\t\t\ttext: err.message\n\t\t\t});\n\t\t} finally {\n\t\t\tsetBusy(false);\n\t\t}\n\t}\n\treturn /* @__PURE__ */ _jsxDEV(\"section\", { children: [\n\t\t/* @__PURE__ */ _jsxDEV(\"h2\", { children: \"Cart\" }, void 0, false, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 37,\n\t\t\tcolumnNumber: 7\n\t\t}, this),\n\t\tlines.length === 0 ? /* @__PURE__ */ _jsxDEV(\"p\", { children: \"Your cart is empty.\" }, void 0, false, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 38,\n\t\t\tcolumnNumber: 29\n\t\t}, this) : /* @__PURE__ */ _jsxDEV(\"p\", { children: [\"Subtotal: \", formatCents(subtotal)] }, void 0, true, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 38,\n\t\t\tcolumnNumber: 58\n\t\t}, this),\n\t\t/* @__PURE__ */ _jsxDEV(\"input\", {\n\t\t\tplaceholder: \"Coupon (try WELCOME10)\",\n\t\t\tvalue: coupon,\n\t\t\tonChange: (e) => setCoupon(e.target.value)\n\t\t}, void 0, false, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 39,\n\t\t\tcolumnNumber: 7\n\t\t}, this),\n\t\t\" \",\n\t\t/* @__PURE__ */ _jsxDEV(\"button\", {\n\t\t\ttype: \"button\",\n\t\t\tclassName: \"primary\",\n\t\t\tdisabled: busy,\n\t\t\tonClick: checkout,\n\t\t\tchildren: \"Checkout\"\n\t\t}, void 0, false, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 44,\n\t\t\tcolumnNumber: 7\n\t\t}, this),\n\t\tstatus && /* @__PURE__ */ _jsxDEV(\"p\", {\n\t\t\tclassName: `notice ${status.kind === \"error\" ? \"error\" : \"\"}`,\n\t\t\tchildren: status.text\n\t\t}, void 0, false, {\n\t\t\tfileName: _jsxFileName,\n\t\t\tlineNumber: 47,\n\t\t\tcolumnNumber: 18\n\t\t}, this)\n\t] }, void 0, true, {\n\t\tfileName: _jsxFileName,\n\t\tlineNumber: 36,\n\t\tcolumnNumber: 5\n\t}, this);\n}\n_s(Cart, \"yvxMkvMr/yie1et7fWiSvChOmXA=\");\n_c = Cart;\nvar _c;\n$RefreshReg$(_c, \"Cart\");\nimport * as RefreshRuntime from \"/@react-refresh\";\nconst inWebWorker = typeof WorkerGlobalScope !== 'undefined' && self instanceof WorkerGlobalScope;\nimport * as __vite_react_currentExports from \"/src/Cart.tsx\";\nif (import.meta.hot && !inWebWorker) {\n  if (!window.$RefreshReg$) {\n    throw new Error(\n      \"@vitejs/plugin-react can't detect preamble. Something is wrong.\"\n    );\n  }\n\n  const currentExports = __vite_react_currentExports;\n  queueMicrotask(() => {\n    RefreshRuntime.registerExportsForReactRefresh(\"/repo____________________________________________/shop/src/Cart.tsx\", currentExports);\n    import.meta.hot.accept((nextExports) => {\n      if (!nextExports) return;\n      const invalidateMessage = RefreshRuntime.validateRefreshBoundaryAndEnqueueUpdate(\"/repo____________________________________________/shop/src/Cart.tsx\", currentExports, nextExports);\n      if (invalidateMessage) import.meta.hot.invalidate(invalidateMessage);\n    });\n  });\n}\nfunction $RefreshReg$(type, id) { return RefreshRuntime.register(type, \"/repo____________________________________________/shop/src/Cart.tsx\" + ' ' + id); }\nfunction $RefreshSig$() { return RefreshRuntime.createSignatureFunctionForTransform(); }\n\n",
+  "sourceMap": {
+    "mappings": "AAAA,SAAS,gBAAgB;AACzB,SAAsC,kBAAkB;AACxD,SAAS,mBAAmB;;;;AAQ5B,OAAO,SAAS,KAAK,EAAE,OAAO,UAAU,gBAA2B;;CACjE,MAAM,CAAC,QAAQ,aAAa,SAAS,EAAE;CACvC,MAAM,CAAC,QAAQ,aAAa,SAAwD,IAAI;CACxF,MAAM,CAAC,MAAM,WAAW,SAAS,KAAK;CAEtC,MAAM,WAAW,MAAM,QAAQ,KAAK,SAAS;EAC3C,MAAM,UAAU,SAAS,MAAM,MAAM,EAAE,OAAO,KAAK,SAAS;EAC5D,OAAO,OAAO,UAAU,QAAQ,aAAa,KAAK,MAAM;CAC1D,GAAG,CAAC;CAEJ,eAAe,WAAW;EACxB,QAAQ,IAAI;EACZ,UAAU,IAAI;EACd,IAAI;GACF,MAAM,SAAS,MAAM,WAAW,OAAO,UAAU,SAAS;GAC1D,UAAU;IAAE,MAAM;IAAM,MAAM,UAAU,OAAO,QAAQ,WAAW,YAAY,OAAO,UAAU;GAAI,CAAC;GACpG,aAAa;EACf,SAAS,KAAK;GACZ,UAAU;IAAE,MAAM;IAAS,MAAO,IAAc;GAAQ,CAAC;EAC3D,UAAU;GACR,QAAQ,KAAK;EACf;CACF;CAEA,OACE,wBAAC,WAAD;EACE,wBAAC,MAAD,YAAI,OAAQ;;;;;EACX,MAAM,WAAW,IAAI,wBAAC,KAAD,YAAG,sBAAsB;;;;aAAI,wBAAC,KAAD,aAAG,cAAW,YAAY,QAAQ,CAAK;;;;;EAC1F,wBAAC,SAAD;GACE,aAAY;GACZ,OAAO;GACP,WAAW,MAAM,UAAU,EAAE,OAAO,KAAK;EAC1C;;;;;EAAE;EACH,wBAAC,UAAD;GAAQ,MAAK;GAAS,WAAU;GAAU,UAAU;GAAM,SAAS;aAAU;EAErE;;;;;EACP,UAAU,wBAAC,KAAD;GAAG,WAAW,UAAU,OAAO,SAAS,UAAU,UAAU;aAAO,OAAO;EAAQ;;;;;CACtF;;;;;AAEb",
+    "names": [],
+    "sources": [
+      "Cart.tsx"
+    ],
+    "version": 3,
+    "sourcesContent": [
+      "import { useState } from 'react';\nimport { type CartLine, type Product, placeOrder } from './api.ts';\nimport { formatCents } from './money.ts';\n\ninterface CartProps {\n  lines: CartLine[];\n  products: Product[];\n  onCheckedOut: () => void;\n}\n\nexport function Cart({ lines, products, onCheckedOut }: CartProps) {\n  const [coupon, setCoupon] = useState('');\n  const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);\n  const [busy, setBusy] = useState(false);\n\n  const subtotal = lines.reduce((sum, line) => {\n    const product = products.find((p) => p.id === line.productId);\n    return sum + (product ? product.priceCents * line.qty : 0);\n  }, 0);\n\n  async function checkout() {\n    setBusy(true);\n    setStatus(null);\n    try {\n      const result = await placeOrder(lines, coupon || undefined);\n      setStatus({ kind: 'ok', text: `Order #${result.orderId} placed: ${formatCents(result.totalCents)}` });\n      onCheckedOut();\n    } catch (err) {\n      setStatus({ kind: 'error', text: (err as Error).message });\n    } finally {\n      setBusy(false);\n    }\n  }\n\n  return (\n    <section>\n      <h2>Cart</h2>\n      {lines.length === 0 ? <p>Your cart is empty.</p> : <p>Subtotal: {formatCents(subtotal)}</p>}\n      <input\n        placeholder=\"Coupon (try WELCOME10)\"\n        value={coupon}\n        onChange={(e) => setCoupon(e.target.value)}\n      />{' '}\n      <button type=\"button\" className=\"primary\" disabled={busy} onClick={checkout}>\n        Checkout\n      </button>\n      {status && <p className={`notice ${status.kind === 'error' ? 'error' : ''}`}>{status.text}</p>}\n    </section>\n  );\n}\n"
+    ]
+  }
+}

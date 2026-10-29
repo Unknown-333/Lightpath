@@ -346,6 +346,8 @@ The daemon handles it in `#onLines()` (section 6.2).
 2. In the child: opens an in-process inspector session, enables `Debugger` (to receive `scriptParsed`) and precise coverage, imports the sample, takes and discards the load-time coverage, awaits `run()`, takes the delta, reads the script source with `Debugger.getScriptSource`, and prints JSON.
 3. Back in the parent: `portable()` decodes the inline source map, swaps this machine's paths for `file:///repo/samples`, and cuts the trailing `//# sourceMappingURL` comment.
 4. Writes `<name>.json` with the sample's SHA-256. `test/fixtures.test.ts` runs each fixture through `mapScript()` and compares against hand-checked lines; it doesn't regenerate them.
+5. Then `captureViteJsx()`: spawns `examples/shop/dev.mjs` (without Lightpath), waits for `http://localhost:5173`, launches Chrome through `playwright-core` from the browser package, and opens a CDP session with `Debugger` and precise coverage on. It loads the page, adds an item, takes and discards that coverage, clicks Checkout, waits for "Order #… placed", and takes the delta.
+6. Saves `/src/Cart.tsx` as Vite served it with its inline map. `redactSameLength()` replaces the absolute path that Vite's React transform writes into `_jsxFileName` with a placeholder of equal length, so no offset moves. Then it kills the shop's process tree.
 
 ## 12. Where to start reading
 

@@ -12,9 +12,10 @@
 //
 // Expected lines are NOT written here. They live in test/fixtures.test.ts and were checked by hand,
 // so a re-capture that changes behavior fails the test instead of silently updating it.
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -23,6 +24,13 @@ const fixtures = join(here, '..', 'test', 'fixtures');
 const samples = join(fixtures, 'samples');
 const samplesUrl = pathToFileURL(samples).href; // file:///C:/.../samples
 const PORTABLE = 'file:///repo/samples';
+/** Replacements that turn this machine's sample paths into file:///repo/samples. */
+const SAMPLE_SWAPS = [
+  [samplesUrl, PORTABLE],
+  // tsx on Windows writes map sources as C:\...\samples\x.ts.
+  [`${samples}\\`, `${PORTABLE}/`],
+  [`${samples.replaceAll('\\', '/')}/`, `${PORTABLE}/`],
+];
 
 /** name → how Node loads it. */
 const NODE_SAMPLES = {
@@ -52,6 +60,106 @@ if (process.argv[2] === '--child') {
     if (only.length > 0 && !only.includes(name)) continue;
     captureNode(name, spec);
   }
+  if (only.length === 0 || only.includes('vite-jsx')) await captureViteJsx();
+}
+
+/**
+ * The Vite fixture: runs examples/shop (API + Vite) without Lightpath, opens it in Chrome, adds an
+ * item, and takes coverage around one Checkout click. Saves Cart.tsx exactly as Vite served it,
+ * with its inline source map. Uses playwright-core from the browser package, so core gains no
+ * dependency for this.
+ */
+async function captureViteJsx() {
+  const repo = join(here, '..', '..', '..');
+  const shop = join(repo, 'examples', 'shop');
+  const { chromium } = createRequire(join(repo, 'packages', 'browser', 'package.json'))('playwright-core');
+  const origin = 'http://localhost:5173';
+
+  const server = spawn(process.execPath, ['dev.mjs'], { cwd: shop, stdio: 'ignore' });
+  let browser;
+  try {
+    await waitForHttp(`${origin}/`, 30_000);
+    browser = await chromium.launch({ channel: 'chrome', headless: true }).catch(() => chromium.launch());
+    const page = await browser.newPage();
+    const cdp = await page.context().newCDPSession(page);
+    const scripts = new Map();
+    cdp.on('Debugger.scriptParsed', (s) => scripts.set(s.scriptId, s));
+    await cdp.send('Debugger.enable');
+    await cdp.send('Debugger.setSkipAllPauses', { skip: true });
+    await cdp.send('Profiler.enable');
+    await cdp.send('Profiler.startPreciseCoverage', { callCount: true, detailed: true });
+
+    await page.goto(origin);
+    await page.click('li:has-text("Desk lamp") button');
+    await page.waitForSelector('text=/Subtotal/');
+    await new Promise((r) => setTimeout(r, 300));
+    await cdp.send('Profiler.takePreciseCoverage'); // discard: page load and "Add to cart"
+
+    await page.click('button:has-text("Checkout")');
+    await page.waitForSelector('text=/Order #\\d+ placed/');
+    await new Promise((r) => setTimeout(r, 300)); // let React finish the last render
+    const { result } = await cdp.send('Profiler.takePreciseCoverage');
+
+    const script = result.find((s) => new URL(s.url).pathname === '/src/Cart.tsx');
+    if (!script) throw new Error(`no Cart.tsx coverage; saw ${result.map((s) => s.url).join(', ')}`);
+    const info = scripts.get(script.scriptId);
+    const { scriptSource } = await cdp.send('Debugger.getScriptSource', { scriptId: script.scriptId });
+    const raw = {
+      url: script.url,
+      functions: script.functions,
+      source: scriptSource,
+      sourceMapURL: info?.sourceMapURL,
+    };
+    const shopSrc = pathToFileURL(join(shop, 'src')).href;
+    const fixture = {
+      name: 'vite-jsx',
+      note: 'examples/shop/src/Cart.tsx as served by Vite (React JSX transform), one Checkout click in Chrome.',
+      capturedWith: { browser: browser.version(), loader: 'vite' },
+      sampleSha256: createHash('sha256')
+        .update(readFileSync(join(shop, 'src', 'Cart.tsx'), 'utf8'))
+        .digest('hex'),
+      ...portable(raw, [
+        [`${origin}/src/`, 'http://localhost:5173/src/'],
+        [`${shopSrc}/`, 'file:///repo/shop/src/'],
+        [`${join(shop, 'src')}\\`, 'file:///repo/shop/src/'],
+        [`${join(shop, 'src').replaceAll('\\', '/')}/`, '/repo/shop/src/'],
+      ]),
+    };
+    fixture.coverage.url = fixture.coverage.url.split('?')[0]; // drop Vite's ?t= cache buster
+    // Vite's React transform writes the absolute path into the code (`_jsxFileName`). Replace it with
+    // a placeholder of exactly the same length, so no coverage offset or map column moves.
+    fixture.source = redactSameLength(fixture.source, shop.replaceAll('\\', '/'));
+    fixture.source = redactSameLength(fixture.source, shop);
+    if (fixture.source.includes(shop.replaceAll('\\', '/'))) throw new Error('machine path left in source');
+    writeFileSync(join(fixtures, 'vite-jsx.json'), `${JSON.stringify(fixture, null, 2)}\n`);
+    const fns = fixture.coverage.functions.length;
+    console.log(
+      `vite-jsx: ${fns} functions, ${fixture.source.length} chars, sources: ${fixture.sourceMap?.sources}`,
+    );
+  } finally {
+    await browser?.close();
+    if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(server.pid), '/T', '/F']);
+    else server.kill('SIGTERM');
+  }
+}
+
+/** `C:/a/b/shop` → `/repo_____/shop`: same length, so every later offset stays valid. */
+function redactSameLength(text, path) {
+  const head = '/repo';
+  const tail = '/shop';
+  if (path.length < head.length + tail.length) throw new Error(`path too short to redact: ${path}`);
+  return text.replaceAll(path, head + '_'.repeat(path.length - head.length - tail.length) + tail);
+}
+
+async function waitForHttp(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      if ((await fetch(url)).ok) return;
+    } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  throw new Error(`${url} did not start within ${timeoutMs} ms`);
 }
 
 function captureNode(name, spec) {
@@ -79,15 +187,13 @@ function captureNode(name, spec) {
   );
 }
 
-/** Replaces this machine's paths with file:///repo/samples and drops the inline map comment. */
-function portable(raw) {
-  // tsx on Windows writes map sources as C:\...\samples\x.ts; replace that form too. The portable
-  // form uses file:// so the fixture behaves the same on every OS.
-  const swap = (s) =>
-    s
-      .replaceAll(samplesUrl, PORTABLE)
-      .replaceAll(`${samples}\\`, `${PORTABLE}/`)
-      .replaceAll(`${samples.replaceAll('\\', '/')}/`, `${PORTABLE}/`);
+/**
+ * Makes a capture machine-independent: applies `swaps` to the script URL and the map's sources,
+ * and drops the inline map comment. The executed source is otherwise kept byte for byte, because
+ * every coverage offset and map column points into it.
+ */
+function portable(raw, swaps = SAMPLE_SWAPS) {
+  const swap = (s) => swaps.reduce((acc, [from, to]) => acc.replaceAll(from, to), s);
   let source = raw.source;
   let sourceMap;
   if (raw.sourceMapURL) {
