@@ -757,3 +757,18 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: When the page pauses in `beforeunload` during an action, the collector counts the navigation as one request in flight until the next document's `load` event. If no `load` comes (a download, a cancelled leave), the count is cleared when the window ends.
 - Why: The navigation test failed once on Linux CI (PR #2) with the new page's `arrived` missing from the trace, and passed on rerun. A link click makes no request until after the `beforeunload` pause, so the 300 ms quiet timer was already running while the collector read coverage there. On a slow machine it could fire in that gap, and the closing read then ran before the new page's scripts. Waiting for `load` makes the window cover the whole navigation.
 - How: `#navigating` in `packages/browser/src/collector.ts`, set in `#onLeave`, cleared by the page's `load` listener or after `settled` in `#click`. The real-browser suite passed 3 runs in a row.
+
+### D-092 Film the demo through DevTools screencasts, not the screen
+
+- Date: 2026-10-29
+- Decision: `extensions/vscode/scripts/record-demo.mjs` records the M4 demo from two `Page.startScreencast` streams: the shop in headless Chrome, and a separate VS Code started with `--remote-debugging-port` and reached with Playwright's `connectOverCDP`. Frames are resampled to one 12 fps timeline and put side by side with ffmpeg, then turned into `docs/media/demo.gif`.
+- Why: Screen capture would film whatever else is on the screen, needs the windows placed and unobstructed, and works differently on each OS. A screencast sees only the page it's attached to, so the video is the same on any machine and nothing private ends up in it. Driving VS Code by its keyboard (Quick Open, the command palette) also shows a viewer the real commands.
+- How: VS Code is the copy the in-editor test downloads, with a throwaway profile (dark theme, no minimap, no AI features, `lightpath.fadeSeconds: 0`). The headless page gets an injected pointer, since screencasts don't draw the mouse; it's injected with `evaluate`, so it has no script URL and the collector drops it. ffmpeg comes from `PATH` or `FFMPEG`, and isn't a dependency.
+- Rejected: OS screen capture (ffmpeg `gdigrab`, `avfoundation`, `x11grab`); Playwright's `recordVideo` (Chrome side only, and its ffmpeg build writes only VP8 WebM).
+
+### D-093 Run the in-editor test in CI
+
+- Date: 2026-10-29
+- Decision: A new `editor` CI job runs `pnpm test:vscode` on Ubuntu under `xvfb-run`, with the downloaded VS Code cached. The suite now also checks Replay: it opens every file of the Checkout trace in `replayOrder`, and the last one is lit with the trace's lines.
+- Why: The extension was only tested by hand. The in-editor test is the only check that the decorations, the Actions view, and the commands work in a real VS Code, so it should run on every change. A reversed replay order now fails the test (measured).
+- How: `.github/workflows/ci.yml` and `extensions/vscode/test/editor/suite.cjs`.

@@ -43,6 +43,25 @@ jobs:
       - run: pnpm e2e
       - run: LIGHTPATH_BROWSER_TESTS=1 pnpm --filter @lightpath-dev/browser test
 
+  editor:
+    name: editor end-to-end (VS Code + example shop)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # The test downloads VS Code stable (about 150 MB); keep it between runs.
+      - uses: actions/cache@v4
+        with:
+          path: extensions/vscode/.vscode-test
+          key: vscode-test-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: vscode-test-${{ runner.os }}-
+      # VS Code needs a display; xvfb-run gives it a virtual one.
+      - run: xvfb-run -a pnpm test:vscode
+
   e2e-api:
     name: backend end-to-end (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}

@@ -2,7 +2,7 @@
 
 Each milestone ends with something you can run and a post you can publish. Don't start a milestone until the previous one's exit check passes.
 
-**Status (October 29, 2026):** M1, M2, and M3 are done (see below). `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
+**Status (October 29, 2026):** M1 to M4 are done (see below). `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark, and `pnpm test:vscode` checks that VS Code draws exactly those lines. Four real apps have been run under Lightpath ([tested-apps.md](tested-apps.md)).
 
 | Milestone                     | Goal                                                                                                         | Exit check                                                                                                                                                    | Post                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -48,6 +48,18 @@ The exit check (click Checkout, see `Cart.tsx` and the backend in one trace) pas
 | Pause benchmark       | `bench/browser-pause.mjs`: under 12 ms p99 up to 3,000 React components. Above the 20 ms budget the boundary moves to the mouse release, where nothing is lost (D-081, D-082) |
 | Noise rules           | Files touched only by timers or polling are marked `background` and toned down in every client (D-083)                                                                        |
 | CSS-in-JS             | styled-components and Emotion interpolations map correctly; no change needed                                                                                                  |
+
+## M4 (done, October 29, 2026)
+
+The exit check is the demo video: [docs/media/demo.gif](media/demo.gif), recorded on the example shop by `pnpm --filter lightpath-vscode demo` (D-092).
+
+| Step             | Result                                                                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Heat decorations | 8 levels by hit count, whole-line, fading after `lightpath.fadeSeconds`. The in-editor test checks every lit line and its level against the trace            |
+| Gutter counts    | `× N` after lines that ran more than once                                                                                                                    |
+| Trace list       | The Actions view lists recent clicks and requests, each with its files; background files are marked                                                          |
+| Replay           | Walks a trace's files in the order the collectors saw them. Tested: every file opens in order and the last is lit (D-093)                                    |
+| Real VS Code     | `pnpm test:vscode` passes on VS Code 1.144 (Windows), and runs in CI on Ubuntu under `xvfb-run` (D-093). 1.101 is the oldest supported (Node 22 in the host) |
 
 ## Open questions to answer during the build
 

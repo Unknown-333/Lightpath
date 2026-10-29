@@ -285,8 +285,19 @@ Starting point: `activate()` in `extensions/vscode/src/extension.ts`. VS Code ca
 1. Starts the daemon for `examples/shop` (writing `.lightpath/daemon.json`), the shop with the Node agent, and a headless `BrowserCollector`.
 2. Opens a control server with one endpoint, `POST /click`: presses "Add to cart", then "Checkout", and replies with the finished Checkout trace.
 3. `runTests()` from `@vscode/test-electron` downloads VS Code into `extensions/vscode/.vscode-test/` and starts it on the shop folder with a temp profile, only this extension, and `test/editor/suite.cjs`.
-4. Inside VS Code, `suite.cjs` waits for the activation event and the connection, opens `Cart.tsx` and `orders.ts` side by side, runs `togglePin`, calls `/click`, and checks that `drawnLines()` equals the trace's lines and heat levels for both files. Then it runs `clear` and checks nothing is drawn.
+4. Inside VS Code, `suite.cjs` waits for the activation event and the connection, opens `Cart.tsx` and `orders.ts` side by side, runs `togglePin`, calls `/click`, and checks that `drawnLines()` equals the trace's lines and heat levels for both files. Then it runs `clear` and checks nothing is drawn. Last, it runs `replay` and checks that the active editor went through every trace file in `replayOrder()` and that the last one is lit with its lines.
 5. The runner stops Chrome, the shop, and the daemon (which removes the discovery file), and deletes the temp profile.
+
+**Demo recording** (`pnpm --filter lightpath-vscode demo` → `extensions/vscode/scripts/record-demo.mjs`, D-092), in order:
+
+1. Starts the daemon for `examples/shop` (writing `.lightpath/daemon.json`) and the shop with the Node agent, like the in-editor test.
+2. `downloadAndUnzipVSCode()` finds the same VS Code in `.vscode-test/`. It's started on the shop folder with a temp profile (filming settings in `User/settings.json`), the extension, and `--remote-debugging-port`; `chromium.connectOverCDP()` finds its workbench page and sizes it.
+3. Through the keyboard: focus the Actions view, Quick Open `Cart.tsx`, then `routes/orders.ts` to the side.
+4. A headless `BrowserCollector` opens the shop at 480 × 720, and `evaluate()` adds a visible pointer.
+5. `screencast()` starts `Page.startScreencast` on both pages and saves each frame with its arrival time.
+6. Presses "Add to cart" twice and "Checkout", then runs "Lightpath: Replay Last Action" from the command palette.
+7. `resample()` turns both frame lists into one 12 fps timeline; ffmpeg puts them side by side into `demo.mp4`, then makes `demo.gif` with a generated palette, in `extensions/vscode/.demo/`.
+8. Stops Chrome, VS Code, the shop, and the daemon.
 
 ## 9. MCP server
 
@@ -334,19 +345,20 @@ The daemon handles it in `#onLines()` (section 6.2).
 
 ## 11. Commands: what runs, in order
 
-| Command                        | Order                                                                                                                  |
-| ------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| `pnpm build`                   | `tsc -b` → `protocol`, `core`, `daemon`, `node-agent`, `browser`, `mcp`, `cli`, each into its `dist/`                  |
-| `pnpm typecheck`               | `pnpm build`, then each package's `typecheck` (`tsc -p test`; the extension also checks `src`; the shop checks itself) |
-| `pnpm lint`                    | `biome check .`                                                                                                        |
-| `pnpm test`                    | `vitest run` in every package that has a `test` script                                                                 |
-| `pnpm test:py`                 | `python -m unittest discover` in `agents/python/tests`                                                                 |
-| `pnpm check`                   | `typecheck` → `lint` → `test` → `test:py` (what CI runs)                                                               |
-| `pnpm bundle`                  | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs`                                           |
-| `pnpm e2e`                     | `pnpm build`, then `scripts/e2e-shop.mjs` (below)                                                                      |
-| `pnpm e2e:api`                 | `pnpm build`, then `scripts/e2e-api.mjs` (below)                                                                       |
-| `pnpm test:vscode`             | `pnpm build`, `pnpm bundle`, then `extensions/vscode/test/editor/run.mjs` (section 8)                                  |
-| `pnpm --filter shop lightpath` | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder                                                 |
+| Command                               | Order                                                                                                                  |
+| ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `pnpm build`                          | `tsc -b` → `protocol`, `core`, `daemon`, `node-agent`, `browser`, `mcp`, `cli`, each into its `dist/`                  |
+| `pnpm typecheck`                      | `pnpm build`, then each package's `typecheck` (`tsc -p test`; the extension also checks `src`; the shop checks itself) |
+| `pnpm lint`                           | `biome check .`                                                                                                        |
+| `pnpm test`                           | `vitest run` in every package that has a `test` script                                                                 |
+| `pnpm test:py`                        | `python -m unittest discover` in `agents/python/tests`                                                                 |
+| `pnpm check`                          | `typecheck` → `lint` → `test` → `test:py` (what CI runs)                                                               |
+| `pnpm bundle`                         | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs`                                           |
+| `pnpm e2e`                            | `pnpm build`, then `scripts/e2e-shop.mjs` (below)                                                                      |
+| `pnpm e2e:api`                        | `pnpm build`, then `scripts/e2e-api.mjs` (below)                                                                       |
+| `pnpm test:vscode`                    | `pnpm build`, `pnpm bundle`, then `extensions/vscode/test/editor/run.mjs` (section 8)                                  |
+| `pnpm --filter lightpath-vscode demo` | `extensions/vscode/scripts/record-demo.mjs` (section 8); needs `pnpm build`, `pnpm bundle`, and ffmpeg                 |
+| `pnpm --filter shop lightpath`        | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder                                                 |
 
 `scripts/e2e-shop.mjs`, in order:
 

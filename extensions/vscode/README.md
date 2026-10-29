@@ -20,3 +20,7 @@ Nothing leaves your machine. The extension talks only to the Lightpath daemon on
 ## Develop
 
 From the repo root, press F5 with the "Lightpath extension (example shop)" launch configuration. It bundles the extension with esbuild and opens the example shop in a development window.
+
+`pnpm test:vscode` (from the repo root) runs the example shop under Lightpath, starts a separate VS Code with the extension, clicks Checkout, and checks the lit lines, Clear, and Replay.
+
+`pnpm --filter lightpath-vscode demo` records the demo in `docs/media/demo.gif`: the shop on the left, VS Code on the right, filmed through DevTools screencasts so nothing else on your screen is recorded. It needs ffmpeg on `PATH` (or `FFMPEG=<path>`) and writes `demo.mp4` and `demo.gif` to `extensions/vscode/.demo`.
