@@ -44,6 +44,15 @@ const html = (api: string) =>
   `<a id="next" href="/two">Next page</a><button id="remote">Remote</button><p id="out"></p>` +
   `<script>window.API = ${JSON.stringify(api)};</script><script type="module" src="/app.js"></script>`;
 const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
+// Each press lands on an element with a data-testid, or inside one (D-098). The first link is
+// Actual's sidebar shape: a balance span with a test id inside the "All accounts" link.
+const htmlLabels =
+  '<!doctype html><style>a, button, div { display: block; margin: 8px; padding: 4px; }</style>' +
+  '<a href="#accounts">All accounts <span data-testid="accounts-balance">1,234.00</span></a>' +
+  '<button>Save <span data-testid="save-icon">*</span></button>' +
+  '<div data-testid="card-total"><p id="total">Total</p></div>' +
+  '<a href="#home" data-testid="nav-home">Home</a>' +
+  '<div role="button">Open <span data-testid="open-count">3</span></div>';
 
 let server: http.Server;
 let origin = '';
@@ -83,6 +92,7 @@ beforeAll(async () => {
             " new Promise((r) => setTimeout(() => r('blocked'), 2000))]).catch(() => 'blocked');</script>" +
             '<script type="module" src="/app.js"></script>',
         );
+    if (req.url === '/labels') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlLabels);
     if (req.url === '/two') {
       traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
       return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
@@ -319,5 +329,40 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     // The new page's startup code, and the page request itself tagged with the trace.
     expect(ran(traceId)).toContain('/two.js#arrived');
     expect(traceHeaders).toContain(traceId);
+  }, 30_000);
+
+  it('labels a click by its nearest control, and by a data-testid only outside any control (D-098)', async () => {
+    const targets = [
+      '[data-testid="accounts-balance"]',
+      '[data-testid="save-icon"]',
+      '#total',
+      '[data-testid="nav-home"]',
+      '[data-testid="open-count"]',
+    ];
+    const { starts } = await record(
+      async (c) => {
+        const page = c.page;
+        if (!page) throw new Error('no page');
+        for (const selector of targets) {
+          const box = await page.locator(selector).boundingBox();
+          if (!box) throw new Error(`${selector} not found`);
+          await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+          await page.mouse.down();
+          await new Promise((r) => setTimeout(r, 80));
+          await page.mouse.up();
+          await new Promise((r) => setTimeout(r, 400)); // let each trace settle
+        }
+      },
+      targets.length,
+      undefined,
+      '/labels',
+    );
+    expect(starts.map((s) => s.label)).toEqual([
+      'a: All accounts 1,234.00',
+      'button: Save *',
+      'div: card-total',
+      'a: nav-home',
+      'button: Open 3',
+    ]);
   }, 30_000);
 });
