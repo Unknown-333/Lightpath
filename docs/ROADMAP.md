@@ -2,7 +2,7 @@
 
 Each milestone ends with something you can run and a post you can publish. Don't start a milestone until the previous one's exit check passes.
 
-**Status (October 29, 2026):** M1 is done (see below). The skeleton already passes the M2 and M3 exit checks on the example shop. `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
+**Status (October 29, 2026):** M1 and M2 are done (see below). The skeleton already passed the M3 exit check on the example shop. `node scripts/e2e-shop.mjs` clicks "Checkout" in a real Chrome and gets one trace with `src/Cart.tsx`, `src/api.ts`, `server/routes/orders.ts`, and both services, with untaken branches dark. What's left in M2 and M3 is hardening: more real apps, `tsx` and external source maps in the Node agent, keyboard boundaries, and benchmarks. M4 (the extension) is scaffolded but hasn't been run in VS Code yet.
 
 | Milestone                     | Goal                                                                                                         | Exit check                                                                                                                                                    | Post                                                                             |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
@@ -25,7 +25,7 @@ What M1 found:
 - Vite's React transform puts the absolute file path into the served code, so the capture redacts it with a same-length placeholder.
 - Line granularity has two visible effects, both now pinned by the fixture: a line like `} catch (err) {` is lit when the `try` block ran, and `onChange={(e) => …}` is lit when the element rendered even if the handler never ran.
 
-## M2 (in progress)
+## M2 (done, October 29, 2026)
 
 The original M2 steps (agent startup, daemon ingest, `lightpath dev`, the agent integration test) were done in the skeleton. M2 is now about real Node setups.
 
@@ -35,18 +35,18 @@ The original M2 steps (agent startup, daemon ingest, `lightpath dev`, the agent 
 | `tsx` and `tsx watch`                                                                       | **Done.** Same e2e: the shop's Express API under `tsx` and `tsx watch` lights exactly the lines type stripping does, in every file. Without the D-068 fix, no `tsx` trace had any file. tsx's CLI process is skipped                                                                                                                                                                                |
 | External `.map` files                                                                       | **Done** for `tsc` output: the agent reads the `.map` next to the script (inside the workspace only) and forwards it inline. `pnpm e2e:api` runs the API built by `tsc` and gets the same lines as type stripping. That run found tsc's end-of-block mappings lighting untaken `}` lines; fixed in core (D-075). Bundled backends (esbuild, webpack) are untested                                   |
 | Fastify and Nest apps                                                                       | **Done.** `examples/backends` has the same checkout on Fastify 5 (type stripping) and NestJS 12 (decorators, built by tsc, ESM). `pnpm e2e:api` checks route, service, and shared files, dark and lit lines, and that Nest's shared checkout lines equal Fastify's. Nothing in Lightpath needed to change: both run on `node:http`, which publishes the `diagnostics_channel` events the agent uses |
-| Coverage read cost on a large app                                                           | To do (`bench/`)                                                                                                                                                                                                                                                                                                                                                                                    |
+| Coverage read cost on a large app                                                           | **Done.** `bench/node-requests.mjs`, results in [bench/README.md](../bench/README.md): about 0.45 ms per 1,000 compiled functions per read, two reads per request. Express, Fastify, and Nest examples pay 4 to 6 ms per request; a 50,000-function app about 50 ms                                                                                                                                 |
 
 ## Open questions to answer during the build
 
-| Question                                                                                              | Answer in                                                                   |
-| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                         | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003             |
-| How long is the boundary pause on a large React app, and does it ever exceed a human press?           | M3 benchmark                                                                |
-| Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?       | **Answered for JSX/TSX: yes** (golden test). CSS-in-JS still to check in M3 |
-| How many compiled functions does a real Express or Fastify app have, and what does a take cost there? | M2 benchmark                                                                |
-| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                              | **Answered: yes** (core fixture with emoji and CJK text)                    |
-| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                             | M6 benchmark                                                                |
+| Question                                                                                                  | Answer in                                                                                                                         |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                             | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003                                                                   |
+| How long is the boundary pause on a large React app, and does it ever exceed a human press?               | M3 benchmark                                                                                                                      |
+| Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?           | **Answered for JSX/TSX: yes** (golden test). CSS-in-JS still to check in M3                                                       |
+| ~~How many compiled functions does a real Express or Fastify app have, and what does a take cost there?~~ | **Answered:** 4,400 (Express), 6,000 (Fastify), 8,500 (Nest); about 2 to 3 ms per read. See [bench/README.md](../bench/README.md) |
+| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                                  | **Answered: yes** (core fixture with emoji and CJK text)                                                                          |
+| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                                 | M6 benchmark                                                                                                                      |
 
 ## Later
 

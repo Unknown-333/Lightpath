@@ -37,7 +37,10 @@ export function startAgent(
   const { config } = result;
 
   try {
-    const session = new InspectorSession();
+    // With LIGHTPATH_DEBUG=1, every coverage read is timed; bench/ parses these lines.
+    const session = new InspectorSession(
+      debug ? (ms, functions) => log(`take ${ms.toFixed(2)} ms, ${functions} functions in delta`) : undefined,
+    );
     session.start();
     const transport = new Transport(config.url, config.token, `node-${process.pid}`, log);
     const agent = new Agent(session, config, (m) => transport.send(m), ownUrl);

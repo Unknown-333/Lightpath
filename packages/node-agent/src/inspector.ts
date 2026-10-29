@@ -9,15 +9,20 @@ export interface ParsedScript {
   sourceMapURL: string;
 }
 
+/** Called after each coverage read with its duration and how many functions it returned. */
+export type TakeObserver = (ms: number, functions: number) => void;
+
 /**
  * Wraps an in-process inspector session. `post` callbacks run synchronously when the session
  * is connected to the same thread (measured on Node 24.13), so every call here returns directly.
  */
 export class InspectorSession {
   readonly #session = new inspector.Session();
+  readonly #onTake: TakeObserver | undefined;
   readonly scripts = new Map<string, ParsedScript>();
 
-  constructor() {
+  constructor(onTake?: TakeObserver) {
+    this.#onTake = onTake;
     this.#session.connect();
     this.#session.on('Debugger.scriptParsed', ({ params }) => {
       this.scripts.set(params.scriptId, {
@@ -55,7 +60,13 @@ export class InspectorSession {
 
   /** Returns everything that ran since the previous take and resets V8's counters. */
   take(): ScriptCoverage[] {
-    return this.post<{ result: ScriptCoverage[] }>('Profiler.takePreciseCoverage').result;
+    if (!this.#onTake) return this.post<{ result: ScriptCoverage[] }>('Profiler.takePreciseCoverage').result;
+    const started = performance.now();
+    const { result } = this.post<{ result: ScriptCoverage[] }>('Profiler.takePreciseCoverage');
+    let functions = 0;
+    for (const script of result) functions += script.functions.length;
+    this.#onTake(performance.now() - started, functions);
+    return result;
   }
 
   source(scriptId: string): string {
