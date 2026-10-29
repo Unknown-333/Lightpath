@@ -266,10 +266,19 @@ Starting point: `activate()` in `extensions/vscode/src/extension.ts`. VS Code ca
    5. `onClose` (or any failure): status shows "waiting", and `scheduleRetry()` tries again in 2 s.
 4. **`show(trace)` → `heat.show(trace, absolute)`**:
    1. Maps each workspace-relative path to an absolute path (first workspace root), keyed by `pathKey()` (`heat.ts`).
-   2. `refresh()` → `#apply(editor)` for each visible editor: `bucketize(lines)` from `heat.ts`, then one `setDecorations` per heat level, plus `× N` labels.
+   2. `refresh()` → `#apply(editor)` for each visible editor: `bucketize(lines)` from `heat.ts`, then one `setDecorations` per heat level, plus `× N` labels. `#apply` also records which lines it drew, per file, for `drawnLines()`.
    3. `#startFade()`: every `fadeSeconds / 4`, lines move down two heat levels; after 4 steps, `clear()`.
 5. **Replay**: walks `replayOrder(trace)` (by `firstSeenAt`), opens each file, `heat.showFile()`, waits 600 ms.
 6. Switching editors calls `heat.refresh()` so newly visible files light up.
+7. `activate()` returns a read-only `LightpathApi` (`isConnected`, `traceIds`, `drawnLines`), reachable as `vscode.extensions.getExtension('lightpath-dev.lightpath-vscode').exports`.
+
+**In-editor test** (`pnpm test:vscode` → `extensions/vscode/test/editor/run.mjs`), in order:
+
+1. Starts the daemon for `examples/shop` (writing `.lightpath/daemon.json`), the shop with the Node agent, and a headless `BrowserCollector`.
+2. Opens a control server with one endpoint, `POST /click`: presses "Add to cart", then "Checkout", and replies with the finished Checkout trace.
+3. `runTests()` from `@vscode/test-electron` downloads VS Code into `extensions/vscode/.vscode-test/` and starts it on the shop folder with a temp profile, only this extension, and `test/editor/suite.cjs`.
+4. Inside VS Code, `suite.cjs` waits for the activation event and the connection, opens `Cart.tsx` and `orders.ts` side by side, runs `togglePin`, calls `/click`, and checks that `drawnLines()` equals the trace's lines and heat levels for both files. Then it runs `clear` and checks nothing is drawn.
+5. The runner stops Chrome, the shop, and the daemon (which removes the discovery file), and deletes the temp profile.
 
 ## 9. MCP server
 
@@ -327,6 +336,7 @@ The daemon handles it in `#onLines()` (section 6.2).
 | `pnpm check`                   | `typecheck` → `lint` → `test` → `test:py` (what CI runs)                                                               |
 | `pnpm bundle`                  | `node esbuild.mjs` in the extension → `extensions/vscode/dist/extension.cjs`                                           |
 | `pnpm e2e`                     | `pnpm build`, then `scripts/e2e-shop.mjs` (below)                                                                      |
+| `pnpm test:vscode`             | `pnpm build`, `pnpm bundle`, then `extensions/vscode/test/editor/run.mjs` (section 8)                                  |
 | `pnpm --filter shop lightpath` | `node packages/cli/dist/bin.js dev -- node dev.mjs` in the shop folder                                                 |
 
 `scripts/e2e-shop.mjs`, in order:

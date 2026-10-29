@@ -8,10 +8,22 @@ import { TraceTree } from './tree.js';
 const RETRY_MS = 2000;
 
 /**
+ * What `activate` returns (`vscode.extensions.getExtension(...).exports`). Read-only; the
+ * in-editor test uses it because VS Code can't read decorations back.
+ */
+export interface LightpathApi {
+  isConnected(): boolean;
+  /** Trace IDs in the Actions view, newest first. */
+  traceIds(): string[];
+  /** Lines lit in an open editor for this file, with heat bucket (0 is coolest). */
+  drawnLines(fsPath: string): ReadonlyMap<number, number> | undefined;
+}
+
+/**
  * Activates when a workspace contains `.lightpath/daemon.json` (written by `lightpath dev`).
  * Connects to the daemon, lights up each new trace, and keeps reconnecting if the daemon restarts.
  */
-export function activate(context: vscode.ExtensionContext): void {
+export function activate(context: vscode.ExtensionContext): LightpathApi {
   const heat = new Heat();
   const tree = new TraceTree();
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
@@ -127,6 +139,12 @@ export function activate(context: vscode.ExtensionContext): void {
   );
 
   void connect();
+
+  return {
+    isConnected: () => client !== undefined,
+    traceIds: () => tree.traces.map((t) => t.id),
+    drawnLines: (fsPath) => heat.drawnLines(fsPath),
+  };
 }
 
 export function deactivate(): void {}

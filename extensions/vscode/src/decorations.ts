@@ -17,6 +17,8 @@ export class Heat implements vscode.Disposable {
   #files = new Map<string, FileHits>();
   #fadeTimer: ReturnType<typeof setInterval> | undefined;
   #fadeLevel = 0;
+  /** pathKey → line → bucket, as last drawn. VS Code can't read decorations back, so tests use this. */
+  readonly #drawn = new Map<string, Map<number, number>>();
   pinned = false;
 
   constructor() {
@@ -59,18 +61,35 @@ export class Heat implements vscode.Disposable {
     for (const editor of vscode.window.visibleTextEditors) this.#apply(editor);
   }
 
+  /** Lines currently drawn in an open editor for `fsPath`, with their heat bucket (0 is coolest). */
+  drawnLines(fsPath: string): ReadonlyMap<number, number> | undefined {
+    return this.#drawn.get(pathKey(fsPath));
+  }
+
   #apply(editor: vscode.TextEditor): void {
-    const file = this.#files.get(pathKey(editor.document.uri.fsPath));
+    const key = pathKey(editor.document.uri.fsPath);
+    const file = this.#files.get(key);
     const buckets = file
       ? bucketize(file.lines)
       : Array.from({ length: HEAT_BUCKETS }, () => [] as LineHit[]);
     const shift = this.#fadeLevel * 2;
+    const drawn = new Map<number, number>();
     for (let i = 0; i < HEAT_BUCKETS; i++) {
       // Fading moves every line down a few buckets until it drops off.
       const source = buckets[i + shift] ?? [];
       const type = this.#types[i];
-      if (type) editor.setDecorations(type, source.map((h) => lineRange(editor, h.line)).filter(isRange));
+      if (!type) continue;
+      const ranges: vscode.Range[] = [];
+      for (const hit of source) {
+        const range = lineRange(editor, hit.line);
+        if (!range) continue;
+        ranges.push(range);
+        drawn.set(hit.line, i);
+      }
+      editor.setDecorations(type, ranges);
     }
+    if (drawn.size > 0) this.#drawn.set(key, drawn);
+    else this.#drawn.delete(key);
     const counts = file && this.#fadeLevel === 0 ? file.lines.filter((h) => h.count > 1) : [];
     editor.setDecorations(
       this.#countType,
@@ -111,8 +130,4 @@ function lineRange(editor: vscode.TextEditor, line: number): vscode.Range | unde
   // Trace lines are 1-based; a file edited since the trace may be shorter now.
   if (line < 1 || line > editor.document.lineCount) return undefined;
   return editor.document.lineAt(line - 1).range;
-}
-
-function isRange(r: vscode.Range | undefined): r is vscode.Range {
-  return r !== undefined;
 }
