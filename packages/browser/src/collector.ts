@@ -1,4 +1,4 @@
-import { newTraceId } from '@lightpath-dev/core';
+import { newTraceId, webpackModulePath } from '@lightpath-dev/core';
 import { type IngestMessage, type ScriptCoverage, TRACE_HEADER, type TraceId } from '@lightpath-dev/protocol';
 import type { Browser, BrowserContext, CDPSession, Page, Request, Route } from 'playwright-core';
 import { launchBrowser } from './launch.js';
@@ -130,6 +130,13 @@ export class BrowserCollector {
   #page: Page | undefined;
   #cdp: CDPSession | undefined;
   #active: TraceId | undefined;
+  #warnedNoWebpackMaps = false;
+
+  /** Logs a message and shows it to the user once (the CLI prints notices in yellow). */
+  #notify(message: string): void {
+    this.#log(message);
+    this.#opts.notice?.(message);
+  }
   #clickChain: Promise<void> = Promise.resolve();
   /** True once the boundary has moved to pointer release (see PRESS_BUDGET_MS). */
   #release = false;
@@ -166,6 +173,18 @@ export class BrowserCollector {
         length: s.length ?? 0,
         sourceMapURL: s.sourceMapURL ?? '',
       });
+      if (
+        !this.#warnedNoWebpackMaps &&
+        !s.sourceMapURL &&
+        !isNoiseScript(s.url) &&
+        webpackModulePath(s.url)
+      ) {
+        this.#warnedNoWebpackMaps = true;
+        this.#notify(
+          "webpack is serving your code without source maps (devtool 'eval'), so browser files can't be shown. " +
+            "Set devtool: 'eval-cheap-module-source-map' in your webpack config for development.",
+        );
+      }
     });
     cdp.on('Debugger.paused', (e) => {
       // CallFrame.url is empty for init scripts (measured); resolve the URL via scriptParsed.

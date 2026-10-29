@@ -33,16 +33,56 @@ export function resolveFile(url: string, ctx: ResolveContext): Resolved {
   if (INTERNAL_MARKERS.some((m) => url.includes(m)) || ctx.ignore?.some((m) => url.includes(m))) {
     return { kind: 'dropped', reason: 'internal' };
   }
+  const webpack = webpackModulePath(url);
+  if (webpack !== undefined) {
+    if (webpack === 'internal') return { kind: 'dropped', reason: 'internal' };
+    if (webpack === 'node_modules') return { kind: 'dropped', reason: 'node_modules' };
+    const base = ctx.devServers?.[0]?.root ?? ctx.workspaceRoots[0];
+    if (base === undefined) return { kind: 'dropped', reason: 'outside-workspace' };
+    return inWorkspace(joinPath(normalizePath(base), webpack), ctx);
+  }
   if (/[/\\]node_modules[/\\]/.test(url)) return { kind: 'dropped', reason: 'node_modules' };
 
   const absolute = toAbsolutePath(url, ctx);
   if (absolute === undefined) return { kind: 'dropped', reason: 'outside-workspace' };
+  return inWorkspace(absolute, ctx);
+}
 
+function inWorkspace(absolute: string, ctx: ResolveContext): Resolved {
   for (const root of ctx.workspaceRoots) {
     const rel = relativeTo(normalizePath(root), absolute);
     if (rel !== undefined) return { kind: 'workspace', path: rel, absolute };
   }
   return { kind: 'dropped', reason: 'outside-workspace' };
+}
+
+/**
+ * Module path inside a webpack URL, relative to webpack's `context` (D-087):
+ * `webpack://<name>/./src/a.tsx?33d7` (source map sources, and module URLs with the `eval` devtool)
+ * and `webpack-internal:///./src/a.tsx` (module URLs with the `eval-*-source-map` devtools).
+ * Loader chains (`css-loader!./src/a.css`) keep the last request. Webpack's own runtime is internal.
+ * Returns undefined for any other URL.
+ */
+export function webpackModulePath(url: string): string | 'internal' | 'node_modules' | undefined {
+  const match = /^webpack(?:-internal)?:\/\/[^/]*\/(.*)$/.exec(url);
+  if (!match) return undefined;
+  const request = (match[1] ?? '').split('!').pop()?.split(/[?#]/)[0] ?? '';
+  if (/(^|[/\\])node_modules[/\\]/.test(request)) return 'node_modules';
+  if (request === '' || /^(webpack\/|\(webpack\)|external )/.test(request)) return 'internal';
+  return request;
+}
+
+/** Joins a relative or absolute module path onto an absolute base, resolving `.` and `..`. */
+function joinPath(base: string, path: string): string {
+  if (/^[a-zA-Z]:[/\\]/.test(path) || path.startsWith('/')) return normalizePath(path);
+  const parts = base.split('/');
+  for (const segment of path.replace(/\\/g, '/').split('/')) {
+    if (segment === '' || segment === '.') continue;
+    if (segment === '..') {
+      if (parts.length > 1) parts.pop();
+    } else parts.push(segment);
+  }
+  return normalizePath(parts.join('/'));
 }
 
 /** Forward slashes, no trailing slash, uppercase drive letter. */

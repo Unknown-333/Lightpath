@@ -1,3 +1,5 @@
+import { webpackModulePath } from '@lightpath-dev/core';
+
 /**
  * Resource types that carry app requests worth tagging (ADR 0004). `navigation` is a main-frame
  * page load started by an action (the collector passes it explicitly): a server-rendered page or a
@@ -56,8 +58,14 @@ export function labelFor(target: TargetInfo): string {
   return target.key ? `${base} (${target.key})` : base;
 }
 
-/** Scripts whose source never needs to leave the browser: dependencies and dev-server internals. */
+/**
+ * Scripts whose source never needs to leave the browser: dependencies and dev-server internals.
+ * Webpack's per-module scripts (`webpack://`, `webpack-internal://`) are kept unless they're
+ * dependencies or webpack's runtime (D-087).
+ */
 export function isNoiseScript(url: string): boolean {
+  const webpack = webpackModulePath(url);
+  if (webpack !== undefined) return webpack === 'internal' || webpack === 'node_modules';
   if (!/^https?:\/\//.test(url)) return true;
   return /\/node_modules\/|\/@vite\/|\/@react-refresh|\/@id\/__x00__|\/__vite/.test(url);
 }

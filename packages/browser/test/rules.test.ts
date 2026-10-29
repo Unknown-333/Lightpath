@@ -92,6 +92,10 @@ describe('isNoiseScript and countsTowardSettle', () => {
     ['http://localhost:5173/@react-refresh', true],
     ['chrome-extension://abc/content.js', true],
     ['', true],
+    ['webpack://tududi/./frontend/App.tsx?', false],
+    ['webpack-internal:///./frontend/App.tsx', false],
+    ['webpack-internal:///./node_modules/react-dom/index.js', true],
+    ['webpack://tududi/webpack/runtime/define property getters', true],
   ])('%s noise=%s', (url, noise) => {
     expect(isNoiseScript(url)).toBe(noise);
   });
