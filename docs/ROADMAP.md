@@ -39,14 +39,14 @@ The original M2 steps (agent startup, daemon ingest, `lightpath dev`, the agent 
 
 ## Open questions to answer during the build
 
-| Question                                                                                                  | Answer in                                                                                                                         |
-| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                             | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003                                                                   |
-| How long is the boundary pause on a large React app, and does it ever exceed a human press?               | M3 benchmark                                                                                                                      |
-| Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?           | **Answered for JSX/TSX: yes** (golden test). CSS-in-JS still to check in M3                                                       |
-| ~~How many compiled functions does a real Express or Fastify app have, and what does a take cost there?~~ | **Answered:** 4,400 (Express), 6,000 (Fastify), 8,500 (Nest); about 2 to 3 ms per read. See [bench/README.md](../bench/README.md) |
-| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                                  | **Answered: yes** (core fixture with emoji and CJK text)                                                                          |
-| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                                 | M6 benchmark                                                                                                                      |
+| Question                                                                                                  | Answer in                                                                                                                                                 |
+| --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ~~Does `takePreciseCoverage` work while the page is paused at the boundary?~~                             | **Answered: yes.** Paused 4.7 to 7.1 ms per click; see ADR 0003                                                                                           |
+| ~~How long is the boundary pause on a large React app, and does it ever exceed a human press?~~           | **Answered:** under 12 ms p99 up to 3,000 components; above the 20 ms budget the boundary moves to the release. See [bench/README.md](../bench/README.md) |
+| Does Vite 8 serve inline source maps for every transformed module, including CSS-in-JS and JSX?           | **Answered for JSX/TSX: yes** (golden test). CSS-in-JS still to check in M3                                                                               |
+| ~~How many compiled functions does a real Express or Fastify app have, and what does a take cost there?~~ | **Answered:** 4,400 (Express), 6,000 (Fastify), 8,500 (Nest); about 2 to 3 ms per read. See [bench/README.md](../bench/README.md)                         |
+| ~~Do non-ASCII sources map correctly (UTF-16 offsets)?~~                                                  | **Answered: yes** (core fixture with emoji and CJK text)                                                                                                  |
+| How much does `sys.monitoring` with `DISABLE` slow a real Django request?                                 | M6 benchmark                                                                                                                                              |
 
 ## Later
 

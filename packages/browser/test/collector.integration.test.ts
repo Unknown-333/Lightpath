@@ -120,13 +120,14 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
   }, 30_000);
 
   /** Starts a collector, runs `act`, waits for `traces` traceEnd messages, and returns everything. */
-  async function record(act: (c: BrowserCollector) => Promise<void>, traces = 1) {
+  async function record(act: (c: BrowserCollector) => Promise<void>, traces = 1, pressBudgetMs?: number) {
     const messages: IngestMessage[] = [];
     const logs: string[] = [];
     const collector = new BrowserCollector({
       url: origin,
       headless: true,
       settleMs: 200,
+      ...(pressBudgetMs !== undefined ? { pressBudgetMs } : {}),
       send: (m) => messages.push(m),
       log: (m) => logs.push(m),
     });
@@ -186,6 +187,29 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
       await new Promise((r) => setTimeout(r, 400));
     }, 0);
     expect(starts).toEqual([]);
+  }, 30_000);
+
+  it('moves the boundary to the release when reads are slow, and keeps short presses working', async () => {
+    const { starts, ran, logs } = await record(
+      async (c) => {
+        const page = c.page;
+        const box = await page?.locator('#buy').boundingBox();
+        if (!page || !box) throw new Error('button not found');
+        await page.waitForTimeout(300); // the load-time read decides the boundary
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        // A 10 ms press: at the press boundary, a pause this long would swallow the release.
+        await page.mouse.down();
+        await new Promise((r) => setTimeout(r, 10));
+        await page.mouse.up();
+        await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+      },
+      1,
+      0, // every read is "too slow": force the release boundary
+    );
+    expect(logs.some((l) => l.includes('clicks now start at the mouse release'))).toBe(true);
+    expect(logs.some((l) => l.includes('boundary release'))).toBe(true);
+    expect(starts.map((s) => s.label)).toEqual(['button: Checkout']);
+    expect(ran(starts[0]?.traceId ?? '')).toContain('/app.js#checkout');
   }, 30_000);
 
   it('keeps the leaving page and the next page in one trace across a full navigation', async () => {

@@ -14,9 +14,16 @@ export interface CollectorOptions {
   maxSettleMs?: number;
   headless?: boolean;
   channel?: string;
+  /**
+   * Coverage reads slower than this move the click boundary from pointer press to release
+   * (default 20 ms). Tests set 0 to force the release boundary.
+   */
+  pressBudgetMs?: number;
   /** Where ingest messages go; the CLI wires this to the daemon. */
   send: (message: IngestMessage) => void;
   log?: (msg: string) => void;
+  /** Messages the user should see even without --debug, like a boundary change. */
+  notice?: (msg: string) => void;
 }
 
 interface ScriptMeta {
@@ -32,6 +39,15 @@ const LAST = '__lightpathLast';
 /** Function names of the hook's listeners, so the collector can tell which one paused. */
 const HOOK_ACTION = 'lightpathAction';
 const HOOK_LEAVE = 'lightpathLeave';
+/** Set on window when the boundary moves to pointer release; read by the hook at event time. */
+const RELEASE = '__lightpathRelease';
+const PRESSED = '__lightpathPressed';
+/**
+ * Longest coverage read the press boundary may cost. Chrome drops a mouse release that arrives
+ * while the page is paused at the press, so above this the boundary moves to the release, where a
+ * pause loses nothing (measured up to 200 ms). See bench/README.md.
+ */
+const PRESS_BUDGET_MS = 20;
 
 /**
  * Runs in every page before any app script (an init script):
@@ -74,6 +90,13 @@ const HOOK_SOURCE = `(() => {
   window.addEventListener('pointerdown', function ${HOOK_ACTION}(event) {
     if (!event.isPrimary) return;
     window.${LAST} = describe(event.target);
+    // Release boundary (large apps): note the press, pause at pointerup instead.
+    if (window.${RELEASE}) { window.${PRESSED} = true; return; }
+    debugger;
+  }, { capture: true });
+  window.addEventListener('pointerup', function ${HOOK_ACTION}(event) {
+    if (!event.isPrimary || !window.${RELEASE} || !window.${PRESSED}) return;
+    window.${PRESSED} = false;
     debugger;
   }, { capture: true });
   window.addEventListener('keydown', function ${HOOK_ACTION}(event) {
@@ -108,6 +131,8 @@ export class BrowserCollector {
   #cdp: CDPSession | undefined;
   #active: TraceId | undefined;
   #clickChain: Promise<void> = Promise.resolve();
+  /** True once the boundary has moved to pointer release (see PRESS_BUDGET_MS). */
+  #release = false;
 
   constructor(opts: CollectorOptions) {
     this.#opts = opts;
@@ -167,6 +192,9 @@ export class BrowserCollector {
     page.on('request', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestStarted());
     page.on('requestfinished', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
     page.on('requestfailed', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
+    // Page load compiles and runs most of the app. Reading that now keeps the first action's
+    // pause as short as later ones (bench/README.md: 40 ms vs 8 ms at 12,000 functions).
+    page.on('load', () => this.#afterLoad());
 
     await page.goto(this.#opts.url);
     this.#log(`browser open at ${this.#opts.url}`);
@@ -202,15 +230,25 @@ export class BrowserCollector {
   /** Runs while the page is paused in the hook. Does as little as possible before resuming. */
   async #click(): Promise<void> {
     const pausedAt = performance.now();
-    const [before, target] = await Promise.all([this.#take(), this.#lastTarget()]);
+    let readMs = 0;
+    const [before, target] = await Promise.all([
+      this.#take().then((r) => {
+        readMs = performance.now() - pausedAt;
+        return r;
+      }),
+      this.#lastTarget(),
+    ]);
     const traceId = newTraceId();
     const at = Date.now();
     this.#active = traceId; // before resuming, so the click's own requests are tagged
     const settled = this.#settle.begin();
     await this.#resume();
+    const boundary = this.#release ? 'release' : 'press';
     this.#log(
-      `click on ${labelFor(target)}: paused ${(performance.now() - pausedAt).toFixed(1)}ms, trace ${traceId}`,
+      `click on ${labelFor(target)}: paused ${(performance.now() - pausedAt).toFixed(1)}ms, boundary ${boundary}, trace ${traceId}`,
     );
+    // Key presses never lose events to a pause, so only pointer presses count toward the budget.
+    if (!target.key) await this.#checkBudget(readMs);
 
     void this.#emit('background', before, at);
     this.#opts.send({
@@ -263,6 +301,45 @@ export class BrowserCollector {
       return;
     }
     await route.continue();
+  }
+
+  /**
+   * Files everything since the page started loading as background. Queued on the click chain so it
+   * never runs during an action's reads; skipped if an action is open (a navigation's new page
+   * belongs to that action's trace).
+   */
+  #afterLoad(): void {
+    this.#clickChain = this.#clickChain
+      .then(async () => {
+        if (this.#active) return;
+        await this.#emit('background', await this.#take(), Date.now());
+        // The read above returned the whole page load. A second one returns almost nothing, so its
+        // time is what every click's read will cost: decide the boundary before the first click.
+        const started = performance.now();
+        await this.#emit('background', await this.#take(), Date.now());
+        await this.#checkBudget(performance.now() - started);
+      })
+      .catch((err: unknown) => this.#log(`load-time coverage read failed: ${(err as Error).message}`));
+  }
+
+  async #checkBudget(readMs: number): Promise<void> {
+    const budget = this.#opts.pressBudgetMs ?? PRESS_BUDGET_MS;
+    if (this.#release || readMs <= budget) return;
+    this.#release = true;
+    await this.#setReleaseFlag();
+    const message =
+      `a coverage read took ${readMs.toFixed(1)} ms (budget ${budget} ms), so clicks now start at the mouse ` +
+      'release instead of the press: Chrome drops a release that arrives during a long pause. ' +
+      "Code that runs on press (pointerdown and mousedown handlers) won't appear in click traces.";
+    this.#log(message);
+    this.#opts.notice?.(message);
+  }
+
+  /** Turns on the release boundary now, and from the first moment of every later document. */
+  async #setReleaseFlag(): Promise<void> {
+    const expression = `window.${RELEASE} = true`;
+    await this.#cdp?.send('Runtime.evaluate', { expression, silent: true });
+    await this.#page?.addInitScript({ content: expression });
   }
 
   /**

@@ -72,6 +72,7 @@ export async function dev(options: DevOptions): Promise<number> {
       backendOrigins: [origin, ...(options.backend ?? [])],
       ...(options.headless !== undefined ? { headless: options.headless } : {}),
       send: (m) => ingestLocal(daemon, m),
+      notice: (m) => say(pc.yellow(m)),
       ...(options.debug ? { log: say } : {}),
     });
     try {
