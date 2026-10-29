@@ -14,7 +14,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "lightpath.config.schema.json"
   ],
   "engines": {
     "node": ">=22.12"
@@ -30,7 +31,8 @@
     "@lightpath-dev/node-agent": "workspace:*",
     "@lightpath-dev/protocol": "workspace:*",
     "cac": "7.1.0",
-    "picocolors": "1.1.1"
+    "picocolors": "1.1.1",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "1.32.2"

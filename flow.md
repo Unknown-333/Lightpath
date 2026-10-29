@@ -57,18 +57,20 @@ agents/python                            (no dependency on the TypeScript code)
 Starting point: `packages/cli/src/bin.ts`.
 
 1. **`bin.ts`** calls `main(process.argv)` and sets the exit code from its result.
-2. **`main()`** in `packages/cli/src/main.ts` builds the `cac` parser with three commands (`dev`, `mcp`, `doctor`), parses arguments, and runs the matching action. For `dev`, everything after `--` becomes `command`.
+2. **`main()`** in `packages/cli/src/main.ts` builds the `cac` parser with three commands (`dev`, `mcp`, `doctor`), parses arguments, and runs the matching action. For `dev`:
+   1. `loadConfig()` in `config.ts` reads `lightpath.config.json` from the current folder (or `--config`), validates it with the `LightpathConfig` schema, and makes `webRoot` and `roots` absolute against the file's folder. A bad file stops here with every problem listed.
+   2. Flags win over the file. Everything after `--` becomes `command`; without it, the file's `command` is used (a string runs in a shell). `ignore` globs from the file and from `--ignore` are combined.
 3. **`dev()`** in `packages/cli/src/dev.ts`:
    1. `nodeVersionProblem(process.version)` from `env.ts`: stop if Node is older than 22.12.
    2. **`startDaemon()`** in `packages/daemon/src/server.ts`:
       1. `newToken()` from `auth.ts`.
-      2. Creates `MemoryStore` (`store.ts`) and `Correlator` (`correlator.ts`).
+      2. Creates `MemoryStore` (`store.ts`) and `Correlator` (`correlator.ts`). The correlator's `ResolveContext` carries the `ignore` globs.
       3. Creates the HTTP server with `route()`, and a `WebSocketServer` in `noServer` mode for `/v1/client`.
       4. Listens on `127.0.0.1` on a free port.
       5. `writeDiscovery()` in `discovery.ts` writes `.lightpath/daemon.json` and `.lightpath/.gitignore`.
    3. Subscribes to the store: each finished trace is printed with `formatTrace()` from `format.ts`.
    4. `agentEnv()` from `env.ts` builds the child environment: `NODE_OPTIONS` gets `--require="<path of registerUrl>"` (`withRequire()`) (from `packages/node-agent/src/index.ts`), plus `LIGHTPATH_URL`, `LIGHTPATH_TOKEN`, and `LIGHTPATH_ROOTS`.
-   5. Spawns your command. On Windows it goes through the shell as one string from `toShellCommand()`.
+   5. Spawns your command. On Windows it goes through the shell as one string from `toShellCommand()`; a `command` string from the config file always goes through the shell.
    6. Pipes the child's output to your terminal and feeds it to `UrlWatcher` (`detect.ts`). The first local URL triggers `openBrowser(url)`.
    7. **`openBrowser()`**:
       1. `correlator.addDevServer(origin, webRoot)` so `http://localhost:5173/src/Cart.tsx` resolves to a file.
@@ -240,7 +242,7 @@ Every `send` here is `ingestLocal()` in `packages/cli/src/dev.ts`, so it goes st
 `mapScript()` in `packages/core/src/pipeline.ts`, called once per script per delta:
 
 ```
-resolveFile(script url)          resolve.ts      drop node_modules / internal early
+resolveFile(script url)          resolve.ts      drop node_modules / internal / ignored early
         │
 flattenRanges(functions)         flatten.ts      nested V8 ranges → flat segments (innermost wins)
         │
@@ -306,7 +308,7 @@ Starting point: `packages/cli/src/bin.ts` with `lightpath mcp`.
 1. `main()` → the `mcp` action → `runMcpServer({ workspaceRoot })` in `packages/mcp/src/server.ts`.
 2. `createMcpServer()` registers four tools with `server.registerTool()`, then connects a `StdioServerTransport`. From now on stdout carries MCP messages only.
 3. When an agent calls a tool:
-   1. `withClient()` → `connect()` reads `.lightpath/daemon.json` and opens a `DaemonClient`.
+   1. `withClient()` → `connect()` reads `.lightpath/daemon.json` from `--root` (default: the current folder) or the nearest parent that has one, and opens a `DaemonClient`.
    2. The tool runs, for example `find_code_for_action`: `listTraces({ label })`, then `getTrace(id)`.
    3. Output is formatted with `describeTrace()`, `describeSummaries()`, or `diffTraces()` from `format.ts`.
    4. The client is closed.
@@ -363,17 +365,19 @@ The daemon handles it in `#onLines()` (section 6.2).
 `scripts/e2e-shop.mjs`, in order:
 
 1. Imports the built `daemon`, `browser`, `node-agent`, and `cli` packages from `dist/`.
-2. `startDaemon()` without a discovery file; subscribes to traces.
+2. `startDaemon()` (writing `.lightpath/daemon.json` for step 8); subscribes to traces.
 3. Spawns `examples/shop/dev.mjs` with `agentEnv()`. `dev.mjs` starts `server/index.ts` (with the agent) and Vite (skipped by the agent).
 4. Waits for Vite's URL with `UrlWatcher`, then `addDevServer()`.
 5. Starts a headless `BrowserCollector`; waits for the product list.
 6. Presses "Add to cart" (press, hold 80 ms, release), waits for its trace, checks it.
 7. Presses "Checkout", waits for "Order #… placed", waits for a trace that has Node files, checks files, the request, a dark line, and a lit line.
-8. Stops the browser, kills the shop's process tree, closes the daemon, exits 0 or 1.
+8. The M5 exit check: starts `lightpath mcp --root examples/shop` through the MCP SDK's `StdioClientTransport`, calls `find_code_for_action({ action: 'Checkout' })`, and checks that the answer is this trace, with every file's exact line ranges and the request.
+9. Stops the browser, kills the shop's process tree, closes the daemon, exits 0 or 1.
 
 `scripts/e2e-api.mjs`, in order:
 
-1. Resolves tsx's and tsc's bins from the dependencies, like `npx` would. `RUNS` lists each app: the shop's Express API four ways (type stripping, `tsx`, `tsx watch`, a `tsc` build), and `examples/backends` on Fastify (type stripping) and NestJS (`tsc -p tsconfig.nest.json`).
+1. Resolves tsx's and tsc's bins from the dependencies, like `npx` would. `RUNS` lists each app: the shop's Express API four ways (type stripping, `tsx`, `tsx watch`, a `tsc` build), `examples/backends` on Fastify (type stripping) and NestJS (`tsc -p tsconfig.nest.json`), and the shop once more with everything from a config file (`command`, `browser: false`, an `ignore` glob).
+   A run with `config` writes it to `lightpath.e2e.config.json` in the app's folder, starts `lightpath dev --config lightpath.e2e.config.json`, checks that the ignored file is missing and counted as `ignored`, and removes the file afterwards.
 2. For each run: `build()` if it has one (tsc into `dist/`), then spawns `packages/cli/dist/bin.js dev --no-browser --debug -- <command>` in the app's folder, so the CLI starts the daemon and sets `NODE_OPTIONS` exactly as for a user.
 3. Waits for "listening on port" (failing early if the CLI exits), reads `.lightpath/daemon.json` (checking its `pid` is this CLI), and connects a `DaemonClient`.
 4. POSTs one order to `http://127.0.0.1:3001/api/orders`, then polls `listTraces()` and `getTrace()` until a finished trace contains the run's route file.

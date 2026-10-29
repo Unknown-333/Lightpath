@@ -1,6 +1,10 @@
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { launchBrowser } from '@lightpath-dev/browser';
 import { readDiscovery } from '@lightpath-dev/daemon';
+import { registerUrl } from '@lightpath-dev/node-agent';
 import pc from 'picocolors';
+import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
 import { nodeVersionProblem } from './env.js';
 
 interface Check {
@@ -9,7 +13,7 @@ interface Check {
 }
 
 /** `lightpath doctor`: checks the environment and explains what to fix. */
-export async function doctor(cwd: string): Promise<number> {
+export async function doctor(cwd: string, configFile?: string): Promise<number> {
   const checks: Check[] = [
     {
       name: 'Node.js version',
@@ -28,6 +32,29 @@ export async function doctor(cwd: string): Promise<number> {
           return { ok: true, detail: version };
         } catch (err) {
           return { ok: false, detail: (err as Error).message };
+        }
+      },
+    },
+    {
+      name: 'Node agent',
+      run: async () => {
+        const path = fileURLToPath(registerUrl);
+        return existsSync(path)
+          ? { ok: true, detail: path }
+          : { ok: false, detail: `missing ${path}; reinstall @lightpath-dev/cli` };
+      },
+    },
+    {
+      name: 'Config file',
+      run: async () => {
+        try {
+          const loaded = await loadConfig(cwd, configFile);
+          if (!loaded) return { ok: true, detail: `none (optional; see ${CONFIG_FILE} in the README)` };
+          const keys = Object.keys(loaded.config).filter((k) => k !== '$schema');
+          return { ok: true, detail: `${loaded.path} (${keys.join(', ') || 'empty'})` };
+        } catch (err) {
+          if (err instanceof ConfigError) return { ok: false, detail: err.message };
+          throw err;
         }
       },
     },

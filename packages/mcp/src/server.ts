@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath-dev/protocol';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -9,6 +10,11 @@ import { describeSummaries, describeTrace, diffTraces } from './format.js';
 export interface McpOptions {
   workspaceRoot: string;
 }
+
+/** This package's version, read from package.json next to dist/ so it can't drift. */
+const VERSION = (
+  JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
+).version;
 
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const traceIdSchema = z
@@ -21,7 +27,7 @@ const traceIdSchema = z
  * and connects fresh, so the server works whether `lightpath dev` started before or after it.
  */
 export function createMcpServer(options: McpOptions): McpServer {
-  const server = new McpServer({ name: 'lightpath', version: '0.0.0' });
+  const server = new McpServer({ name: 'lightpath', version: VERSION });
 
   const withClient = async <T>(fn: (c: DaemonClient) => Promise<T>): Promise<T> => {
     const client = await connect(options.workspaceRoot);
@@ -104,10 +110,16 @@ export async function runMcpServer(options: McpOptions): Promise<void> {
 }
 
 async function connect(workspaceRoot: string): Promise<DaemonClient> {
-  let raw: string;
-  try {
-    raw = await readFile(join(workspaceRoot, DISCOVERY_FILE), 'utf8');
-  } catch {
+  // The nearest folder at or above the root with a discovery file: editors don't always start
+  // MCP servers in the project folder itself.
+  let raw: string | undefined;
+  for (let dir = resolve(workspaceRoot); ; ) {
+    raw = await readFile(join(dir, DISCOVERY_FILE), 'utf8').catch(() => undefined);
+    const parent = dirname(dir);
+    if (raw !== undefined || parent === dir) break;
+    dir = parent;
+  }
+  if (raw === undefined) {
     throw new Error(
       `Lightpath isn't running in ${workspaceRoot}. Start it with: lightpath dev -- <your dev command>`,
     );

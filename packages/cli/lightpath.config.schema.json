@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "command": {
+      "description": "Dev command to run when none is given after --. A string runs in a shell.",
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "url": {
+      "description": "App URL; detected from the command output when omitted",
+      "type": "string"
+    },
+    "webRoot": {
+      "description": "Folder the dev server serves from, relative to this file",
+      "type": "string",
+      "minLength": 1
+    },
+    "backend": {
+      "description": "Remote backend origins to tag with the trace header",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "roots": {
+      "description": "Workspace roots, relative to this file",
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "ignore": {
+      "description": "Globs for workspace files to leave out of traces, like \"src/generated/**\"",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "settleMs": {
+      "description": "Quiet time that ends a click (ms)",
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 10000
+    },
+    "maxSettleMs": {
+      "description": "Longest a click can last (ms)",
+      "type": "integer",
+      "minimum": 500,
+      "maximum": 60000
+    },
+    "browser": {
+      "description": "false: trace backend requests only",
+      "type": "boolean"
+    },
+    "headless": {
+      "description": "Run the browser without a window",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

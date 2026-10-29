@@ -772,3 +772,35 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Decision: A new `editor` CI job runs `pnpm test:vscode` on Ubuntu under `xvfb-run`, with the downloaded VS Code cached. The suite now also checks Replay: it opens every file of the Checkout trace in `replayOrder`, and the last one is lit with the trace's lines.
 - Why: The extension was only tested by hand. The in-editor test is the only check that the decorations, the Actions view, and the commands work in a real VS Code, so it should run on every change. A reversed replay order now fails the test (measured).
 - How: `.github/workflows/ci.yml` and `extensions/vscode/test/editor/suite.cjs`.
+
+### D-094 `lightpath.config.json`, validated strictly, flags win
+
+- Date: 2026-10-29
+- Decision: `lightpath dev` and `lightpath doctor` read `lightpath.config.json` from the current folder (or `--config <file>`). Keys: `command`, `url`, `webRoot`, `backend`, `roots`, `ignore`, `settleMs`, `maxSettleMs`, `browser`, `headless`, and `$schema`. All optional. A flag on the command line wins over the file; `ignore` globs from both are combined. Unknown keys and bad values stop the CLI with every problem listed.
+- Why: The trials needed the same flags on every run (D-086 still needs `--backend` for remote APIs), and generated code had no way out of traces. Typos in a config file that pass silently are worse than no file, so the schema is strict. A `command` key means a project can be started with plain `npx @lightpath-dev/cli dev`. Only the current folder is read, so a file never applies by surprise from a parent.
+- How: `packages/cli/src/config.ts` (zod schema `LightpathConfig`, `loadConfig()`); paths in `webRoot` and `roots` resolve against the file's folder, `backend` entries become origins. `packages/cli/lightpath.config.schema.json` is the JSON Schema for editors, generated from the same zod schema; a test fails when they differ (`UPDATE_SCHEMA=1` rewrites it). `pnpm e2e:api` has a run that takes its command, `browser: false`, and an `ignore` glob from a config file.
+- Rejected: JavaScript config files (`lightpath.config.ts`): loading user code before the daemon starts adds a loader and a security question for no need here. Looking in parent folders: surprising in monorepos.
+
+### D-095 `ignore` globs match workspace paths and count as `ignored`
+
+- Date: 2026-10-29
+- Decision: `ResolveContext.ignore` holds globs, checked after a file resolves to a workspace path. A match is dropped with the new drop reason `ignored`. `*` and `?` stay inside a folder, `**` crosses folders, a pattern with no `/` matches at any depth, a match on a folder hides its contents, and matching ignores case.
+- Why: Users think in project paths (`src/generated/**`), not script URLs, and the same rule then covers browser, Node, and Python files. The old `ignore` (URL substrings) was never set by anything. A separate reason tells a user their own rule hid a file, rather than "internal". Case is ignored because Windows paths reach the daemon in more than one casing.
+- How: `packages/core/src/ignore.ts` (`compileIgnore`, no dependency; compiled once per context), `inWorkspace()` in `resolve.ts`, `DropReason` in `packages/protocol/src/model.ts`. All clients ship together in 0.0.1, so the new enum value needs no protocol bump.
+
+### D-096 The M5 exit check runs through the real MCP server, and it finds the daemon from below
+
+- Date: 2026-10-29
+- Decision: `pnpm e2e` now ends by starting `lightpath mcp` as a coding agent would (MCP SDK client over stdio), calling `find_code_for_action("Checkout")`, and checking that the answer is the trace the click just made, with every file's exact line ranges. The MCP server also looks for `.lightpath/daemon.json` in each parent of its root, and reports its package version instead of `0.0.0`.
+- Why: The integration test only read a hand-made trace. The exit check ("an agent answers which code handles Checkout from a real trace") needs the whole path: browser, agent, daemon, MCP. Editors don't all start MCP servers in the project folder; walking up makes the one-line setup work from a subfolder.
+- How: `scripts/e2e-shop.mjs` (the daemon now writes its discovery file there), `connect()` in `packages/mcp/src/server.ts`, a CLI test that starts the server in a subfolder. The CLI's `--version` reads its package.json the same way.
+
+
+### D-097 Report the press pause against page size, and the closing read beside it
+
+- Date: 2026-10-29
+- Decision: The Actual benchmark (`bench/actual.mjs`) reports, per sidebar link and for all 199 presses: page size at the press (every function any read has returned so far), press pause p50 / p99 / max, closing-read size (functions, app functions, browser files, p50), and closing-read time p50 / p99. The press pause is the number compared with the 20 ms budget. The README says the press read finds 0 app functions by design and that the closing read runs after the settle window with the page running. The sync server is measured with direct HTTP requests, because Actual's demo budget sends it none. The M3 numbers (`browser-pause.mjs`) stay as they are.
+- Why: The first smoke run printed "0 functions per read", which looked like Lightpath collecting nothing. Two causes: the script read the wrong field, and the press read really is empty, since nothing in the app ran since the previous click's closing read. Its cost still scales with every function V8 has compiled for the page, and the page is paused during it (the hook's `debugger;`, `collector.ts` 99 and 104), so it is the pause that can drop a mouse release. The closing read (`collector.ts` 306) runs after `#resume()` (278) and the settle window (300), so it is longer but costs no input. Showing size next to each time keeps an empty read from looking like a broken one. M3 measured the same press read the same way, so its numbers stay comparable.
+- How: The bench times each `Profiler.takePreciseCoverage` by wrapping Playwright's CDP session in the script; nothing in `packages/` changed. Raw output of the published run: `results-bench-actual.txt` in the trial folder (not in the repo).
+- Note: Actual sits at the edge of the budget. The published run had p99 19.8 ms and max 20.2 ms with the boundary at the press throughout; an earlier full run of the same clicks, before the reporting fix, had p99 22.7 ms and moved the boundary to the release (D-082). Treat about 35,000 page functions as the size where the press boundary starts to give way.
+- Rejected: Quoting only reads that return functions (the closing read): it hides the pause that matters. Leaving the press read out of the table: readers would compare the closing read with the 20 ms budget, which it is not subject to.

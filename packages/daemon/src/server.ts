@@ -19,6 +19,8 @@ export interface DaemonOptions {
   /** Workspace roots; the first one holds `.lightpath/daemon.json`. */
   workspaceRoots: string[];
   devServers?: ResolveContext['devServers'];
+  /** Globs for workspace files to leave out of traces (`ignore` in lightpath.config.json). */
+  ignore?: string[];
   /** 0 picks a free port. */
   port?: number;
   token?: string;
@@ -46,6 +48,7 @@ export async function startDaemon(options: DaemonOptions): Promise<RunningDaemon
   const correlator = new Correlator(store, {
     workspaceRoots: options.workspaceRoots,
     ...(options.devServers ? { devServers: options.devServers } : {}),
+    ...(options.ignore?.length ? { ignore: options.ignore } : {}),
   });
 
   const server = http.createServer((req, res) => {

@@ -1,9 +1,11 @@
 // Golden end-to-end test (docs/ARCHITECTURE.md section 11): runs the example shop under Lightpath,
 // clicks "Add to cart" and "Checkout" in a real browser, and checks that one trace contains the
-// React component and the backend route, service, and payment code.
+// React component and the backend route, service, and payment code. Then asks for the same code
+// through `lightpath mcp`, the way a coding agent would (the M5 exit check).
 //
 // Usage: pnpm build && node scripts/e2e-shop.mjs [--headed]
 import { execSync, spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,7 +24,8 @@ const check = (ok, message) => {
   if (!ok) failures.push(message);
 };
 
-const daemon = await startDaemon({ workspaceRoots: [shop], writeDiscoveryFile: false });
+// The discovery file lets `lightpath mcp` find this daemon; close() removes it.
+const daemon = await startDaemon({ workspaceRoots: [shop] });
 const traces = new Map();
 daemon.store.subscribe((t) => traces.set(t.id, t));
 
@@ -131,6 +134,38 @@ try {
     Boolean(file('src/Cart.tsx')?.lines.some((l) => l.line === okLine)),
     `Cart.tsx line ${okLine} (success message) is lit`,
   );
+
+  // M5 exit check: a coding agent asks "which code handles Checkout?" through `lightpath mcp`,
+  // as Claude Code or Cursor would, and gets this real trace's files and lines back.
+  const requireMcp = createRequire(join(repo, 'packages', 'mcp', 'package.json'));
+  const { Client } = requireMcp('@modelcontextprotocol/sdk/client/index.js');
+  const { StdioClientTransport } = requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
+  const { lineRanges } = await import(dist('mcp'));
+  const agent = new Client({ name: 'e2e-agent', version: '0.0.0' });
+  await agent.connect(
+    new StdioClientTransport({
+      command: process.execPath,
+      args: [join(repo, 'packages', 'cli', 'dist', 'bin.js'), 'mcp', '--root', shop],
+    }),
+  );
+  try {
+    const answer = await agent.callTool({ name: 'find_code_for_action', arguments: { action: 'Checkout' } });
+    const text = answer.content?.[0]?.text ?? '';
+    console.log(`\nfind_code_for_action("Checkout") →\n${text}\n`);
+    check(
+      text.startsWith(`Trace ${checkout?.id}: button: Checkout`),
+      'MCP: find_code_for_action returns the Checkout trace',
+    );
+    for (const f of checkout?.files ?? []) {
+      check(
+        text.includes(`${f.path} [${f.collector}] lines ${lineRanges(f.lines)}`),
+        `MCP: the answer lists ${f.path} with the trace's exact lines`,
+      );
+    }
+    check(text.includes('request: POST /api/orders → 201'), 'MCP: the answer includes the request');
+  } finally {
+    await agent.close();
+  }
 } catch (err) {
   failures.push(String(err?.stack ?? err));
   console.error(err);

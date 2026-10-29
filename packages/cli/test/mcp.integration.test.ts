@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -63,6 +63,22 @@ describe('lightpath mcp over stdio', () => {
       const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
       expect(text).toContain('Trace t_abc123def456: button: Checkout');
       expect(text).toContain('src/Cart.tsx [browser] lines 21-22');
+    } finally {
+      await client.close();
+    }
+  }, 20_000);
+
+  it('finds the daemon from a folder inside the workspace', async () => {
+    const sub = join(root, 'src', 'deep');
+    await mkdir(sub, { recursive: true });
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await client.connect(
+      new StdioClientTransport({ command: process.execPath, args: [bin, 'mcp'], cwd: sub }),
+    );
+    try {
+      const result = await client.callTool({ name: 'list_traces', arguments: {} });
+      const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
+      expect(text).toContain('t_abc123def456');
     } finally {
       await client.close();
     }

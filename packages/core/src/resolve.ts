@@ -1,11 +1,12 @@
 import type { DropReason } from '@lightpath-dev/protocol';
+import { compileIgnore } from './ignore.js';
 
 export interface ResolveContext {
   /** Absolute workspace roots, any slash style. */
   workspaceRoots: readonly string[];
   /** Dev servers whose URL paths map onto a directory, e.g. Vite at http://localhost:5173 → C:/repo/web. */
   devServers?: readonly { origin: string; root: string }[];
-  /** Extra substrings that mark a URL as noise. */
+  /** Globs from `lightpath.config.json`, matched against workspace-relative paths (see ignore.ts). */
   ignore?: readonly string[];
 }
 
@@ -30,7 +31,7 @@ export function resolveFile(url: string, ctx: ResolveContext): Resolved {
   if (url === '' || url.startsWith('node:') || url.startsWith('data:') || url.startsWith('evalmachine')) {
     return { kind: 'dropped', reason: 'internal' };
   }
-  if (INTERNAL_MARKERS.some((m) => url.includes(m)) || ctx.ignore?.some((m) => url.includes(m))) {
+  if (INTERNAL_MARKERS.some((m) => url.includes(m))) {
     return { kind: 'dropped', reason: 'internal' };
   }
   const webpack = webpackModulePath(url);
@@ -51,9 +52,23 @@ export function resolveFile(url: string, ctx: ResolveContext): Resolved {
 function inWorkspace(absolute: string, ctx: ResolveContext): Resolved {
   for (const root of ctx.workspaceRoots) {
     const rel = relativeTo(normalizePath(root), absolute);
-    if (rel !== undefined) return { kind: 'workspace', path: rel, absolute };
+    if (rel === undefined) continue;
+    if (ctx.ignore?.length && ignoreMatcher(ctx.ignore)(rel)) return { kind: 'dropped', reason: 'ignored' };
+    return { kind: 'workspace', path: rel, absolute };
   }
   return { kind: 'dropped', reason: 'outside-workspace' };
+}
+
+const matchers = new WeakMap<readonly string[], (path: string) => boolean>();
+
+/** Compiles a context's ignore list once; contexts are reused for every script. */
+function ignoreMatcher(patterns: readonly string[]): (path: string) => boolean {
+  let m = matchers.get(patterns);
+  if (!m) {
+    m = compileIgnore(patterns);
+    matchers.set(patterns, m);
+  }
+  return m;
 }
 
 /**

@@ -57,3 +57,39 @@ What the numbers say:
 - **Above that, the read costs grow faster than the function count**: 8 ms at 12,000 functions, 66 ms at 24,600. A plain script with 24,000 functions reads in 10 ms (measured), so the extra cost comes from React's dev build and Vite's modules, not the count alone.
 - **When a read goes over 20 ms, the collector moves the boundary to the mouse release** (D-082) and says so in the terminal. A pause at the release loses nothing: mouseup and click still arrived after a 200 ms pause, and 10 ms presses all worked at 6,000 components (measured). The cost: code that runs on press, in `pointerdown` and `mousedown` handlers, isn't in the click's trace.
 - The first click used to pay for reading the whole page load (40 ms at 12,000 functions). The collector now reads that right after `load`, so the first click is no slower than the rest.
+
+
+## Real large app (Actual): `actual.mjs`
+
+```sh
+node bench/actual.mjs --actual <path to an actualbudget/actual clone> [--requests 600] [--rounds 50]
+```
+
+The script runs [Actual Budget](https://github.com/actualbudget/actual) the way docs/tested-apps.md describes: a clone outside this repo, installed with `ELECTRON_SKIP_BINARY_DOWNLOAD=1 yarn install`, `yarn workspace @actual-app/sync-server build`, and both processes started with `concurrently` (the Express 5 sync server is one `vite build` bundle; the frontend is React 19 under Vite). The server runs with `NODE_ENV=development`, as Actual's own `start:server-dev` does; otherwise its rate limit (500 requests a minute) refuses requests partway through. Actual's demo budget sends the sync server no requests, so the server was measured with direct HTTP requests, like `node-requests.mjs`: 600 sequential requests (`GET /account/needs-bootstrap`, `/account/validate`, `/sync/list-user-files`) after 30 warmup, once without Lightpath and once with the agent and `LIGHTPATH_DEBUG=1`. For the frontend, the script opens the demo budget in the real `BrowserCollector` and presses the four sidebar links in turn (Reports, Schedules, All accounts, Budget), 50 rounds, each press held 80 ms. The first press on the budget page is left out. The press pause comes from the collector's log. The script also times every coverage read and counts what it returns, by wrapping Playwright's CDP session, with nothing in `packages/` changed. "Page size" is every function any read has returned so far, dependencies included: what V8 has compiled for the page, which every read goes through. That counts dependencies, so it isn't the same measure as "Functions in first read" in the table above.
+
+Results (October 29, 2026; Actual at 53a6185; Node 24.13, Chrome headless, Windows 11, AMD Ryzen 7 9700X):
+
+Sync server, direct HTTP requests:
+
+| Functions in first read | First read | Read per request: p50 / p99 (1,200 reads) | Latency without Lightpath: p50 / p99 | Latency with Lightpath: p50 / p99 |
+| ----------------------- | ---------- | ----------------------------------------- | ------------------------------------ | --------------------------------- |
+| 13,175                  | 23.91 ms   | 7.09 / 9.56 ms                            | 0.67 / 1.52 ms                       | 16.18 / 21.72 ms                  |
+
+Frontend, demo budget:
+
+| Pressed                     | Clicks | Page size at the press (p50) | Press pause: p50 / p99 / max | Closing read: functions / app functions / browser files (p50) | Closing read time: p50 / p99 |
+| --------------------------- | ------ | ---------------------------- | ---------------------------- | ------------------------------------------------------------- | ---------------------------- |
+| All four sidebar links      | 199    | 35,362                       | 15.9 / 19.8 / 20.2 ms        | 2,366 / 652 / 133                                             | 25.4 / 36.2 ms               |
+| Sidebar "Reports" link      | 49     | 35,362                       | 15.8 / 19.8 / 19.8 ms        | 3,082 / 599 / 112                                             | 28.0 / 37.2 ms               |
+| Sidebar "Schedules" link    | 50     | 35,403                       | 15.9 / 19.5 / 19.5 ms        | 1,636 / 425 / 97                                              | 22.2 / 27.7 ms               |
+| Sidebar "All accounts" link | 50     | 35,444                       | 15.6 / 20.2 / 20.2 ms        | 2,562 / 1,048 / 140                                           | 26.2 / 36.2 ms               |
+| Sidebar "Budget" link       | 50     | 35,485                       | 16.1 / 19.0 / 19.0 ms        | 2,101 / 655 / 133                                             | 24.6 / 32.0 ms               |
+
+The press read finds 0 app functions by design (191 of 199 presses; at most 1), because nothing in the app ran since the previous click's closing read; it still returns about 174 functions from dependencies, Vite and the test driver (p50), and its cost depends on page size, not on what it returns. The closing read runs after the settle window, and the page isn't paused during it: the collector resumes the page before the window opens and doesn't pause it again. The "All accounts" press is labelled `span: __global!accounts-balance`, not `a: All accounts`, because of an open label bug: a balance cell inside the link has its own `data-testid`. Code in Web Workers isn't collected, and Actual runs its budget engine in one, so the engine's work costs no read and is in no trace.
+
+What the numbers say:
+
+- **A real bundled backend costs what `node-requests.mjs` predicts for its size.** A read of its 13,175 functions takes 7.09 ms (p50), between the 10,000- and 50,000-function rows above, and a request goes from 0.67 ms to 16.18 ms with Lightpath.
+- **At about 35,000 functions on the page, the press pause is 15.9 ms p50 and 19.8 ms p99**, inside the 20 ms budget, so the boundary stayed at the press for the whole run. The slowest press paused 20.2 ms. Page size grew from 30,622 to 39,421 functions over the 199 clicks.
+- **The closing read is the longer one (25.4 ms p50, 36.2 ms p99)**, and it holds the click's code: 133 browser files at the median, none empty. It doesn't cost a dropped mouse release, because the page isn't paused then.
+- "Try the demo" on the start screen (page size 25,130) paused 17.9 ms. It changes the route without reloading the page; its closing read held the budget opening, 254 browser files.

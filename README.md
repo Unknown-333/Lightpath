@@ -40,6 +40,71 @@ corepack pnpm build
 corepack pnpm --filter shop lightpath
 ```
 
+`npx @lightpath-dev/cli doctor` checks Node, the browser, the agent, and your config file, and says what to fix.
+
+## Config file
+
+Flags are enough for most apps. To save them, or to hide generated code, put a `lightpath.config.json` next to your `package.json`. Then `npx @lightpath-dev/cli dev` needs no arguments.
+
+```json
+{
+  "$schema": "./node_modules/@lightpath-dev/cli/lightpath.config.schema.json",
+  "command": "npm run dev",
+  "backend": ["https://api.staging.example.com"],
+  "ignore": ["src/generated/**", "*.gen.ts"]
+}
+```
+
+| Key                       | What it does                                                                                                                       |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `command`                 | Your dev command. A string runs in a shell; a list runs as is                                                                      |
+| `url`                     | Your app's URL, if Lightpath can't find it in the command's output                                                                 |
+| `webRoot`                 | The folder your dev server serves from, if it isn't this one                                                                       |
+| `backend`                 | Remote API origins to link to clicks. Local ones on any port are linked already                                                    |
+| `roots`                   | Folders whose files show in traces (default: this one)                                                                             |
+| `ignore`                  | Globs for files to leave out of traces. `*` stays in one folder, `**` crosses folders, and a name with no `/` matches at any depth |
+| `settleMs`, `maxSettleMs` | How long a click waits for quiet (300 ms) and at most (5,000 ms)                                                                   |
+| `browser`, `headless`     | `browser: false` traces backend requests only; `headless: true` hides the window                                                   |
+
+A flag on the command line wins over the file. Unknown keys are errors, so typos don't pass silently.
+
+## Ask your coding agent
+
+`lightpath mcp` is an [MCP](https://modelcontextprotocol.io) server. Your agent can ask which code ran for an action you just did, instead of guessing from file names.
+
+| Tool                   | Answers                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `find_code_for_action` | "Which code handles Checkout?" from the last matching click |
+| `list_traces`          | What you clicked recently                                   |
+| `get_trace`            | Every file and line one action ran, frontend and backend    |
+| `diff_traces`          | Lines that ran in only one of two actions                   |
+
+Add it once:
+
+| Agent       | Setup                                                                                                                                    |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Claude Code | `claude mcp add lightpath -- npx -y @lightpath-dev/cli mcp`                                                                              |
+| Cursor      | `.cursor/mcp.json`: `{ "mcpServers": { "lightpath": { "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }`               |
+| VS Code     | `.vscode/mcp.json`: `{ "servers": { "lightpath": { "type": "stdio", "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }` |
+| Kiro        | `.kiro/settings/mcp.json`: `{ "mcpServers": { "lightpath": { "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }`        |
+
+The server looks for `.lightpath/daemon.json` in its folder and then each parent, so it finds the `lightpath dev` running in your project. Pass `--root <folder>` if your agent starts it somewhere else.
+
+This is what an agent gets for "which code handles Checkout?" in the example shop, from a real click (`pnpm e2e` checks it):
+
+```
+Trace t_0oq7762nndnu: button: Checkout
+  request: POST /api/orders → 201 (node, 12 ms)
+  src/api.ts [browser] lines 25-32, 35-36
+  src/Cart.tsx [browser] lines 11-14, 16-19, 21-28, 30-33, 35-44, 46-48, 50 (max 4 hits)
+  server/routes/orders.ts [node] lines 11-14, 19-21, 25, 29, 31-33, 38-40
+  server/services/pricing.ts [node] lines 12-19, 21-22, 26-33
+  server/services/payment.ts [node] lines 6-7, 10-12
+  ...
+```
+
+From that, the agent can answer exactly: `checkout()` in `Cart.tsx` calls `placeOrder()` in `api.ts`, which posts to `createOrder` in `orders.ts`, which prices the cart in `pricing.ts` and charges it in `payment.ts`.
+
 ## How it works
 
 | Part           | Technique                                                                                                                                                                   |
