@@ -848,3 +848,12 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: The 0.0.1 install test ran `npx lightpath doctor` in `my shop\src` while `lightpath dev` ran in `my shop`. The doctor said "not running (start it with lightpath dev)", while `lightpath mcp` started in the same `src` folder found the daemon and answered `find_code_for_action Checkout` with the full trace. The two disagreed about the same folder, and the doctor is what a user runs when MCP looks broken.
 - How: `packages/daemon/src/discovery.ts` (`findDiscovery`), `packages/cli/src/doctor.ts`. A daemon test writes the discovery file at a root and finds it from `src/components`.
 - Rejected: Moving `lightpath mcp` onto `findDiscovery` in the same change: the MCP package imports only `@lightpath-dev/protocol`, and its own loop already works.
+
+
+### D-103 The in-editor test can run against a packed `.vsix`
+
+- Date: 2026-10-30
+- Decision: `extensions/vscode/test/editor/run.mjs` reads `LIGHTPATH_VSCODE_VSIX`. When it names a `.vsix`, VS Code's own CLI (`runVSCodeCommand` from `@vscode/test-electron`) installs it into the test's temp profile (`--extensions-dir` and `--user-data-dir` under one `mkdtemp` folder), the run passes an empty harness folder as the development extension, and `--disable-extensions` is left out. The suite logs the extension's version and path, and in this mode fails unless the path is inside that extensions folder. Without the variable nothing changes: CI's editor job still tests the source folder.
+- Why: The 0.0.1 checklist needs the same in-editor test against what users install. `runTests` loads `extensionDevelopmentPath` and requires one; pointed at the source folder, VS Code would load the folder and ignore an installed copy with the same id. `--disable-extensions` turns off installed extensions, the `.vsix` included. The temp extensions folder is new for each run and holds only the `.vsix`, so the run stays as isolated as before.
+- How: `LIGHTPATH_VSCODE_VSIX=<path>.vsix pnpm test:vscode`. Measured on 2026-10-30 with VS Code 1.144.0: the extension loaded from `%TEMP%\lightpath-vscode-…\extensions\lightpath-dev.lightpath-vscode-0.0.1`, Cart.tsx 34 lines and orders.ts 15 lines lit as in the trace, Clear and Replay passed.
+- Rejected: Unzipping the `.vsix` and passing its `extension/` folder as the development path: it skips VS Code's install step, which is part of what a user's install does.

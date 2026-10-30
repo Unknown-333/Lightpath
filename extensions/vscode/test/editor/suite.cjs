@@ -32,6 +32,12 @@ exports.run = async () => {
   const shop = process.env.LIGHTPATH_TEST_SHOP;
   const ext = vscode.extensions.getExtension('lightpath-dev.lightpath-vscode');
   assert.ok(ext, 'the extension is loaded');
+  console.log(`[lightpath test] extension ${ext.packageJSON.version} from ${ext.extensionPath}`);
+  const installedIn = process.env.LIGHTPATH_TEST_EXTENSIONS_DIR;
+  if (installedIn) {
+    const inside = ext.extensionPath.toLowerCase().startsWith(installedIn.toLowerCase());
+    assert.ok(inside, `the extension is the .vsix installed in ${installedIn}, not ${ext.extensionPath}`);
+  }
 
   // Not calling ext.activate(): the workspaceContains activation event has to do it by itself.
   await until('the extension to activate on .lightpath/daemon.json', () => ext.isActive);
