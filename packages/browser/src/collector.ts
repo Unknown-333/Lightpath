@@ -286,7 +286,7 @@ export class BrowserCollector {
       `click on ${labelFor(target)}: paused ${(performance.now() - pausedAt).toFixed(1)}ms, boundary ${boundary}, trace ${traceId}`,
     );
     // Key presses never lose events to a pause, so only pointer presses count toward the budget.
-    if (!target.key) await this.#checkBudget(readMs);
+    if (!target.key && boundary === 'press') await this.#checkBudget(readMs);
 
     void this.#emit('background', before, at);
     this.#opts.send({
@@ -356,15 +356,16 @@ export class BrowserCollector {
       .then(async () => {
         if (this.#active) return;
         await this.#emit('background', await this.#take(), Date.now());
-        // The read above returned the whole page load. A second one returns almost nothing, so its
-        // time is what every click's read will cost: decide the boundary before the first click.
-        const started = performance.now();
+        // A second read files what the page ran right after load, background too. It isn't timed
+        // against the press budget: the page can still be busy here, so this read can cost more than
+        // any click's (Actual: 20.8 ms, while 103 press reads stayed under 18.9 ms). Only a read at a
+        // pointer press moves the boundary (D-082, D-105).
         await this.#emit('background', await this.#take(), Date.now());
-        await this.#checkBudget(performance.now() - started);
       })
       .catch((err: unknown) => this.#log(`load-time coverage read failed: ${(err as Error).message}`));
   }
 
+  /** Called only with the read taken while the page is paused at a pointer press (D-105). */
   async #checkBudget(readMs: number): Promise<void> {
     const budget = this.#opts.pressBudgetMs ?? PRESS_BUDGET_MS;
     if (this.#release || readMs <= budget) return;
