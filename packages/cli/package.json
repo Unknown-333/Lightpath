@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Click anything in your running app and see which frontend and backend lines ran",
   "keywords": [
     "coverage",

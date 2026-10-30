@@ -2,6 +2,24 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## [0.0.2] - not published yet
+
+A fix for the browser collector. Only the npm packages whose published files changed get 0.0.2: `@lightpath-dev/browser` and `@lightpath-dev/cli` (D-107). `npx @lightpath-dev/cli@0.0.2` installs browser 0.0.2 with the 0.0.1 packages below.
+
+### Fixed
+
+- On a busy page, the coverage read right after `load` could take longer than the 20 ms press budget and move the click boundary to the mouse release before the first click. Then `pointerdown` and `mousedown` code was left out of every click's trace (Actual Budget: 1 run in 3). Now only a read at a pointer press moves the boundary (D-105).
+- The D-085 require-hook test failed when run from a color terminal, because the child process printed `true` in color. It now ignores color codes. Test only; no package changed.
+
+### Docs
+
+- `@lightpath-dev/cli` has a README for its npm page.
+- [bench/README.md](bench/README.md): the press pause on Actual Budget after D-105 is 15.00 / 17.73 ms p50 / p99, most of it Chrome reading coverage, and it stays as it is (D-106).
+
+### Stays at 0.0.1
+
+`@lightpath-dev/protocol`, `@lightpath-dev/core`, `@lightpath-dev/node-agent`, `@lightpath-dev/daemon`, `@lightpath-dev/mcp`, and the VS Code extension `lightpath-dev.lightpath-vscode`: nothing they ship changed (D-107).
+
 ## [0.0.1] - 2026-10-30
 
 The first release. On npm as the 7 `@lightpath-dev/*` packages (install with `npx @lightpath-dev/cli`), on the VS Code Marketplace as `lightpath-dev.lightpath-vscode`, and on PyPI as `lightpath-agent` (uploaded 2026-10-28). Tagged `v0.0.1`. Click something in your app and see every line of frontend and backend code it ran, in the terminal, in VS Code, and for your coding agent over MCP. It covers milestones M1 to M5 of the [roadmap](docs/ROADMAP.md).
