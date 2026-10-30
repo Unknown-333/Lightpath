@@ -1,0 +1,17 @@
+name: Feature request
+description: Something Lightpath should do, or a stack it should support.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: What you were trying to do, and where Lightpath got in the way or fell short.
+      placeholder: My app talks to the server over socket.io, so clicks never show backend code.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How you would like it to work. Optional.
