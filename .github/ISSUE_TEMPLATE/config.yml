@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Known limits
+    url: https://github.com/Unknown-333/Lightpath#known-limits
+    about: Check what Lightpath doesn't support yet before you file a bug.

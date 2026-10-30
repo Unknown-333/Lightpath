@@ -1,0 +1,64 @@
+name: I tried Lightpath on my app
+description: Tell us how it went, good or bad. Reports become rows in docs/tested-apps.md.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Each report becomes a row in [Tested apps](https://github.com/Unknown-333/Lightpath/blob/main/docs/tested-apps.md). Short answers are fine. Remove secrets from anything you paste.
+  - type: input
+    id: repo
+    attributes:
+      label: Repo link
+      description: Leave blank for a private app.
+      placeholder: https://github.com/owner/app
+  - type: dropdown
+    id: size
+    attributes:
+      label: App size
+      options:
+        - Small (a few screens)
+        - Medium
+        - Large (hundreds of components)
+  - type: input
+    id: frontend
+    attributes:
+      label: Frontend
+      description: Framework and bundler, with versions.
+      placeholder: React 18, webpack 5 + swc-loader
+    validations:
+      required: true
+  - type: input
+    id: backend
+    attributes:
+      label: Backend
+      description: Framework, what runs it, and anything unusual (bundled, WebSockets, workers).
+      placeholder: Express 4 under nodemon + ts-node, SQLite
+    validations:
+      required: true
+  - type: dropdown
+    id: worked
+    attributes:
+      label: Did it work?
+      options:
+        - "Yes"
+        - Partly
+        - "No"
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: What you clicked and what it showed
+      placeholder: '"Log in" showed 46 frontend and 45 backend files.'
+    validations:
+      required: true
+  - type: textarea
+    id: missing
+    attributes:
+      label: What was missing or wrong
+      placeholder: Saving a monitor showed no backend code; it goes over socket.io.
+  - type: input
+    id: setup
+    attributes:
+      label: OS, Node.js, browser
+      placeholder: Windows 11, Node 24.13, Chrome 156
