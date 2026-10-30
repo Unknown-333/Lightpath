@@ -4,6 +4,8 @@ A checklist for the owner. Agents prepare a release; only the owner publishes. K
 
 Commands are PowerShell on Windows. If `pnpm` isn't on `PATH`, run `corepack enable` once, or start each shell with `$env:PATH = "$env:LOCALAPPDATA\corepack-shims;$env:PATH"`.
 
+Steps 1 to 7 are how 0.0.1 went out. For 0.0.2, follow [Releasing 0.0.2](#releasing-002) at the end.
+
 ## What 0.0.1 publishes
 
 | Registry            | Name                                                                            | Account                                         |
@@ -149,3 +151,57 @@ Then change the `0.0.1` heading in `CHANGELOG.md` from "not published yet" to th
 - `lightpath doctor` in a subfolder disagreed with `lightpath mcp` about whether the daemon runs. Fixed (D-102).
 - The example shop's `dev.mjs` starts Vite and the API at the same time. When the browser opens before the API listens, the product list stays empty until a reload. The same race makes the first `pnpm e2e` or `pnpm test:vscode` after a build time out now and then on the product list; a second run passes.
 - `pnpm test:vscode` tests the source folder unless `LIGHTPATH_VSCODE_VSIX` names a `.vsix` (D-103).
+
+
+## Releasing 0.0.2
+
+0.0.2 publishes 2 npm packages: `@lightpath-dev/browser` (the D-105 fix) and `@lightpath-dev/cli` (its npm page README, and it needs browser 0.0.2). Everything else stays at 0.0.1 (D-107):
+
+| Stays at 0.0.1                                                   | Why                                                                                                                                                   |
+| ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lightpath-dev/protocol`, `core`, `node-agent`, `daemon`, `mcp` | No file they ship changed since `v0.0.1`                                                                                                              |
+| VS Code extension `lightpath-dev.lightpath-vscode`               | Not republished: nothing in `extensions/vscode` changed since `v0.0.1`, and it bundles only `core` and `protocol` (D-100), which didn't change either |
+| `lightpath-agent` (PyPI)                                         | Nothing in `agents/python` changed                                                                                                                    |
+
+The release PR is merged and every CI check on `main` is green. Then, in a new PowerShell window:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\corepack-shims;$env:PATH"
+cd $HOME\Desktop\lightpath-publish
+git switch main
+git pull
+git status                     # must say "nothing to commit, working tree clean"
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+npm whoami                     # must print unknown-333; if not, run npm login first
+pnpm -r --filter @lightpath-dev/browser --filter @lightpath-dev/cli publish --dry-run   # shows the 2 tarballs, sends nothing
+```
+
+The dry run must list `@lightpath-dev/browser@0.0.2` and `@lightpath-dev/cli@0.0.2` and nothing else. Then publish browser first, then cli. The cli's `package.json` names browser `0.0.2`, so npm must serve browser 0.0.2 before anyone installs cli 0.0.2:
+
+```powershell
+pnpm --filter @lightpath-dev/browser publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/cli publish --publish-wait-timeout 600000
+```
+
+What 0.0.1 taught: each publish asks for the security key. If you tick "don't ask again for 5 minutes", the wait after a publish (`--publish-wait-timeout`, while npm scans the upload) can use up those 5 minutes, so the cli publish may ask for the key again. Have the key ready for both.
+
+Check:
+
+```powershell
+npm view @lightpath-dev/cli@0.0.2 dependencies   # @lightpath-dev/browser 0.0.2; daemon, mcp, node-agent, protocol 0.0.1
+cd $env:TEMP; npx -y @lightpath-dev/cli@0.0.2 --version   # lightpath/0.0.2 ...
+```
+
+Then tag the release:
+
+```powershell
+cd $HOME\Desktop\lightpath-publish
+git tag -a v0.0.2 -m "Lightpath 0.0.2"
+git push origin v0.0.2
+```
+
+Then change the `0.0.2` heading in `CHANGELOG.md` from "not published yet" to the publish date, in a small PR.
+
+What the 0.0.2 checks found: the 2 packed tarballs, installed with the 0.0.1 packages from npm into a copy of the shop (step 2's copy and tsconfig fix), print `lightpath/0.0.2`, pass `lightpath doctor`, and both Checkout traces, before and after a reload, list `src/Cart.tsx` and `server/routes/orders.ts` with lines.
