@@ -1,5 +1,5 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { DaemonDiscovery, DISCOVERY_FILE } from '@lightpath-dev/protocol';
 
 /** Writes `.lightpath/daemon.json` with user-only permissions, plus a .gitignore for the folder. */
@@ -25,4 +25,20 @@ export async function readDiscovery(workspaceRoot: string): Promise<DaemonDiscov
 
 export async function removeDiscovery(workspaceRoot: string): Promise<void> {
   await rm(join(workspaceRoot, DISCOVERY_FILE), { force: true });
+}
+
+/**
+ * The nearest folder at or above `dir` with a valid discovery file, and what it says. This is where
+ * `lightpath mcp` looks too, so `lightpath doctor` in a subfolder reports the daemon MCP would use.
+ */
+export async function findDiscovery(
+  dir: string,
+): Promise<{ root: string; info: DaemonDiscovery } | undefined> {
+  for (let root = resolve(dir); ; ) {
+    const info = await readDiscovery(root);
+    if (info) return { root, info };
+    const parent = dirname(root);
+    if (parent === root) return undefined;
+    root = parent;
+  }
 }

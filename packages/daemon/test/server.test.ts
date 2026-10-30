@@ -1,10 +1,10 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { DaemonToClientMessage, IngestBatch } from '@lightpath-dev/protocol';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
-import { readDiscovery } from '../src/discovery.js';
+import { findDiscovery, readDiscovery } from '../src/discovery.js';
 import { type RunningDaemon, startDaemon } from '../src/server.js';
 
 let root: string;
@@ -41,6 +41,14 @@ describe('daemon HTTP', () => {
       token: daemon.token,
       protocolVersion: 1,
     });
+  });
+
+  it('finds the discovery file from a subfolder, where lightpath mcp finds it too (D-102)', async () => {
+    const sub = join(root, 'src', 'components');
+    await mkdir(sub, { recursive: true });
+    expect(await readDiscovery(sub)).toBeUndefined();
+    expect(await findDiscovery(sub)).toMatchObject({ root, info: { port: daemon.port, pid: process.pid } });
+    expect(await findDiscovery(root)).toMatchObject({ root });
   });
 
   it('rejects ingest without the token, and any request from a web page', async () => {

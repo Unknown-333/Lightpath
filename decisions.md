@@ -839,3 +839,12 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Reproduced in examples/shop and in the packed install: on 66a544b the repo's own, unmodified `examples/shop` under `lightpath dev` gave Checkout with `src/Cart.tsx` lines 11-14, 16-19, 21-28, 30-33, 35-44, 46-48, 50 before a Chrome reload, and after it only the backend files and "4 scripts hidden (no-source)". With the fix, the Checkout after the reload lists the same frontend files and lines as the one before.
 - Note: The node agent has the same once-per-hash shape (`packages/node-agent/src/agent.ts`). It is not changed: one Node process parses each file once, and a restarted server is a new agent. It is a suspect for the Uptime Kuma `no-source` scripts after a server restart, not yet checked.
 - Rejected: Sending the source again for every script id: same text, sent once per load for every file. Re-keying the daemon by hash: the delta carries script ids, and two scripts with one hash can still differ by URL and source map.
+
+
+### D-102 `lightpath doctor` finds the daemon from a subfolder, the way `lightpath mcp` does
+
+- Date: 2026-10-30
+- Decision: The doctor's "Daemon for this workspace" check looks for `.lightpath/daemon.json` in the current folder and then in each parent, and names the folder when it is a parent: `running on port 50981, pid 34152 (started in C:\…\my shop)`. A stale file is named by its full path. The walk lives in `findDiscovery()` in `@lightpath-dev/daemon`.
+- Why: The 0.0.1 install test ran `npx lightpath doctor` in `my shop\src` while `lightpath dev` ran in `my shop`. The doctor said "not running (start it with lightpath dev)", while `lightpath mcp` started in the same `src` folder found the daemon and answered `find_code_for_action Checkout` with the full trace. The two disagreed about the same folder, and the doctor is what a user runs when MCP looks broken.
+- How: `packages/daemon/src/discovery.ts` (`findDiscovery`), `packages/cli/src/doctor.ts`. A daemon test writes the discovery file at a root and finds it from `src/components`.
+- Rejected: Moving `lightpath mcp` onto `findDiscovery` in the same change: the MCP package imports only `@lightpath-dev/protocol`, and its own loop already works.
