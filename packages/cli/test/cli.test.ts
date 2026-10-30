@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { stripVTControlCharacters } from 'node:util';
 import type { Trace } from '@lightpath-dev/protocol';
 import { describe, expect, it } from 'vitest';
 import { findLocalUrl, UrlWatcher } from '../src/detect.js';
@@ -57,7 +58,9 @@ describe('agentEnv', () => {
         env,
         encoding: 'utf8',
       });
-      expect(out.trim()).toBe('main ran true');
+      // A child that inherits FORCE_COLOR (set when the tests run in a color terminal) prints
+      // `true` in yellow, so compare the text without its color codes.
+      expect(stripVTControlCharacters(out).trim()).toBe('main ran true');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
