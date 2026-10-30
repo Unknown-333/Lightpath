@@ -813,3 +813,56 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - How: Two `closest()` calls in `HOOK_SOURCE` (`packages/browser/src/collector.ts`). A real-browser test presses five shapes: a link with an inner test-id span (`a: All accounts 1,234.00`), a button with one (`button: Save *`), a `div` with a test id and no control around it (`div: card-total`), a link that carries the test id itself (`a: nav-home`), and `role="button"` around a test-id span (`button: Open 3`). The first, second and fifth failed on the old `describe()` (`span: …`).
 - Note: An ARIA role on a large container (`role="main"`) now also wins over a test id inside it, and is labelled with its first 80 characters of text, as a plain click inside it already was.
 - Rejected: Preferring a test id when it is closer than the control: it is exactly the Actual case. Dropping `data-testid` from labels: it is the best name for clickable `div`s that have no role.
+
+### D-099 What each npm package ships in 0.0.1
+
+- Date: 2026-10-29
+- Decision: Every `@lightpath-dev/*` package is 0.0.1 and ships `dist/` without `dist/.tsbuildinfo` and without `*.map` files, plus `package.json`, the repo `LICENSE` (pnpm adds it), and a short README (the CLI also ships `lightpath.config.schema.json`). Each manifest gains `keywords`, `homepage`, `bugs`, `repository` (with `directory`), `engines.node >=22.12`, and `publishConfig.access: public`. The node-agent description now says `--require` (D-085).
+- Why: The build cache is not code. The `.js.map` and `.d.ts.map` files point at `src/`, which isn't shipped, so they would only add size and dead links. Node 22.12 is the floor for every package, not just the CLI: the node-agent is loaded with `--require` on an ES module file, which needs 22.12 (ADR 0002). A scoped package is private by default on npm, so the first publish would fail without `access: public`. READMEs fill the npm page; relative links in the node-agent README pointed into the repo and break on npmjs.com, so they are absolute now.
+- How: `files` negations in each `packages/*/package.json`; checked with `pnpm pack --dry-run` in each package. The JSON schema the README's `$schema` line points at is in the CLI tarball.
+- Rejected: Shipping `src/` so the maps resolve: doubles the size for a debugging aid no user of 0.0.1 needs.
+
+### D-100 The extension's bundled packages are dev dependencies, and `vsce package` builds the bundle
+
+- Date: 2026-10-29
+- Decision: `@lightpath-dev/core` and `@lightpath-dev/protocol` move to the extension's `devDependencies`, and a `vscode:prepublish` script runs `node esbuild.mjs --production`. Plain `vsce package` (and `pnpm --filter lightpath-vscode exec vsce package`) now gives a `.vsix` with only `dist/extension.cjs`, `package.json`, the README, and the license.
+- Why: esbuild inlines both packages into `dist/extension.cjs`, so the `.vsix` needs none of `node_modules`. As runtime dependencies they made `vsce package` run `npm list --production`, which fails in a pnpm workspace (ELSPROBLEMS on the `workspace:*` links). `vsce` runs `vscode:prepublish` before every package, so a `.vsix` can no longer hold a stale development bundle with source maps.
+- How: `extensions/vscode/package.json`; `pnpm-lock.yaml` moves the two links from `dependencies` to `devDependencies`. The `package` script keeps `--no-dependencies` as a second guard.
+
+
+### D-101 The browser collector announces every script id, and sends each source once per hash
+
+- Date: 2026-10-30
+- Decision: `#pushSources` in `packages/browser/src/collector.ts` sends a `scripts` message the first time each script id shows up in coverage, and the `source` message only the first time each hash does. Before, both went out once per hash.
+- Why: The 0.0.1 install test from the packed `.tgz` files found it. A fresh install's first `lightpath dev` always reloads the page once (Vite optimizes its dependencies on the first visit and reloads). After that reload every frontend file came out as `no-source`: the Checkout trace showed `server/routes/orders.ts` but "not shown: 4 no-source" instead of `Cart.tsx`. A reload parses the same files under new script ids with the same hash. The daemon looks each coverage entry up by script id (`correlator.ts`, `agent.scripts`), and the collector skipped the new ids because their hash had been sent. Any full reload did the same: the user pressing F5, an HMR full reload, a login redirect back to the same bundle.
+- How: A second set, `#sentScripts`, next to `#sentHashes`. A real-browser test loads the page, reloads it, presses Enter on a button, and checks that every script id in the action delta was announced and that `app.js` source went out once. It failed on the old code.
+- Reproduced in examples/shop and in the packed install: on 66a544b the repo's own, unmodified `examples/shop` under `lightpath dev` gave Checkout with `src/Cart.tsx` lines 11-14, 16-19, 21-28, 30-33, 35-44, 46-48, 50 before a Chrome reload, and after it only the backend files and "4 scripts hidden (no-source)". With the fix, the Checkout after the reload lists the same frontend files and lines as the one before.
+- Note: The node agent has the same once-per-hash shape (`packages/node-agent/src/agent.ts`). It is not changed: one Node process parses each file once, and a restarted server is a new agent. It is a suspect for the Uptime Kuma `no-source` scripts after a server restart, not yet checked.
+- Rejected: Sending the source again for every script id: same text, sent once per load for every file. Re-keying the daemon by hash: the delta carries script ids, and two scripts with one hash can still differ by URL and source map.
+
+
+### D-102 `lightpath doctor` finds the daemon from a subfolder, the way `lightpath mcp` does
+
+- Date: 2026-10-30
+- Decision: The doctor's "Daemon for this workspace" check looks for `.lightpath/daemon.json` in the current folder and then in each parent, and names the folder when it is a parent: `running on port 50981, pid 34152 (started in C:\…\my shop)`. A stale file is named by its full path. The walk lives in `findDiscovery()` in `@lightpath-dev/daemon`.
+- Why: The 0.0.1 install test ran `npx lightpath doctor` in `my shop\src` while `lightpath dev` ran in `my shop`. The doctor said "not running (start it with lightpath dev)", while `lightpath mcp` started in the same `src` folder found the daemon and answered `find_code_for_action Checkout` with the full trace. The two disagreed about the same folder, and the doctor is what a user runs when MCP looks broken.
+- How: `packages/daemon/src/discovery.ts` (`findDiscovery`), `packages/cli/src/doctor.ts`. A daemon test writes the discovery file at a root and finds it from `src/components`.
+- Rejected: Moving `lightpath mcp` onto `findDiscovery` in the same change: the MCP package imports only `@lightpath-dev/protocol`, and its own loop already works.
+
+
+### D-103 The in-editor test can run against a packed `.vsix`
+
+- Date: 2026-10-30
+- Decision: `extensions/vscode/test/editor/run.mjs` reads `LIGHTPATH_VSCODE_VSIX`. When it names a `.vsix`, VS Code's own CLI (`runVSCodeCommand` from `@vscode/test-electron`) installs it into the test's temp profile (`--extensions-dir` and `--user-data-dir` under one `mkdtemp` folder), the run passes an empty harness folder as the development extension, and `--disable-extensions` is left out. The suite logs the extension's version and path, and in this mode fails unless the path is inside that extensions folder. Without the variable nothing changes: CI's editor job still tests the source folder.
+- Why: The 0.0.1 checklist needs the same in-editor test against what users install. `runTests` loads `extensionDevelopmentPath` and requires one; pointed at the source folder, VS Code would load the folder and ignore an installed copy with the same id. `--disable-extensions` turns off installed extensions, the `.vsix` included. The temp extensions folder is new for each run and holds only the `.vsix`, so the run stays as isolated as before.
+- How: `LIGHTPATH_VSCODE_VSIX=<path>.vsix pnpm test:vscode`. Measured on 2026-10-30 with VS Code 1.144.0: the extension loaded from `%TEMP%\lightpath-vscode-…\extensions\lightpath-dev.lightpath-vscode-0.0.1`, Cart.tsx 34 lines and orders.ts 15 lines lit as in the trace, Clear and Replay passed.
+- Rejected: Unzipping the `.vsix` and passing its `extension/` folder as the development path: it skips VS Code's install step, which is part of what a user's install does.
+
+
+### D-104 How 0.0.1 is published: `docs/RELEASE.md`, and a `CHANGELOG.md`
+
+- Date: 2026-10-30
+- Decision: `docs/RELEASE.md` is the owner's checklist; `CHANGELOG.md` starts with a 0.0.1 entry headed "not published yet", dated when the owner publishes. The checklist publishes from a fresh clone of `main`; tests the packed `.tgz` files in a copy of the shop and the `.vsix` with `LIGHTPATH_VSCODE_VSIX` before anything goes out; publishes the 7 npm packages one `pnpm --filter <name> publish --publish-wait-timeout 600000` at a time in dependency order (protocol, node-agent, core, browser, daemon, mcp, cli); publishes the tested `.vsix` itself with `vsce publish --packagePath`; and uploads nothing to PyPI for 0.0.1.
+- Why: `pnpm publish` checks that the tree is clean, the branch is `main`, and it matches `origin` (pnpm docs); the working checkout holds untracked scratch files, which count as dirty. One command per package stops at the first failure with the rest unpublished, and the wait lets npm finish scanning a package before a dependent one names it. `--packagePath` keeps the published extension byte for byte the one the in-editor test ran (D-103). `lightpath-agent` 0.0.1 is on PyPI since 2026-10-28 19:21 UTC, uploaded after the last `agents/python` commit (d922587), and PyPI refuses a second file with the same name; the checklist keeps the build and upload commands for the next version and says to empty `dist/` first, since it still holds the 0.0.1 files.
+- How: `docs/RELEASE.md`, `CHANGELOG.md`. The copy, tsconfig and `tar` commands in step 2 were run once in a temp folder to check them; no publish command was run, not even `--dry-run`.
+- Rejected: `pnpm -r publish` for all 7 at once: it also orders by dependencies, but a failure in the middle is harder to read. Bumping the Python agent to 0.0.2 so all registries show the same version: its code hasn't changed since 0.0.1.

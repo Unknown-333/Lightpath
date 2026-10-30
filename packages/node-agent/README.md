@@ -9,4 +9,4 @@ Runs inside your Node.js process and reports which code ran for each HTTP reques
 
 Set `LIGHTPATH_DEBUG=1` to see what it's doing on stderr.
 
-Design: [ADR 0002](../../docs/adr/0002-node-agent-in-process.md), [ADR 0006](../../docs/adr/0006-agent-ingest-over-http.md), [ARCHITECTURE.md section 5.2](../../docs/ARCHITECTURE.md).
+Design: [ADR 0002](https://github.com/Unknown-333/Lightpath/blob/main/docs/adr/0002-node-agent-in-process.md), [ADR 0006](https://github.com/Unknown-333/Lightpath/blob/main/docs/adr/0006-agent-ingest-over-http.md), [ARCHITECTURE.md section 5.2](https://github.com/Unknown-333/Lightpath/blob/main/docs/ARCHITECTURE.md).

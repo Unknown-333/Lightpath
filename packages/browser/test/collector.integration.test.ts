@@ -278,6 +278,37 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     expect(ran(coupon.traceId)).not.toContain('/app.js#checkout');
   }, 30_000);
 
+  it('announces every script again after a reload, so its lines still resolve (D-101)', async () => {
+    const { messages, starts, ran } = await record(async (c) => {
+      const page = c.page;
+      if (!page) throw new Error('no page');
+      await page.waitForTimeout(300); // the load-time read sends app.js once
+      // A full reload, like Vite's after its first dependency scan: same files, new script ids.
+      await page.reload();
+      await page.waitForTimeout(300);
+      await page.focus('#buy');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+    });
+    const [buy] = starts;
+    if (!buy) throw new Error('no trace');
+    expect(ran(buy.traceId)).toContain('/app.js#checkout');
+    const announced = new Set(
+      messages.flatMap((m) => (m.type === 'scripts' ? m.scripts.map((s) => s.scriptId) : [])),
+    );
+    const used = messages.flatMap((m) =>
+      m.type === 'delta' && m.phase === 'action' && m.traceId === buy.traceId
+        ? m.coverage.filter((s) => s.url === `${origin}/app.js`).map((s) => s.scriptId)
+        : [],
+    );
+    expect(used.length).toBeGreaterThan(0);
+    // The daemon maps a delta through the scriptId it was told about; an unknown id is "no-source".
+    for (const id of used) expect(announced.has(id)).toBe(true);
+    // The source itself is still sent once per hash, not once per load.
+    const appSources = messages.filter((m) => m.type === 'source' && m.url === `${origin}/app.js`);
+    expect(appSources).toHaveLength(1);
+  }, 30_000);
+
   it("doesn't open a trace for typing, including Space in a text field", async () => {
     const { starts } = await record(async (c) => {
       await c.page?.fill('#code', '');

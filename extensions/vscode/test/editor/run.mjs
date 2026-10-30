@@ -9,18 +9,21 @@
 // Downloads VS Code stable into extensions/vscode/.vscode-test on the first run (about 150 MB).
 // Set LIGHTPATH_VSCODE_VERSION to test another version, for example 1.101.0 (the oldest supported:
 // the first VS Code on Node 22, which the extension needs for the global WebSocket).
+// Set LIGHTPATH_VSCODE_VSIX to a packed .vsix to test that instead of this folder: VS Code's own CLI
+// installs it into the temp profile's extensions folder, and VS Code loads it from there (D-103).
 import { execSync, spawn } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runTests } from '@vscode/test-electron';
+import { runTests, runVSCodeCommand } from '@vscode/test-electron';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extension = join(here, '..', '..');
 const repo = join(extension, '..', '..');
 const shop = join(repo, 'examples', 'shop');
+const vsix = process.env.LIGHTPATH_VSCODE_VSIX ? resolve(process.env.LIGHTPATH_VSCODE_VSIX) : undefined;
 const dist = (pkg) => new URL(`../../../../packages/${pkg}/dist/index.js`, import.meta.url).href;
 const { startDaemon } = await import(dist('daemon'));
 const { BrowserCollector } = await import(dist('browser'));
@@ -104,19 +107,53 @@ try {
   });
   await new Promise((r) => control.listen(0, '127.0.0.1', r));
 
+  const version = process.env.LIGHTPATH_VSCODE_VERSION ?? 'stable';
+  const userDataDir = join(profile, 'user');
+  const extensionsDir = join(profile, 'extensions');
+  let developmentPath = extension;
+  if (vsix) {
+    // The CLI runs through a shell on Windows, so a path with a space needs quotes.
+    const q = (arg) => (process.platform === 'win32' && arg.includes(' ') ? `"${arg}"` : arg);
+    await runVSCodeCommand(
+      [
+        '--install-extension',
+        q(vsix),
+        `--extensions-dir=${q(extensionsDir)}`,
+        `--user-data-dir=${q(userDataDir)}`,
+      ],
+      { version },
+    );
+    console.log(`installed ${vsix} into ${extensionsDir}`);
+    // runTests needs a development extension. An empty one keeps the installed .vsix the only Lightpath.
+    developmentPath = join(profile, 'harness');
+    mkdirSync(developmentPath);
+    writeFileSync(
+      join(developmentPath, 'package.json'),
+      JSON.stringify({
+        name: 'test-harness',
+        publisher: 'lightpath-test',
+        version: '0.0.0',
+        engines: { vscode: '*' },
+      }),
+    );
+  }
+
   exitCode = await runTests({
-    version: process.env.LIGHTPATH_VSCODE_VERSION ?? 'stable',
-    extensionDevelopmentPath: extension,
+    version,
+    extensionDevelopmentPath: developmentPath,
     extensionTestsPath: join(here, 'suite.cjs'),
     extensionTestsEnv: {
       LIGHTPATH_TEST_CONTROL: `http://127.0.0.1:${control.address().port}`,
       LIGHTPATH_TEST_SHOP: shop,
+      ...(vsix ? { LIGHTPATH_TEST_EXTENSIONS_DIR: extensionsDir } : {}),
     },
     launchArgs: [
       shop,
-      '--disable-extensions', // only the extension under test
-      `--user-data-dir=${join(profile, 'user')}`,
-      `--extensions-dir=${join(profile, 'extensions')}`,
+      // Only the extension under test. With a .vsix the extensions folder is new and holds only it,
+      // and this flag would turn it off.
+      ...(vsix ? [] : ['--disable-extensions']),
+      `--user-data-dir=${userDataDir}`,
+      `--extensions-dir=${extensionsDir}`,
     ],
   }).then(
     () => 0,

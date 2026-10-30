@@ -131,6 +131,8 @@ export class BrowserCollector {
   readonly #settle: SettleTracker;
   readonly #scripts = new Map<string, ScriptMeta>();
   readonly #sentHashes = new Set<string>();
+  /** Script ids the daemon has been told about (one per parse; a reload makes new ones). */
+  readonly #sentScripts = new Set<string>();
   readonly #backendOrigins: string[];
   #browser: Browser | undefined;
   #context: BrowserContext | undefined;
@@ -437,14 +439,21 @@ export class BrowserCollector {
     });
   }
 
-  /** Sends script info and source once per hash, before the delta that needs it. */
+  /**
+   * Sends script info once per script id and the source once per hash, before the delta that needs
+   * them. A reload parses the same files again under new ids with the same hash; the daemon looks a
+   * delta up by id, so each new id must be announced even when its source was sent before (D-101).
+   */
   async #pushSources(coverage: ScriptCoverage[]): Promise<void> {
     for (const { scriptId } of coverage) {
       const meta = this.#scripts.get(scriptId);
-      if (!meta || this.#sentHashes.has(meta.hash) || !this.#cdp) continue;
-      this.#sentHashes.add(meta.hash);
+      if (!meta || this.#sentScripts.has(scriptId) || !this.#cdp) continue;
+      this.#sentScripts.add(scriptId);
+      const needSource = !this.#sentHashes.has(meta.hash);
       try {
-        const { scriptSource } = await this.#cdp.send('Debugger.getScriptSource', { scriptId });
+        const scriptSource = needSource
+          ? (await this.#cdp.send('Debugger.getScriptSource', { scriptId })).scriptSource
+          : undefined;
         this.#opts.send({
           type: 'scripts',
           scripts: [
@@ -458,7 +467,10 @@ export class BrowserCollector {
             },
           ],
         });
-        this.#opts.send({ type: 'source', scriptId, hash: meta.hash, url: meta.url, source: scriptSource });
+        if (scriptSource !== undefined) {
+          this.#sentHashes.add(meta.hash);
+          this.#opts.send({ type: 'source', scriptId, hash: meta.hash, url: meta.url, source: scriptSource });
+        }
       } catch (err) {
         this.#log(`could not read source of ${meta.url}: ${(err as Error).message}`);
       }

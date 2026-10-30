@@ -1,8 +1,22 @@
 {
   "name": "@lightpath-dev/mcp",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "MCP server that lets coding agents ask which code ran for an action in your app",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "coverage",
+    "trace",
+    "agent"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/Unknown-333/Lightpath#readme",
+  "bugs": "https://github.com/Unknown-333/Lightpath/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unknown-333/Lightpath.git",
+    "directory": "packages/mcp"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -11,8 +25,16 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/.tsbuildinfo",
+    "!dist/**/*.map"
   ],
+  "engines": {
+    "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run",
     "typecheck": "tsc -p test"

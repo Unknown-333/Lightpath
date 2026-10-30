@@ -1,8 +1,24 @@
 {
   "name": "@lightpath-dev/cli",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Click anything in your running app and see which frontend and backend lines ran",
+  "keywords": [
+    "coverage",
+    "runtime",
+    "trace",
+    "debug",
+    "click",
+    "devtools",
+    "mcp"
+  ],
   "license": "MIT",
+  "homepage": "https://github.com/Unknown-333/Lightpath#readme",
+  "bugs": "https://github.com/Unknown-333/Lightpath/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unknown-333/Lightpath.git",
+    "directory": "packages/cli"
+  },
   "type": "module",
   "bin": {
     "lightpath": "./dist/bin.js"
@@ -15,10 +31,15 @@
   },
   "files": [
     "dist",
-    "lightpath.config.schema.json"
+    "lightpath.config.schema.json",
+    "!dist/.tsbuildinfo",
+    "!dist/**/*.map"
   ],
   "engines": {
     "node": ">=22.12"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "test": "vitest run",
