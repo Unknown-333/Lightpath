@@ -18,6 +18,11 @@ export function checkout(total) {
 document.getElementById('buy').addEventListener('click', () => {
   checkout(20).then((t) => { document.getElementById('out').textContent = t; });
 });
+// Press-time code: in the click's trace only while the boundary is at the press (D-082).
+export function pressed() {
+  window.pressedAt = Date.now();
+}
+document.getElementById('buy').addEventListener('pointerdown', pressed);
 export function applyCoupon(event) {
   event.preventDefault();
   document.getElementById('out').textContent = 'coupon ' + document.getElementById('code').value;
@@ -319,27 +324,84 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     expect(starts).toEqual([]);
   }, 30_000);
 
-  it('moves the boundary to the release when reads are slow, and keeps short presses working', async () => {
+  /** Presses #buy with the real mouse for `holdMs`, then waits for the click's result. */
+  async function pressBuy(page: NonNullable<BrowserCollector['page']>, holdMs: number) {
+    const box = await page.locator('#buy').boundingBox();
+    if (!box) throw new Error('button not found');
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await new Promise((r) => setTimeout(r, holdMs));
+    await page.mouse.up();
+    await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+  }
+  const clickLog = (logs: string[]) => logs.filter((l) => l.startsWith('click on '));
+  const NOTICE = 'clicks now start at the mouse release';
+
+  it("doesn't move the boundary on reads after a load, a key press or a navigation, only on a press read (D-105)", async () => {
     const { starts, ran, logs } = await record(
       async (c) => {
         const page = c.page;
-        const box = await page?.locator('#buy').boundingBox();
-        if (!page || !box) throw new Error('button not found');
-        await page.waitForTimeout(300); // the load-time read decides the boundary
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-        // A 10 ms press: at the press boundary, a pause this long would swallow the release.
-        await page.mouse.down();
-        await new Promise((r) => setTimeout(r, 10));
-        await page.mouse.up();
+        if (!page) throw new Error('no page');
+        await page.waitForTimeout(300); // the load-time reads, all "too slow" at this budget
+        await page.reload(); // a second `load`
+        await page.waitForTimeout(300);
+        await page.focus('#buy'); // a key action: keys never count (D-082)
+        await page.keyboard.press('Enter');
         await page.waitForSelector('#out:has-text("created")', { timeout: 8000 });
+        await page.waitForTimeout(400);
+        await page.focus('#next'); // a full navigation in an action: a leave read, a new page (D-091)
+        await page.keyboard.press('Enter');
+        await page.waitForSelector('#here:has-text("arrived")', { timeout: 8000 });
+        await page.waitForTimeout(400);
+        await page.goto(origin); // back, and one more `load`
+        await page.waitForTimeout(300);
+        await pressBuy(page, 80);
       },
-      1,
+      3,
+      0, // every read is "too slow"
+    );
+    expect(starts.map((s) => s.label)).toEqual([
+      'button: Checkout (Enter)',
+      'a: Next page (Enter)',
+      'button: Checkout',
+    ]);
+    // The first pointer press is still at the press, so its pointerdown code is in its trace.
+    const clicks = clickLog(logs);
+    expect(clicks[2]).toContain('boundary press');
+    expect(ran(starts[2]?.traceId ?? '')).toEqual(
+      expect.arrayContaining(['/app.js#pressed', '/app.js#checkout']),
+    );
+    // That press's own read is what moves the boundary, once, after the click was logged.
+    expect(logs.filter((l) => l.includes(NOTICE))).toHaveLength(1);
+    expect(logs.findIndex((l) => l.includes(NOTICE))).toBeGreaterThan(logs.indexOf(clicks[2] ?? ''));
+  }, 30_000);
+
+  it('moves the boundary to the release after a slow press read, keeps it after a reload, and keeps short presses working', async () => {
+    const { starts, ran, logs } = await record(
+      async (c) => {
+        const page = c.page;
+        if (!page) throw new Error('no page');
+        await page.waitForTimeout(300);
+        // The first press is at the press boundary; its read is "too slow", so the boundary moves.
+        await pressBuy(page, 80);
+        await page.waitForTimeout(400);
+        await page.reload(); // the release boundary survives a new document (D-082)
+        await page.waitForTimeout(300);
+        // A 10 ms press: at the press boundary, a pause this long would swallow the release.
+        await pressBuy(page, 10);
+      },
+      2,
       0, // every read is "too slow": force the release boundary
     );
-    expect(logs.some((l) => l.includes('clicks now start at the mouse release'))).toBe(true);
-    expect(logs.some((l) => l.includes('boundary release'))).toBe(true);
-    expect(starts.map((s) => s.label)).toEqual(['button: Checkout']);
-    expect(ran(starts[0]?.traceId ?? '')).toContain('/app.js#checkout');
+    expect(logs.filter((l) => l.includes(NOTICE))).toHaveLength(1);
+    const clicks = clickLog(logs);
+    expect(clicks[0]).toContain('boundary press');
+    expect(clicks[1]).toContain('boundary release');
+    expect(starts.map((s) => s.label)).toEqual(['button: Checkout', 'button: Checkout']);
+    expect(ran(starts[0]?.traceId ?? '')).toContain('/app.js#pressed');
+    expect(ran(starts[1]?.traceId ?? '')).toContain('/app.js#checkout');
+    // At the release, pointerdown code ran before the boundary: not in the click's trace.
+    expect(ran(starts[1]?.traceId ?? '')).not.toContain('/app.js#pressed');
   }, 30_000);
 
   it('keeps the leaving page and the next page in one trace across a full navigation', async () => {

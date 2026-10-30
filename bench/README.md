@@ -55,7 +55,7 @@ What the numbers say:
 
 - **Up to about 3,000 components (12,000 functions), the pause at the press stays under 12 ms p99**, inside the 20 ms budget.
 - **Above that, the read costs grow faster than the function count**: 8 ms at 12,000 functions, 66 ms at 24,600. A plain script with 24,000 functions reads in 10 ms (measured), so the extra cost comes from React's dev build and Vite's modules, not the count alone.
-- **When a read goes over 20 ms, the collector moves the boundary to the mouse release** (D-082) and says so in the terminal. A pause at the release loses nothing: mouseup and click still arrived after a 200 ms pause, and 10 ms presses all worked at 6,000 components (measured). The cost: code that runs on press, in `pointerdown` and `mousedown` handlers, isn't in the click's trace.
+- **When a read at the press goes over 20 ms, the collector moves the boundary to the mouse release** (D-082, D-105) and says so in the terminal. A pause at the release loses nothing: mouseup and click still arrived after a 200 ms pause, and 10 ms presses all worked at 6,000 components (measured). The cost: code that runs on press, in `pointerdown` and `mousedown` handlers, isn't in the click's trace.
 - The first click used to pay for reading the whole page load (40 ms at 12,000 functions). The collector now reads that right after `load`, so the first click is no slower than the rest.
 
 
