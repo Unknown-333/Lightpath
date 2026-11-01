@@ -16,13 +16,13 @@ Raw evidence (tool lists, help output, READMEs, API reads, notes) is kept outsid
 
 Searched on 2026-11-01 (search terms in the raw notes). Candidates and what each lacks:
 
-| Tool | Frontend | Backend | Joined to one click | What it lacks for this job |
-| --- | --- | --- | --- | --- |
-| Replay MCP | Statements that ran, in a recording [3] | Replay Node only: Node 16, not under active development, separate recording [4] | No: the backend isn't in the browser recording | Modern Node backends; local-only use (recordings upload to Replay's cloud) [2] |
-| mypry | Live browser through Playwright: eval, snapshot, click [27] | Breakpoints, logpoints, eval through the Node inspector [27] | Yes, in one MCP session [27] | A record of what ran: the agent must already know where to set breakpoints. 0 stars [G] |
-| Datadog MCP | RUM events, session replay [15] | APM spans, profiles, Live Debugger logpoints (Preview) [15] | Yes, RUM requests link to APM traces [17] | Executed lines; local dev use; needs SDKs, a tracer and a paid account [16][17] |
-| Sentry MCP / Spotlight | Spans, errors with file:line stacks [11][13] | Same [11][13] | Yes, at span level, through trace propagation [12] | Executed lines: spans and stack frames only |
-| OpenTelemetry MCP servers | Only if the frontend is instrumented | Spans [6][7][8][9] | Yes, if both sides propagate trace context | Executed lines; needs OpenTelemetry in the app |
+| Tool                      | Frontend                                                    | Backend                                                                         | Joined to one click                                | What it lacks for this job                                                              |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Replay MCP                | Statements that ran, in a recording [3]                     | Replay Node only: Node 16, not under active development, separate recording [4] | No: the backend isn't in the browser recording     | Modern Node backends; local-only use (recordings upload to Replay's cloud) [2]          |
+| mypry                     | Live browser through Playwright: eval, snapshot, click [27] | Breakpoints, logpoints, eval through the Node inspector [27]                    | Yes, in one MCP session [27]                       | A record of what ran: the agent must already know where to set breakpoints. 0 stars [G] |
+| Datadog MCP               | RUM events, session replay [15]                             | APM spans, profiles, Live Debugger logpoints (Preview) [15]                     | Yes, RUM requests link to APM traces [17]          | Executed lines; local dev use; needs SDKs, a tracer and a paid account [16][17]         |
+| Sentry MCP / Spotlight    | Spans, errors with file:line stacks [11][13]                | Same [11][13]                                                                   | Yes, at span level, through trace propagation [12] | Executed lines: spans and stack frames only                                             |
+| OpenTelemetry MCP servers | Only if the frontend is instrumented                        | Spans [6][7][8][9]                                                              | Yes, if both sides propagate trace context         | Executed lines; needs OpenTelemetry in the app                                          |
 
 **Closest: Replay MCP** for line-level detail (frontend only), and **mypry** for joining a click to the backend handler (breakpoints only). Neither returns "these lines ran on both sides for this click". Our search may have missed a small project; the claim to make is "we found no other", with the date, not "the only".
 
@@ -30,13 +30,13 @@ Searched on 2026-11-01 (search terms in the raw notes). Candidates and what each
 
 Each server was started locally with `npx`, sent `initialize` and `tools/list` over stdio, then stopped by its own PID. No accounts or logins. Chrome DevTools MCP collects usage statistics and sends performance-trace URLs to Google's CrUX API by default [19]; both were turned off with `--no-usage-statistics --no-performance-crux` and `CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=1`. Playwright MCP's `--help` shows no telemetry flag.
 
-| Server | Version | Flags | Tools | `tools` JSON size (characters) |
-| --- | --- | --- | --- | --- |
-| Chrome DevTools MCP | 1.12.0 | `--headless --isolated`, telemetry off | 32 | 29,661 |
-| Chrome DevTools MCP | 1.12.0 | plus `--memoryDebugging --experimentalVision` | 46 | 45,540 |
-| Playwright MCP | 0.0.84 (Playwright 1.65.0-alpha-2026-10-30) | `--headless --isolated` | 25 | 21,060 |
-| Playwright MCP | 0.0.84 | plus `--caps vision,pdf,devtools` | 45 | 32,822 |
-| Lightpath | cli 0.0.2 (mcp package 0.0.1) | `mcp` | 4 | 1,769 |
+| Server              | Version                                     | Flags                                         | Tools | `tools` JSON size (characters) |
+| ------------------- | ------------------------------------------- | --------------------------------------------- | ----- | ------------------------------ |
+| Chrome DevTools MCP | 1.12.0                                      | `--headless --isolated`, telemetry off        | 32    | 29,661                         |
+| Chrome DevTools MCP | 1.12.0                                      | plus `--memoryDebugging --experimentalVision` | 46    | 45,540                         |
+| Playwright MCP      | 0.0.84 (Playwright 1.65.0-alpha-2026-10-30) | `--headless --isolated`                       | 25    | 21,060                         |
+| Playwright MCP      | 0.0.84                                      | plus `--caps vision,pdf,devtools`             | 45    | 32,822                         |
+| Lightpath           | cli 0.0.2 (mcp package 0.0.1)               | `mcp`                                         | 4     | 1,769                          |
 
 Characters are not tokens; the token-budget item measures tokens. Default tool names:
 
@@ -146,11 +146,11 @@ Better than Lightpath: test-gap analysis and "which tests cover this diff". Ligh
 
 Ways to make it work, for the browser-control item to test:
 
-| Option | Gain | Cost or risk |
-| --- | --- | --- |
-| Lightpath adds its own small action tool (click by role and name, then return the trace) | One call, boundary kept, small tool list | Lightpath now does some browser driving |
+| Option                                                                                           | Gain                                      | Cost or risk                                                                                                                      |
+| ------------------------------------------------------------------------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Lightpath adds its own small action tool (click by role and name, then return the trace)         | One call, boundary kept, small tool list  | Lightpath now does some browser driving                                                                                           |
 | Lightpath opens a DevTools port on 127.0.0.1 so Playwright MCP or Chrome DevTools MCP can attach | Reuses tools with 38,919 and 54,571 stars | A DevTools port has no token, so any local process could drive the browser. That loosens local-only security, which is **Tier 3** |
-| Lightpath connects to a Chrome the user or Chrome DevTools MCP started | No new Lightpath browser | Lightpath's per-page hooks and request tagging must work on a context it didn't create; untested |
+| Lightpath connects to a Chrome the user or Chrome DevTools MCP started                           | No new Lightpath browser                  | Lightpath's per-page hooks and request tagging must work on a context it didn't create; untested                                  |
 
 ## Recommendations
 
@@ -168,17 +168,17 @@ Ways to make it work, for the browser-control item to test:
 
 Every cell links to its source. "No" means the source shows no such feature.
 
-| | Lightpath | Chrome DevTools MCP | Playwright MCP | Replay MCP | Sentry MCP | Datadog MCP | React Grab |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Agent drives the browser | No, a person clicks [L1] | Yes [H] | Yes [H] | No, a person reproduces in Replay Browser [2] | No [11] | No [15] | No, a person selects [25] |
-| Frontend lines that ran | Yes, per action [L1] | No [H] | No [H] | Yes, per recording [3] | No, spans [11] | No, RUM events [15] | No, source location of the element [25] |
-| Backend lines that ran | Yes, Node [L1] | No [H] | No [H] | Node 16 only, separate recording [4] | No, spans [11] | No; logpoints in Preview [15] | No [25] |
-| Joins a click to its backend request | Yes [L1] | No [H] | No [H] | No [4] | Yes, spans [12] | Yes, spans [17] | No [25] |
-| Values at a moment in time | No [L1] | Live eval [H] | Live eval [H] | Yes, any point [3] | No [11] | Logpoints in Preview [15] | No [25] |
-| Console, network, screenshots | Request and status only [L1] | Yes [H] | Yes [H] | Yes [3] | Errors, logs, replays [11] | Logs, RUM, replays [15] | No [25] |
-| Runs locally, no account | Yes [L1] | Yes; usage stats on by default [19] | Yes [21] | No [2] | No [10] | No [16] | Yes [25] |
-| Changes to your app | None [L1] | None [19] | None [21] | None; use Replay Browser [2] | Sentry SDKs [12] | RUM SDK and APM tracer [17] | One import or `grab init` [25] |
-| Stars, 2026-11-01 | 0 [G] | 54,571 [G] | 38,919 [G] | hosted [2] | 952 [G] | hosted [16] | 7,693 [G] |
+|                                      | Lightpath                    | Chrome DevTools MCP                 | Playwright MCP | Replay MCP                                    | Sentry MCP                 | Datadog MCP                   | React Grab                              |
+| ------------------------------------ | ---------------------------- | ----------------------------------- | -------------- | --------------------------------------------- | -------------------------- | ----------------------------- | --------------------------------------- |
+| Agent drives the browser             | No, a person clicks [L1]     | Yes [H]                             | Yes [H]        | No, a person reproduces in Replay Browser [2] | No [11]                    | No [15]                       | No, a person selects [25]               |
+| Frontend lines that ran              | Yes, per action [L1]         | No [H]                              | No [H]         | Yes, per recording [3]                        | No, spans [11]             | No, RUM events [15]           | No, source location of the element [25] |
+| Backend lines that ran               | Yes, Node [L1]               | No [H]                              | No [H]         | Node 16 only, separate recording [4]          | No, spans [11]             | No; logpoints in Preview [15] | No [25]                                 |
+| Joins a click to its backend request | Yes [L1]                     | No [H]                              | No [H]         | No [4]                                        | Yes, spans [12]            | Yes, spans [17]               | No [25]                                 |
+| Values at a moment in time           | No [L1]                      | Live eval [H]                       | Live eval [H]  | Yes, any point [3]                            | No [11]                    | Logpoints in Preview [15]     | No [25]                                 |
+| Console, network, screenshots        | Request and status only [L1] | Yes [H]                             | Yes [H]        | Yes [3]                                       | Errors, logs, replays [11] | Logs, RUM, replays [15]       | No [25]                                 |
+| Runs locally, no account             | Yes [L1]                     | Yes; usage stats on by default [19] | Yes [21]       | No [2]                                        | No [10]                    | No [16]                       | Yes [25]                                |
+| Changes to your app                  | None [L1]                    | None [19]                           | None [21]      | None; use Replay Browser [2]                  | Sentry SDKs [12]           | RUM SDK and APM tracer [17]   | One import or `grab init` [25]          |
+| Stars, 2026-11-01                    | 0 [G]                        | 54,571 [G]                          | 38,919 [G]     | hosted [2]                                    | 952 [G]                    | hosted [16]                   | 7,693 [G]                               |
 
 When the table goes into the README, the "[n]" marks become links, the stars row is dropped (it is here for context), and the first row changes once Lightpath has an action tool.
 
