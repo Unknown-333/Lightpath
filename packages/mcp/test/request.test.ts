@@ -94,7 +94,13 @@ let root: string;
 let daemon: RunningDaemon;
 let app: http.Server;
 let appUrl = '';
-const seen: { method?: string; url?: string; trace?: string; body: string; proxied: boolean }[] = [];
+const seen: {
+  method: string | undefined;
+  url: string | undefined;
+  trace: string | undefined;
+  body: string;
+  proxied: boolean;
+}[] = [];
 
 const source = 'export function createOrder() {\n  return 1;\n}\n';
 let fileUrl = '';
@@ -112,7 +118,7 @@ beforeAll(async () => {
     req.on('end', async () => {
       const trace = req.headers['x-lightpath-trace'] as string | undefined;
       seen.push({ method: req.method, url: req.url, trace, body, proxied: /^https?:/.test(req.url ?? '') });
-      const path = (req.url ?? '/').split('?')[0];
+      const path = (req.url ?? '/').split('?')[0] ?? '/';
       if (path === '/redirect-out') return res.writeHead(302, { location: 'http://example.com/steal' }).end();
       if (path === '/redirect-in') return res.writeHead(302, { location: '/api/next?token=x' }).end();
       if (path === '/plain') return res.writeHead(200).end('ok');
