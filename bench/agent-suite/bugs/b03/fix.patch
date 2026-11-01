@@ -1,0 +1,26 @@
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+index 410153e..6ab47c1 100644
+--- a/src/Cart.tsx
++++ b/src/Cart.tsx
+@@ -23,7 +23,6 @@ export function Cart({ lines, products, onCheckedOut }: CartProps) {
+     setStatus(null);
+     try {
+       const result = await placeOrder(lines, coupon || undefined);
+-      if (!result.orderId) return;
+       setStatus({ kind: 'ok', text: `Order #${result.orderId} placed: ${formatCents(result.totalCents)}` });
+       onCheckedOut();
+     } catch (err) {
+diff --git a/src/api.ts b/src/api.ts
+index c740ff2..ff3c873 100644
+--- a/src/api.ts
++++ b/src/api.ts
+@@ -30,8 +30,7 @@ export async function placeOrder(lines: CartLine[], coupon?: string): Promise<Or
+   });
+   const body = await res.json();
+   if (!res.ok) {
+-    console.warn(`Order failed (${res.status})`, body.error);
+-    return { orderId: 0, totalCents: 0, shippingCents: 0, discountCents: 0 };
++    throw new Error(body.error ?? `Order failed (${res.status})`);
+   }
+   return body;
+ }

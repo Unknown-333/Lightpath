@@ -1,0 +1,13 @@
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+index 6ab47c1..e1b0ee2 100644
+--- a/src/Cart.tsx
++++ b/src/Cart.tsx
+@@ -14,7 +14,7 @@ export function Cart({ lines, products, onCheckedOut }: CartProps) {
+   const [busy, setBusy] = useState(false);
+ 
+   const subtotal = lines.reduce((sum, line) => {
+-    const product = products.find((p) => p.id === line.productId);
++    const product = products.find((p) => p.name === line.productId);
+     return sum + (product ? product.priceCents * line.qty : 0);
+   }, 0);
+ 

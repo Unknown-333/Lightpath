@@ -1,0 +1,13 @@
+diff --git a/server/routes/orders.ts b/server/routes/orders.ts
+index 49179a5..9ffbe3d 100644
+--- a/server/routes/orders.ts
++++ b/server/routes/orders.ts
+@@ -22,7 +22,7 @@ export function createOrder(req: Request, res: Response): void {
+       res.status(404).json({ error: `Unknown product ${line.productId}` });
+       return;
+     }
+-    if (product.stock <= line.qty) {
++    if (product.stock < line.qty) {
+       res.status(409).json({ error: `${product.name} is out of stock.` });
+       return;
+     }
