@@ -8,6 +8,10 @@ import pc from 'picocolors';
 import { UrlWatcher } from './detect.js';
 import { agentEnv, nodeVersionProblem, toShellCommand } from './env.js';
 import { formatTrace } from './format.js';
+import { waitForUrl } from './ready.js';
+
+/** How long `--url` waits for the dev server to answer before giving up (D-126). */
+const URL_WAIT_MS = 60_000;
 
 export interface DevOptions {
   /**
@@ -115,9 +119,22 @@ export async function dev(options: DevOptions): Promise<number> {
   };
   pipe(child.stdout, process.stdout);
   pipe(child.stderr, process.stderr);
-  if (options.url) void openBrowser(options.url);
+  // The command was only just spawned, so its server may not listen yet: wait until the URL
+  // answers, then open it once (D-126). A detected URL is already up, so that path doesn't wait.
+  const childExited = new AbortController();
+  const openWhenUp = async (url: string) => {
+    if (options.browser === false) return;
+    if (await waitForUrl(url, { timeoutMs: URL_WAIT_MS, signal: childExited.signal })) {
+      return openBrowser(url);
+    }
+    if (!childExited.signal.aborted) {
+      say(pc.red(`${url} did not answer within ${URL_WAIT_MS / 1000} s, so no browser opened. Check --url.`));
+    }
+  };
+  if (options.url) void openWhenUp(options.url);
 
   const code = await waitForExit(child);
+  childExited.abort();
   unsubscribe();
   daemon.setActionRunner(undefined);
   await collector?.stop();

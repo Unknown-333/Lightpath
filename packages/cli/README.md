@@ -39,21 +39,22 @@ To see the lines light up in your editor, add the [VS Code extension](https://ma
 code --install-extension lightpath-dev.lightpath-vscode
 ```
 
-To let your coding agent ask "which code handles Checkout?", add the MCP server. For Claude Code:
+To let your coding agent ask "which code handles Checkout?", add the MCP server with one command in your project folder:
 
 ```sh
-claude mcp add lightpath -- npx -y @lightpath-dev/cli mcp
+npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro
 ```
 
-Setup for Cursor, VS Code and Kiro is in [the main README](https://github.com/Unknown-333/Lightpath#ask-your-coding-agent).
+It writes the agent's MCP config and a short `AGENTS.md` block that says when to call Lightpath. More in [the main README](https://github.com/Unknown-333/Lightpath#ask-your-coding-agent).
 
 ## Commands
 
-| Command            | What it does                                             |
-| ------------------ | -------------------------------------------------------- |
-| `lightpath dev`    | Runs your dev command with Lightpath and opens your app  |
-| `lightpath mcp`    | MCP server over stdio, so coding agents can ask what ran |
-| `lightpath doctor` | Checks Node, the browser, the agent and your config file |
+| Command                                                      | What it does                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| `lightpath dev`                                              | Runs your dev command with Lightpath and opens your app                   |
+| `lightpath mcp`                                              | MCP server over stdio, so coding agents can ask what ran                  |
+| `lightpath init --agent <claude-code\|cursor\|vscode\|kiro>` | Writes that agent's MCP config and the `AGENTS.md` block                  |
+| `lightpath doctor`                                           | Checks Node, the browser, the agent, your config file and what init wrote |
 
 Everything stays on your machine: the daemon listens on `127.0.0.1` only and needs a token.
 

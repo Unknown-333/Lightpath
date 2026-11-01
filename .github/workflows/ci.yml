@@ -62,6 +62,26 @@ jobs:
       # VS Code needs a display; xvfb-run gives it a virtual one.
       - run: xvfb-run -a pnpm test:vscode
 
+  setup:
+    name: agent setup (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # No agent is installed. For Claude Code, Cursor, VS Code and Kiro: pack the packages, install
+      # them in a fresh project, run lightpath init, start the configured command offline and ask
+      # it for initialize and tools/list, then run lightpath doctor (D-120).
+      - run: node scripts/setup-check.mjs
+
   e2e-api:
     name: backend end-to-end (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}
