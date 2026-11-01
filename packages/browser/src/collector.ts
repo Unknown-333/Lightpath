@@ -287,7 +287,8 @@ export class BrowserCollector {
       this.#problem('exception', text, appFrame(err.stack));
     });
     page.on('console', (msg) => {
-      if (msg.type() !== 'error') return;
+      // Chrome's own "Failed to load resource" lines repeat a failed request, which is reported once.
+      if (msg.type() !== 'error' || msg.text().startsWith('Failed to load resource')) return;
       const loc = msg.location();
       this.#problem(
         'console-error',

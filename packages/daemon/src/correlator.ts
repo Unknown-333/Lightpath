@@ -160,7 +160,8 @@ export class Correlator {
     const pending = this.#pending.get(msg.traceId) ?? this.#fromStore(msg.traceId);
     if (!pending) return;
     const agent = this.#agent(agentId);
-    const problems = (pending.trace.problems ??= []);
+    pending.trace.problems ??= [];
+    const problems = pending.trace.problems;
     if (problems.length >= MAX_TRACE_PROBLEMS) {
       pending.trace.problemsDropped = (pending.trace.problemsDropped ?? 0) + 1;
       this.#publish(pending);

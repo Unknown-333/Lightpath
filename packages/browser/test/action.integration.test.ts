@@ -64,6 +64,16 @@ export function three() {
   return Promise.all([post(), post(), post()]);
 }
 document.getElementById('three').addEventListener('click', three);
+// D-121: a thrown error, a console.error, a 404 and a fetch to a closed port in one click.
+export function broken() {
+  console.error('broken: console says no');
+  fetch('/api/missing');
+  fetch(window.CLOSED + '/nothing').catch(() => {});
+  setTimeout(() => {
+    throw new TypeError('broken: thrown from a timer');
+  }, 0);
+}
+document.getElementById('broken').addEventListener('click', broken);
 `;
 const pageTwoJs = `export function arrived() {
   document.getElementById('here').textContent = 'arrived';
@@ -77,26 +87,34 @@ const html =
   '<li data-name="mug"><span>Coffee mug</span> <button class="add">Add to cart</button></li></ul>' +
   '<button disabled>Sold out</button><div id="plain">Just some text</div>' +
   '<input id="code" placeholder="Coupon"><button id="apply">Apply</button>' +
-  '<button id="slow">Slow</button><button id="jumpy">Jumpy</button><button id="three">Three</button>' +
+  '<button id="slow">Slow</button><button id="jumpy">Jumpy</button><button id="three">Three</button><button id="broken">Broken</button>' +
   '<a id="next" href="/two">Next page</a><p id="out"></p><p id="cart"></p>' +
-  '<script type="module" src="/app.js"></script>';
+  // CLOSED_ORIGIN is a port that was just closed, filled in when the page is served.
+  '<script>window.CLOSED = "CLOSED_ORIGIN";</script><script type="module" src="/app.js"></script>';
 const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
 
 let server: http.Server;
 let origin = '';
+let closedOrigin = '';
 
 beforeAll(async () => {
+  const closed = http.createServer();
+  closed.listen(0, '127.0.0.1');
+  await once(closed, 'listening');
+  closedOrigin = `http://127.0.0.1:${(closed.address() as AddressInfo).port}`;
+  await new Promise((r) => closed.close(r));
   server = http.createServer((req, res) => {
     const path = (req.url ?? '/').split('?')[0];
     if (path === '/app.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(appJs);
     if (path === '/two.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(pageTwoJs);
     if (path === '/two') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
     if (path === '/api/orders') return res.writeHead(201).end('created');
+    if (path === '/api/missing') return res.writeHead(404).end('nope');
     if (path === '/api/slow') {
       setTimeout(() => res.writeHead(200).end('slow'), 1500);
       return;
     }
-    res.writeHead(200, { 'content-type': 'text/html' }).end(html);
+    res.writeHead(200, { 'content-type': 'text/html' }).end(html.replace('CLOSED_ORIGIN', closedOrigin));
   });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -403,6 +421,33 @@ describe.skipIf(!enabled)('run_action on a real browser', () => {
       beforeRequest: { method: 'POST', path: '/api/orders' },
     });
     expect(logs.filter((l) => l.startsWith('request read for'))).toHaveLength(1);
+  }, 30_000);
+
+  it('attaches a thrown error, a console.error, a 404 and a refused fetch to the click, once each (D-121)', async () => {
+    const { result, messages, starts } = await withCollector(async (c, page) => {
+      const r = await c.runAction(action('button "Broken"'));
+      // After the trace: a problem now has no open trace, so it is dropped.
+      await page.evaluate(() => console.error('outside any action'));
+      await page.waitForTimeout(200);
+      return r;
+    });
+    expect(result).toMatchObject({ ok: true });
+    const problems = messages.flatMap((m) => (m.type === 'problem' ? [m] : []));
+    for (const p of problems) expect(p.traceId).toBe(starts[0]?.traceId);
+    const brief = problems
+      .map(
+        (p) =>
+          `${p.kind} ${p.request ? `${p.request.method} ${p.request.path} ${p.request.status ?? 'failure'}` : p.message}`,
+      )
+      .sort();
+    expect(brief).toEqual([
+      'console-error broken: console says no',
+      'exception TypeError: broken: thrown from a timer',
+      'request-failed GET /api/missing 404',
+      'request-failed GET /nothing failure',
+    ]);
+    const thrown = problems.find((p) => p.kind === 'exception');
+    expect(thrown?.location?.url).toBe(`${origin}/app.js`);
   }, 30_000);
 
   it('never shows a fill value: not in tool output, the stored trace, or the collector log (rule 6)', async () => {
