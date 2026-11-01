@@ -77,7 +77,7 @@ Each requirement names the owner's target it serves, the success metric it can m
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ----------------------------------------------------- | ------------ |
 | R1  | One tool call clicks or presses a key in the app and returns that action's trace, frontend and backend. No human click, no CDP port.                          | a      | Product proof; Phase 3 "Checkout with no human click" | 2            |
 | R2  | Every tool result is at most 16,000 characters. A cut result ends with one line naming the call that shows the rest.                                          | b      | Token budget N                                        | 3            |
-| R3  | The default trace text is a function summary grouped by phase: before each request, each request's backend, after the response.                               | b      | Product proof (fewer steps)                           | 3            |
+| R3  | The default trace text is a function summary grouped by phase: before the first request, each request's backend, after the response (D-128).                  | b      | Product proof (fewer steps)                           | 3            |
 | R4  | A drill-down by file or function returns the executed lines with not-run lines and untaken blocks marked, paged under 16,000 characters.                      | b      | Product proof                                         | 3            |
 | R5  | `diff_traces` compares two traces at function level. Fix verification is run_action, fix, run_action, diff_traces. No new tool.                               | c      | Product proof (correct-fix rate)                      | 5            |
 | R6  | `lightpath init --agent <claude-code\|cursor\|vscode\|kiro>` writes that agent's MCP config and the marked `AGENTS.md` block, and `CLAUDE.md` when it exists. | d      | Setup success; time to first wow                      | 6            |
@@ -312,7 +312,7 @@ interface DeltaMessage {
 }
 ```
 
-The browser collector sends one such delta per tagged fetch or XHR, from a coverage read in its `page.route` handler before `route.continue()`. Not for navigation requests: a read inside a held navigation deadlocks (ADR 0003, measured), and the `beforeunload` read already splits a page load. `path` has no query string, like the Node agent's request path (`packages/node-agent/src/agent.ts`).
+The browser collector sends one such delta per action, for its first tagged fetch or XHR only, from a coverage read in its `page.route` handler before `route.continue()` (D-128: on Actual a read took 27.98 ms p50, so later requests don't wait for one). Not for navigation requests: a read inside a held navigation deadlocks (ADR 0003, measured), and the `beforeunload` read already splits a page load. `path` has no query string, like the Node agent's request path (`packages/node-agent/src/agent.ts`).
 
 ### 5.3 Trace model gains `phases` and `functions` (build 2, D-116)
 
@@ -345,7 +345,7 @@ interface Trace {
 
 How the daemon fills them:
 
-- Phases in time order: for each browser action delta with `beforeRequest`, a `before-request` phase; each backend delta (Node or Python) is a `backend` phase for its request; the browser's closing delta is `after-response`. With no `beforeRequest` deltas, the browser side is one `browser` phase.
+- Phases in time order: for each browser action delta with `beforeRequest` (one per action at most, D-128), a `before-request` phase; each backend delta (Node or Python) is a `backend` phase for its request; the browser's other reads (closing, leaving) merge into one last phase, `after-response`. With no `beforeRequest` delta, the browser side is one `browser` phase.
 - A `before-request` phase is tied to the backend request with the same method and path, first unmatched in time order.
 - Functions come from the V8 function list in each delta. A new core function maps each function's first range (its whole body) through the same line index and source map as `mapScript`, then takes `notRun` from the zero-count lines inside it. `mapScript` already returns those zeros (`packages/core/src/lines.ts`); `Correlator.#publish` drops them today.
 - Python `lines` messages have no functions: Python files appear in `files` only, and the summary lists them by line range as today.
@@ -392,33 +392,48 @@ Ruling 3, D-109, D-116, D-117, D-118, [ADR 0008](../adr/0008-trace-output.md). M
 
 ### 6.1 The default: a function summary by phase
 
-Used by `run_action`, `find_code_for_action` and `get_trace` with no file or function. Layout sketch below. The function lines are from call-order.md section 1 (measured). Which function lands in which phase is a guess at the layout only; build 2 prints the real one.
+Used by `run_action`, `find_code_for_action` and `get_trace` with no file or function. The output below is the shop's Checkout as build 2 prints it (`pnpm e2e`, 2026-11-01): 1,023 characters, against 574 for the old `describeTrace()` text. Since D-128 the browser is read once before the action's first request, so "before" holds the browser code up to the first request, and "after the response" everything after it.
 
 ```text
-Trace t_p6szzi2njx9d: button: Checkout
-action: click button "Checkout" (boundary press, settled quiet)
-page: http://localhost:5173/
-request: POST /api/orders → 201 (node, 3 ms)
-errors: none
+Trace t_dmy3l7cssiv8: button: Checkout
+request: POST /api/orders → 201 (node, 21 ms)
 
 before POST /api/orders [browser]
-  src/Cart.tsx
-    checkout 21-33 ×1 not run: 29
   src/api.ts
-    placeOrder 25-36 ×1 not run: 33-34
-POST /api/orders [node, 3 ms]
+    placeOrder 25-36 ×1 not run: 31-35
+  src/Cart.tsx
+    Cart 11-50 ×2 not run: 26-32
+    (anonymous) 16-19 ×2
+    (anonymous) 17 ×2
+    checkout 21-33 ×1 not run: 26-32
+  src/money.ts
+    formatCents 3-5 ×2
+POST /api/orders → 201 [node, 21 ms]
+  server/db.ts
+    findProduct 26-28 ×3
+    (anonymous) 27 ×3
+    saveOrder 30-38 ×1
   server/routes/orders.ts
     createOrder 11-40 ×1 not run: 15-17, 22-24, 26-28, 34-36
+  server/services/payment.ts
+    charge 6-12 ×1 not run: 8-9
   server/services/pricing.ts
     priceCart 12-33 ×1 not run: 23-24
-  ...
 after the response [browser]
   src/App.tsx
     App 6-43 ×2 not run: 11, 14-22
-  ...
-hidden: 4 no-source
+    (anonymous) 29-37 ×6
+    onCheckedOut 40 ×1
+  src/api.ts
+    placeOrder 25-36 resumed not run: 25-30, 33-34, 36
+  src/Cart.tsx
+    Cart 11-50 ×2 not run: 17-18, 21-25, 29, 33
+    checkout 21-33 resumed not run: 21-25, 29, 33
+  src/money.ts
+    formatCents 3-5 ×7
 ```
 
+Not-run lines are per phase: in "before", `checkout` hasn't reached its `await` result yet (26-32); in "after", it resumed and ran those lines. `run_action` adds its action, page and warning lines after the first line. The problem lines (section 8) join in build 4.
 Rules:
 
 - Header lines always print: trace id and label, action line (run_action only), page URL (run_action only), up to 20 request lines (then "+N more requests"), and the problem lines (section 8).

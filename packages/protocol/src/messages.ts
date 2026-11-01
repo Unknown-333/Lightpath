@@ -35,6 +35,8 @@ export const DeltaMessage = z.object({
   endedAt: epochMs,
   overlapped: z.array(TraceId).optional(),
   request: RequestInfo.optional(),
+  /** Browser only: this delta ends when that request left the page (D-116). `path` has no query. */
+  beforeRequest: z.object({ method: z.string(), path: z.string() }).optional(),
   coverage: z.array(ScriptCoverage),
 });
 

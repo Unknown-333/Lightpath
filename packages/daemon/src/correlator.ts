@@ -1,6 +1,7 @@
 import {
   decodeDataUrlSourceMap,
   type LineCounts,
+  mapFunctions,
   mapScript,
   mergeLineCounts,
   newTraceId,
@@ -13,11 +14,13 @@ import type {
   DeltaMessage,
   DropReason,
   FileHits,
+  FunctionHit,
   IngestMessage,
   LinesIngest,
   ScriptInfo,
   Trace,
   TraceId,
+  TracePhase,
 } from '@lightpath-dev/protocol';
 import type { Store } from './store.js';
 
@@ -32,7 +35,28 @@ interface AgentState {
   periodic: PeriodicFunctions;
 }
 
+/** A phase while the trace is open; ordered and numbered when it is published (D-116). */
+interface OpenPhase {
+  kind: TracePhase['kind'];
+  /** Sort key: when the read was taken, or when the request started. */
+  at: number;
+  /** before-request: the request that left the page. */
+  leaving?: { method: string; path: string };
+  /** backend: index into trace.requests. */
+  request?: number;
+}
+
+interface OpenFunction {
+  phase: OpenPhase;
+  hit: Omit<FunctionHit, 'phase'>;
+}
+
 interface PendingTrace {
+  phases: OpenPhase[];
+  /** The browser phase for reads that aren't before a request (closing, leaving), made on first use. */
+  closing?: OpenPhase;
+  /** `phase|path|name|startLine` → the function, merged over deltas of that phase. */
+  functions: Map<string, OpenFunction>;
   trace: Trace;
   files: Map<
     string,
@@ -136,6 +160,18 @@ export class Correlator {
       delta.request ? `${delta.request.method} ${delta.request.path}` : 'action',
       delta.startedAt,
     );
+    // Which phase this delta's functions belong to (D-116). A backend phase is made below, once
+    // the request has its index.
+    let phase: OpenPhase | undefined;
+    if (delta.beforeRequest) {
+      phase = { kind: 'before-request', at: delta.endedAt, leaving: delta.beforeRequest };
+      pending.phases.push(phase);
+    } else if (!delta.request) {
+      phase = this.#closingPhase(pending, delta.endedAt);
+    } else {
+      phase = { kind: 'backend', at: delta.startedAt, request: pending.trace.requests.length };
+      pending.phases.push(phase);
+    }
 
     for (const coverage of delta.coverage) {
       const info = agent.scripts.get(coverage.scriptId);
@@ -166,6 +202,12 @@ export class Correlator {
         const foreground = fgLines !== undefined && [...fgLines.values()].some((c) => c > 0);
         this.#addFile(pending, path, agent.kind, lines, delta.startedAt, foreground);
       }
+      const fns = mapFunctions(
+        { coverage, source, ...(sourceMap ? { sourceMap } : {}) },
+        result.files,
+        this.#ctx,
+      );
+      for (const fn of fns) this.#addFunction(pending, phase, agent.kind, fn);
     }
 
     if (delta.request) {
@@ -186,10 +228,61 @@ export class Correlator {
     this.#publish(pending);
   }
 
+  /** Adds one function to its phase, summing calls and keeping lines not run in every delta. */
+  #addFunction(
+    p: PendingTrace,
+    phase: OpenPhase,
+    collector: CollectorKind,
+    fn: ReturnType<typeof mapFunctions>[number],
+  ): void {
+    const key = `${p.phases.indexOf(phase)}|${phase.kind}|${fn.path}|${fn.name}|${fn.startLine}`;
+    const prev = p.functions.get(key);
+    if (!prev) {
+      p.functions.set(key, {
+        phase,
+        hit: {
+          path: fn.path,
+          collector,
+          name: fn.name,
+          startLine: fn.startLine,
+          endLine: fn.endLine,
+          count: fn.count,
+          ...(fn.notRun.length ? { notRun: fn.notRun } : {}),
+          ...(fn.notRunSpans.length ? { notRunSpans: fn.notRunSpans } : {}),
+        },
+      });
+      return;
+    }
+    const hit = prev.hit;
+    hit.count += fn.count;
+    hit.endLine = Math.max(hit.endLine, fn.endLine);
+    const notRun = (hit.notRun ?? []).filter((l) => fn.notRun.includes(l));
+    const spans = (hit.notRunSpans ?? []).filter((s) =>
+      fn.notRunSpans.some((t) => t.line === s.line && t.startColumn === s.startColumn),
+    );
+    if (notRun.length) hit.notRun = notRun;
+    else delete hit.notRun;
+    if (spans.length) hit.notRunSpans = spans;
+    else delete hit.notRunSpans;
+  }
+
+  /** The one browser phase for reads not taken before a request (D-116), made on first use. */
+  #closingPhase(p: PendingTrace, at: number): OpenPhase {
+    if (!p.closing) {
+      p.closing = { kind: 'browser', at };
+      p.phases.push(p.closing);
+    }
+    p.closing.at = Math.max(p.closing.at, at);
+    return p.closing;
+  }
+
   #onLines(agentId: string, msg: LinesIngest): void {
     const agent = this.#agent(agentId);
     const label = msg.request ? `${msg.request.method} ${msg.request.path}` : 'action';
     const pending = this.#pendingFor(msg.traceId, label, msg.startedAt);
+    // Python files have no function list; the summary lists them by line range in this phase.
+    if (msg.request)
+      pending.phases.push({ kind: 'backend', at: msg.startedAt, request: pending.trace.requests.length });
     for (const file of msg.files) {
       const r = resolveFile(file.path, this.#ctx);
       if (r.kind === 'dropped') {
@@ -243,7 +336,34 @@ export class Correlator {
   #fromStore(traceId: TraceId): PendingTrace | undefined {
     const trace = this.#store.get(traceId);
     if (!trace) return undefined;
-    const p: PendingTrace = { trace: structuredClone(trace), files: new Map(), dropped: new Map() };
+    const p: PendingTrace = {
+      trace: structuredClone(trace),
+      files: new Map(),
+      dropped: new Map(),
+      phases: [],
+      functions: new Map(),
+    };
+    // Phases keep their published order: their old sort keys are their positions, which sort
+    // before any new read's time. The closing browser phase stays last.
+    for (const [i, ph] of (trace.phases ?? []).entries()) {
+      const open: OpenPhase = {
+        kind: ph.kind,
+        at: i,
+        ...(ph.request !== undefined ? { request: ph.request } : {}),
+      };
+      if (ph.kind === 'before-request' && ph.request !== undefined) {
+        const r = trace.requests[ph.request];
+        if (r) open.leaving = { method: r.method, path: r.path };
+      }
+      if (ph.kind === 'browser' || ph.kind === 'after-response') p.closing = open;
+      p.phases.push(open);
+    }
+    for (const f of trace.functions ?? []) {
+      const phase = p.phases[f.phase];
+      if (!phase) continue;
+      const { phase: _, ...hit } = f;
+      p.functions.set(`${f.phase}|${phase.kind}|${f.path}|${f.name}|${f.startLine}`, { phase, hit });
+    }
     for (const f of trace.files) {
       p.files.set(f.path, {
         collector: f.collector,
@@ -262,7 +382,49 @@ export class Correlator {
       trace: { id, label, origin, startedAt: at, files: [], requests: [], dropped: [] },
       files: new Map(),
       dropped: new Map(),
+      phases: [],
+      functions: new Map(),
     };
+  }
+
+  /**
+   * Orders the phases and numbers them (design section 5.3): reads and requests in time order, the
+   * closing browser phase last. It is `after-response` when any request left the page before it,
+   * else `browser`. Each before-request phase is tied to the first unmatched backend request with
+   * the same method and path.
+   */
+  #phasesOf(
+    p: PendingTrace,
+    published: ReadonlySet<string>,
+  ): { phases: TracePhase[]; functions: FunctionHit[] } | undefined {
+    if (p.phases.length === 0) return undefined;
+    const ordered = p.phases.filter((ph) => ph !== p.closing).sort((a, b) => a.at - b.at);
+    if (p.closing) ordered.push(p.closing);
+    const hasBefore = ordered.some((ph) => ph.kind === 'before-request');
+    const matched = new Set<number>();
+    const phases: TracePhase[] = ordered.map((ph) => {
+      if (ph === p.closing) return { kind: hasBefore ? 'after-response' : 'browser' };
+      if (ph.kind === 'backend')
+        return { kind: 'backend', ...(ph.request !== undefined ? { request: ph.request } : {}) };
+      if (ph.kind === 'before-request' && ph.leaving) {
+        const { method, path } = ph.leaving;
+        const i = p.trace.requests.findIndex(
+          (r, j) => !matched.has(j) && r.collector !== 'browser' && r.method === method && r.path === path,
+        );
+        if (i >= 0) {
+          matched.add(i);
+          return { kind: 'before-request', request: i };
+        }
+      }
+      return { kind: ph.kind };
+    });
+    const functions: FunctionHit[] = [];
+    for (const { phase, hit } of p.functions.values()) {
+      if (!published.has(hit.path)) continue; // its file has no lit line, so it isn't in the trace
+      functions.push({ ...hit, phase: ordered.indexOf(phase) });
+    }
+    functions.sort((a, b) => a.phase - b.phase || a.path.localeCompare(b.path) || a.startLine - b.startLine);
+    return { phases, functions };
   }
 
   #addFile(
@@ -303,6 +465,11 @@ export class Correlator {
     files.sort((a, b) => a.firstSeenAt - b.firstSeenAt || a.path.localeCompare(b.path));
     p.trace.files = files;
     p.trace.dropped = [...p.dropped].map(([reason, count]) => ({ reason, count }));
+    const shaped = this.#phasesOf(p, new Set(files.map((f) => f.path)));
+    if (shaped) {
+      p.trace.phases = shaped.phases;
+      p.trace.functions = shaped.functions;
+    }
     this.#store.put(structuredClone(p.trace));
     // Keep at most 50 traces open for late backend deltas; older ones are re-read from the store.
     if (this.#pending.size > 50) {

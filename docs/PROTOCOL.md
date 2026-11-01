@@ -56,15 +56,15 @@ interface ScriptInfo {
 
 ## Ingest messages (inside an `IngestBatch`)
 
-| `type`       | Fields                                                                                                                                                                                     | Sent by       | When                                                                |
-| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------- | ------------------------------------------------------------------- |
-| `hello`      | `protocolVersion`, `kind`, `pid`, `processTitle`, `cwd`, `runtime` (`{ name, version }`)                                                                                                   | All           | First batch from a process                                          |
-| `scripts`    | `scripts: ScriptInfo[]`                                                                                                                                                                    | Node, browser | After `Debugger.enable`, then whenever new scripts are parsed       |
-| `source`     | `scriptId`, `hash`, `url`, `source`                                                                                                                                                        | Node, browser | Once per script hash, the first time that script appears in a delta |
-| `delta`      | `traceId?`, `phase` (`'background' \| 'action'`), `startedAt`, `endedAt` (ms since epoch), `overlapped?: TraceId[]`, `request?` (`{ method, path, status }`), `coverage: ScriptCoverage[]` | Node, browser | At each boundary                                                    |
-| `traceStart` | `traceId`, `label`, `target` (`{ role?, name?, testId?, text? }`), `at`                                                                                                                    | Browser       | At pointer down                                                     |
-| `traceEnd`   | `traceId`, `at`, `settled` (`'quiet' \| 'timeout'`)                                                                                                                                        | Browser       | After the settle window                                             |
-| `lines`      | see below                                                                                                                                                                                  | Python        | At the end of each request                                          |
+| `type`       | Fields                                                                                                                                                                                                                                                                                                                                                      | Sent by       | When                                                                                          |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------- |
+| `hello`      | `protocolVersion`, `kind`, `pid`, `processTitle`, `cwd`, `runtime` (`{ name, version }`)                                                                                                                                                                                                                                                                    | All           | First batch from a process                                                                    |
+| `scripts`    | `scripts: ScriptInfo[]`                                                                                                                                                                                                                                                                                                                                     | Node, browser | After `Debugger.enable`, then whenever new scripts are parsed                                 |
+| `source`     | `scriptId`, `hash`, `url`, `source`                                                                                                                                                                                                                                                                                                                         | Node, browser | Once per script hash, the first time that script appears in a delta                           |
+| `delta`      | `traceId?`, `phase` (`'background' \| 'action'`), `startedAt`, `endedAt` (ms since epoch), `overlapped?: TraceId[]`, `request?` (`{ method, path, status }`), `beforeRequest?` (`{ method, path }`, browser only: this delta ends as the action's first tagged fetch or XHR left the page; `path` has no query, D-116, D-128), `coverage: ScriptCoverage[]` | Node, browser | At each boundary, and in the browser as an action's first tagged fetch or XHR leaves the page |
+| `traceStart` | `traceId`, `label`, `target` (`{ role?, name?, testId?, text? }`), `at`                                                                                                                                                                                                                                                                                     | Browser       | At pointer down                                                                               |
+| `traceEnd`   | `traceId`, `at`, `settled` (`'quiet' \| 'timeout'`)                                                                                                                                                                                                                                                                                                         | Browser       | After the settle window                                                                       |
+| `lines`      | see below                                                                                                                                                                                                                                                                                                                                                   | Python        | At the end of each request                                                                    |
 
 The daemon replies `204 No Content` on success. It never asks agents for anything, so agents need no listener.
 
@@ -182,8 +182,27 @@ interface Trace {
     reason: 'node_modules' | 'outside-workspace' | 'no-source' | 'no-source-map' | 'internal' | 'ignored';
     count: number;
   }[];
+  phases?: TracePhase[]; // D-116; absent from daemons before build 2
+  functions?: FunctionHit[]; // outermost and nested; a function that runs in two phases appears twice
+}
+interface TracePhase {
+  kind: 'before-request' | 'backend' | 'after-response' | 'browser'; // 'browser': no tagged request was read
+  request?: number; // index into Trace.requests, for 'before-request' and 'backend'
+}
+interface FunctionHit {
+  path: string; // workspace-relative, like FileHits.path
+  collector: CollectorKind;
+  name: string; // '' when V8 has no name
+  startLine: number; // original, 1-based
+  endLine: number;
+  count: number; // calls in this phase; 0: it resumed after an await without a new call
+  notRun?: number[]; // lines inside it with count 0 in this phase, sorted
+  notRunSpans?: { line: number; startColumn: number; endColumn: number; text: string }[]; // untaken blocks inside a line that ran; text at most 40 chars, '' when unknown
+  phase: number; // index into Trace.phases
 }
 ```
+
+Phases are in time order: a `before-request` phase for the browser delta with `beforeRequest` (at most one per action, D-128), a `backend` phase for each backend delta or Python `lines` message, and one closing browser phase for the other browser reads, last. That last phase is `after-response` when any request was read before it, else `browser`. A `before-request` phase points at the first unmatched backend request with the same method and path. Python files have no functions; they are in `files` only.
 
 `ignored` counts files that match an `ignore` glob in `lightpath.config.json`.
 
