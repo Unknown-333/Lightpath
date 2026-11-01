@@ -226,9 +226,18 @@ export function createMcpServer(options: McpOptions): McpServer {
         // The daemon answers after the settle cap, the backend wait (1.5 s) and the press wait (2 s).
         const send = () => postAction(info.port, info.token, request, (input.timeoutMs ?? 5000) + 30_000);
         let result = await send();
-        // A daemon this server just started opens its browser a little later (design section 11).
+        // A daemon this server just started opens its browser a little later (design section 11),
+        // and the app may still be rendering its first data then (seen in CI: the shop's product
+        // rows weren't there yet). So right after a start, `no_browser` is retried up to the
+        // start wait, and `not_found` for up to 10 s more.
         const deadline = Date.now() + (options.autoStartWaitMs ?? AUTO_START_WAIT_MS);
-        while (started && !result.ok && result.error.code === 'no_browser' && Date.now() < deadline) {
+        let renderDeadline = Number.POSITIVE_INFINITY;
+        while (started && !result.ok && Date.now() < deadline) {
+          if (result.error.code === 'not_found') {
+            if (renderDeadline === Number.POSITIVE_INFINITY)
+              renderDeadline = Date.now() + STARTED_RENDER_WAIT_MS;
+            if (Date.now() >= renderDeadline) break;
+          } else if (result.error.code !== 'no_browser') break;
           await sleep(500);
           result = await send();
         }
@@ -354,6 +363,9 @@ interface Live {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** After an auto-start, how long run_action retries a target that isn't on the page yet. */
+const STARTED_RENDER_WAIT_MS = 10_000;
 
 /** The discovery file's daemon, if it is up: a stale file (a hard-killed daemon) counts as none. */
 async function liveDaemon(workspaceRoot: string): Promise<Live | undefined> {
