@@ -1090,3 +1090,13 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: Keep the trial and have the hook ignore it (no way to tell the trial's trusted press from a real one). Skip the check and let a covered or disabled target fail at the press (a disabled button then gives `no_trace` or a wrong trace instead of `not_actionable`).
 - Limits: `elementFromPoint` checks the center only, as Playwright's hit-target check does. A target inside an iframe isn't supported (ADR 0007: one page only).
 - Revert: put `locator.click({ trial: true })` back in `checkActionable` in `packages/browser/src/collector.ts`; the double traces come back.
+
+### D-128 One coverage read per action, before its first tagged request only (amends D-116)
+
+- Date: 2026-11-01 (build 2; the lead's decision on the worker's question)
+- Decision: The browser collector takes the extra coverage read only as an action's first tagged fetch or XHR leaves the page, not before every tagged request. Later requests of the same action go out without waiting for a read. Phases become: before the first request (browser), each request's backend, and after (browser: all browser code after the first request left, until the trace settles). `DeltaMessage.beforeRequest` and the trace model don't change.
+- Why: Measured on Actual Budget's demo budget (page about 31,700 functions): the read before a tagged request took 27.98 ms p50, 42.61 ms p99 over 50 reads (`goal/build1-raw/bench-actual-1.out`; the machine was busy, CPU 49.9% to 55.9%). Design risk 4 set 20 ms as the line to decide at. Reads run one at a time, so with a read per request a burst of N fetches would wait N reads. With one read per action, an action pays at most one read, however many requests it sends.
+- Alternatives: A read before every tagged request (D-116 as written: exact phases for every request, but N reads for N requests). Turning phases off past a page size (no phases at all on the apps where they help most). Keeping the per-request read and logging the cost (the cost grows with the number of requests).
+- Cost: code that runs between the first and a later request (after the first response, before the second request) lands in the "after" phase, not in a phase of its own.
+- Test: `packages/browser/test/action.integration.test.ts`: an action that sends 3 tagged requests gets exactly one `beforeRequest` delta and one read.
+- Revert: drop the `#readBefore` check in `packages/browser/src/collector.ts` `#onRoute`; every tagged request is read again.

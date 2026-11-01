@@ -59,6 +59,11 @@ export function jump(event) {
   event.currentTarget.style.display = 'none';
 }
 document.getElementById('jumpy').addEventListener('pointerdown', jump);
+export function three() {
+  const post = () => fetch('/api/orders', { method: 'POST' });
+  return Promise.all([post(), post(), post()]);
+}
+document.getElementById('three').addEventListener('click', three);
 `;
 const pageTwoJs = `export function arrived() {
   document.getElementById('here').textContent = 'arrived';
@@ -72,7 +77,7 @@ const html =
   '<li data-name="mug"><span>Coffee mug</span> <button class="add">Add to cart</button></li></ul>' +
   '<button disabled>Sold out</button><div id="plain">Just some text</div>' +
   '<input id="code" placeholder="Coupon"><button id="apply">Apply</button>' +
-  '<button id="slow">Slow</button><button id="jumpy">Jumpy</button>' +
+  '<button id="slow">Slow</button><button id="jumpy">Jumpy</button><button id="three">Three</button>' +
   '<a id="next" href="/two">Next page</a><p id="out"></p><p id="cart"></p>' +
   '<script type="module" src="/app.js"></script>';
 const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
@@ -383,6 +388,21 @@ describe.skipIf(!enabled)('run_action on a real browser', () => {
     if (result.slow.ok) expect(result.slow.warnings.map((w) => w.code)).toEqual(['timeout']);
     expect(result.jumpy).toMatchObject({ ok: true });
     if (result.jumpy.ok) expect(result.jumpy.warnings.map((w) => w.code)).toEqual(['click_lost']);
+  }, 30_000);
+
+  it('reads coverage once before the first of three tagged requests, and not before the others (D-128)', async () => {
+    const { result, messages, logs, starts } = await withCollector(async (c) =>
+      c.runAction(action('button "Three"')),
+    );
+    expect(result).toMatchObject({ ok: true });
+    if (result.ok) expect(result.tagged).toHaveLength(3);
+    const before = messages.filter((m) => m.type === 'delta' && m.beforeRequest);
+    expect(before).toHaveLength(1);
+    expect(before[0]).toMatchObject({
+      traceId: starts[0]?.traceId,
+      beforeRequest: { method: 'POST', path: '/api/orders' },
+    });
+    expect(logs.filter((l) => l.startsWith('request read for'))).toHaveLength(1);
   }, 30_000);
 
   it('never shows a fill value: not in tool output, the stored trace, or the collector log (rule 6)', async () => {

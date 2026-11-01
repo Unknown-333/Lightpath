@@ -176,6 +176,7 @@ Three rules, applied in order:
 - **Settle rule**: zero in-flight requests and 300 ms without new requests or long tasks, capped at 5 s.
 - **Navigations**: a full page load replaces the document and its scripts. Coverage keeps running because the session belongs to the target. The hook's `beforeunload` listener pauses so the collector can take the leaving page's coverage and sources while they exist (ADR 0003); the new page's startup code joins the same trace.
 - **Keyboard boundary**: the same hook pauses on Enter and Space when they activate something (ADR 0003).
+- **Phases** (D-116, D-128): as an action's first tagged fetch or XHR leaves the page, the `page.route` handler takes one more coverage read before `route.continue()` and sends it as a delta with `beforeRequest: { method, path }`. Later requests of the same action go out without a read (D-128: a read took 27.98 ms p50 on Actual). Not for navigations: a read inside a held navigation deadlocks (ADR 0003), and the `beforeunload` read already splits a page load.
 
 ### 5.2 Node agent (`@lightpath-dev/node-agent`)
 
@@ -289,13 +290,15 @@ Benchmarks live in `bench/` and run in CI on every release. Numbers in the READM
 
 `lightpath mcp` runs an MCP server over stdio. It reads the discovery file and talks to the daemon as a client.
 
-| Tool                   | Input                                                           | Output                                                                                     |
-| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `run_action`           | target, optional `within`, `action`, `key`, `timeoutMs`, `fill` | the action's trace, with action and page lines and warnings; or the outcome and candidates |
-| `list_traces`          | optional label filter, limit                                    | id, label, time, file count                                                                |
-| `get_trace`            | trace id                                                        | files with line ranges and counts                                                          |
-| `find_code_for_action` | text, e.g. "Checkout"                                           | best-matching trace by label, with its files                                               |
-| `diff_traces`          | two trace ids                                                   | lines only in each                                                                         |
+| Tool                   | Input                                                           | Output                                                                                       |
+| ---------------------- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `run_action`           | target, optional `within`, `action`, `key`, `timeoutMs`, `fill` | the action's summary, with action and page lines and warnings; or the outcome and candidates |
+| `list_traces`          | optional label filter, limit                                    | id, label, time, file count                                                                  |
+| `get_trace`            | trace id, optional `file`, `function`, `page`                   | the summary; with `file` or `function`, the executed lines, paged                            |
+| `find_code_for_action` | text, e.g. "Checkout"                                           | the summary of the latest trace whose label matches                                          |
+| `diff_traces`          | two trace ids                                                   | requests whose status changed, functions in only one, changed branches and call counts       |
+
+Every tool result is at most 16,000 characters (D-109), through `fit()` in `packages/mcp/src/budget.ts`. The default text is a function summary by phase (D-116): the header (trace, action, page, requests), then "before <request>" (browser code until the first fetch left the page), "<request>" (its backend) and "after the response", each listing files and their functions with line range, calls and not-run lines. When it doesn't fit, whole files are dropped, background first, then by fewest hits, and a last line names the call that shows one. `get_trace` with `file` or `function` (D-117) reads the source from the workspace file, only for trace paths whose real path is inside a workspace root, and warns when the file changed after the trace started. `diff_traces` matches functions by file, name and order, not line numbers (D-118). The server sends `instructions` (D-119).
 
 `run_action` sends one `POST /v1/action` to the daemon in the discovery file, with the token ([ADR 0007](adr/0007-run-action.md)). The collector runs it on its own page, one action at a time, after any open trace has ended: `fill` entries first with `locator.fill` (no key events, so no trace opens), then a synced press (mouse down, wait until the boundary is taken and the page resumed, mouse up; at once on the release boundary) or `locator.press` for Enter and Space. Before a click it checks the target is visible, enabled, not moving and not covered at its center without sending any input: Playwright's `click({ trial: true })` sends a real press that the hook sees (measured, Playwright 1.64). No CDP port is opened. Fill values are scrubbed from labels and the collector's log, and from the tool's text (redaction rule 6, D-123).
 

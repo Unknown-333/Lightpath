@@ -203,6 +203,8 @@ export class BrowserCollector {
   #activeDone: Promise<void> = Promise.resolve();
   /** Requests tagged with each open trace's header, for the daemon's backend wait. */
   readonly #tagged = new Map<TraceId, { method: string; path: string }[]>();
+  /** Traces whose first tagged request has had its read (D-128); cleared when the trace ends. */
+  readonly #readBefore = new Set<TraceId>();
   /** The current run_action's `fill` values (4+ characters): scrubbed from labels and logs (D-123 rule 6). */
   #secrets: string[] = [];
 
@@ -581,6 +583,7 @@ export class BrowserCollector {
       if (this.#active === traceId) this.#active = undefined;
       // Only run_action reads the tagged list (and then drops it); a person's click doesn't need it.
       if (!armed) this.#tagged.delete(traceId);
+      this.#readBefore.delete(traceId);
       endTrace(reason);
     }
   }
@@ -615,14 +618,18 @@ export class BrowserCollector {
       this.#tagged.get(traceId)?.push(leaving);
       // The browser code up to this request leaving the page is its "before" phase (D-116). Not for
       // a navigation: a read inside a held navigation deadlocks (ADR 0003); beforeunload covers it.
-      if (type !== 'navigation') await this.#readBeforeRequest(traceId, leaving);
+      // Only the action's first tagged request is read (D-128): later ones never wait for a read.
+      if (type !== 'navigation' && !this.#readBefore.has(traceId)) {
+        this.#readBefore.add(traceId);
+        await this.#readBeforeRequest(traceId, leaving);
+      }
       await route.continue({ headers: { ...request.headers(), [TRACE_HEADER]: traceId } });
       return;
     }
     await route.continue();
   }
 
-  /** One coverage read as a tagged fetch or XHR leaves the page; its delta names the request. */
+  /** One coverage read as the action's first tagged fetch or XHR leaves the page; its delta names it. */
   async #readBeforeRequest(traceId: TraceId, leaving: { method: string; path: string }): Promise<void> {
     const startedAt = performance.now();
     try {
