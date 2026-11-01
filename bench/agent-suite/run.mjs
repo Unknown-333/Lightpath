@@ -298,6 +298,14 @@ async function main() {
       if (name) counts[name] = (counts[name] ?? 0) + 1;
     }
     record.lightpathCalls = counts;
+    // kiro-cli defers MCP tools: the agent loads them with tool_load before it can call them.
+    record.lightpathLoaded = [
+      ...new Set(
+        parsed.toolCalls.flatMap((c) =>
+          (c.input?.tool_ids ?? []).filter((id) => String(id).startsWith('lightpath::')),
+        ),
+      ),
+    ];
   }
   record.shellFlags = auditShellCommands(parsed.toolCalls, trialDir);
   record.outsidePaths = outsidePaths(parsed.toolCalls, trialDir);
