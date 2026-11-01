@@ -1108,3 +1108,16 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: the cap is the rule; the descriptions are the part the design said to cut. Error wording comes back with build 4, when traces carry errors, if it fits.
 - Alternatives: raising the cap (the design says no); stripping each tool's `$schema` key by replacing the SDK's `tools/list` handler (about 340 characters, but it patches the SDK's internals).
 - Revert: restore the texts in `packages/mcp/src/texts.ts` and `RUN_ACTION_DESCRIPTION` in `packages/mcp/src/server.ts`, and the parameter descriptions; `tools/list` goes back over 4,000.
+
+### D-132 Build 4 details: when problem lines print, what counts once, and two test assertions that grow
+
+- Date: 2026-11-01 (build 4, written before the assertion changes)
+- Decision, in the frame of D-121, D-122 and D-123:
+  - The `errors:` and `failed requests:` lines print only when their count is above 0, so a clean trace reads as before (the shop's Checkout stays 1,023 characters). They are header lines, so `fit()` never cuts them.
+  - Chrome's own console line "Failed to load resource: …" isn't a `console-error` problem: it repeats a failed request, which is reported once as `request-failed`.
+  - A Node `uncaught` problem whose trace the daemon doesn't know yet (a crash during `run_request`, before any delta) opens a backend trace labelled `uncaught error`. A browser problem with an unknown or missing trace id is dropped, as D-121 says.
+  - Failed requests and problem request paths print without their query (the browser collector sends the path only), and every tool result goes through `redact()` (rules 2 to 5) and then the 16,000-character cap again, since `[redacted]` can be longer than what it hides. Source slices from `get_trace` with `file` or `function` are never redacted (design section 9).
+  - `lightpath mcp` treats a discovery file whose daemon doesn't answer `GET /v1/health` as no daemon (a hard-killed one), so auto-start or the "isn't running" message follows.
+- Existing test assertions that change, each stricter (one more line or key checked, nothing removed): `packages/mcp/test/output.test.ts` (the function diff of a trace whose request went 500 → 201 now also expects `problems: errors 0 → 0, failed requests 1 → 0`, design 6.4 item 1); `packages/cli/test/init.test.ts` ("adds only the keys an existing config lacks" now also expects `autoStart: true`, which init writes once the schema knows the key, D-122).
+- Why: keep the default output unchanged for traces with no problems, count each failure once, and keep a crash during run_request visible.
+- Revert: print the lines always; count Chrome's lines; drop unknown-id crashes; restore the two assertions.
