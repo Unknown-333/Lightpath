@@ -15,8 +15,26 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { fitText } from './budget.js';
 import { diffFunctions, hasFunctions } from './diff.js';
-import { describeActionResult, describeSummaries, diffTraces } from './format.js';
+import {
+  describeActionResult,
+  describeRequestResult,
+  describeSummaries,
+  diffTraces,
+  redirectNote,
+} from './format.js';
 import { redactFillValues } from './redact.js';
+import {
+  hasBackend,
+  loopbackLocation,
+  newRequestTraceId,
+  pathOnly,
+  REQUEST_METHODS,
+  REQUEST_TRACE_WAIT_MS,
+  type Resolver,
+  type RunRequestInput,
+  resolveTarget as resolveRequestTarget,
+  sendRequest,
+} from './request.js';
 import { type ReadSource, sliceTrace } from './slices.js';
 import { summarizeTrace } from './summary.js';
 import { DESCRIPTIONS, INSTRUCTIONS } from './texts.js';
@@ -24,22 +42,99 @@ import { DESCRIPTIONS, INSTRUCTIONS } from './texts.js';
 /** The design's run_action description (docs/design/agent-loop.md section 3, D-119): under 300 characters. */
 export const RUN_ACTION_DESCRIPTION =
   "Click a button or link, or press Enter or Space, in the user's running app, and return the code that ran, " +
-  'frontend and backend, with errors and failed requests. Can fill fields first. Use it to see which code ' +
-  'handles a UI action, or to rerun a bug after a fix. Target: button "Checkout" or text.';
+  'frontend and backend. Can fill fields first. Use it to see which code handles a UI action, or to ' +
+  'rerun a bug after a fix.';
 
-const targetSchema = z
-  .string()
-  .min(1)
-  .max(500)
-  .describe('role and name like button "Checkout", visible text, or css=<selector>');
-const withinSchema = z
-  .string()
-  .min(1)
-  .max(200)
-  .describe('Text of the row or section that holds the target, e.g. "Coffee mug"');
+const targetSchema = z.string().min(1).max(500).describe('button "Checkout", text, or css=<selector>');
+const withinSchema = z.string().min(1).max(200).describe('Text of its row or section');
 
 export interface McpOptions {
   workspaceRoot: string;
+  /** Resolves `localhost` for run_request's loopback check (tests pass a fake). */
+  resolver?: Resolver;
+  /** How long run_request waits for the backend trace after the response (default 1,500 ms). */
+  requestTraceWaitMs?: number;
+}
+
+/**
+ * The app URL that run_request resolves a path against: `url` in `lightpath.config.json`, in the
+ * folder that holds the daemon's discovery file, or else in the workspace root.
+ */
+async function appUrl(dirs: readonly string[]): Promise<string | undefined> {
+  for (const dir of dirs) {
+    try {
+      const raw = await readFile(join(dir, 'lightpath.config.json'), 'utf8');
+      const url = (JSON.parse(raw.replace(/^\uFEFF/, '')) as { url?: unknown }).url;
+      if (typeof url === 'string') return url;
+    } catch {
+      // No config here, or not JSON.
+    }
+  }
+  return undefined;
+}
+
+/** run_request (design section 4A, D-125): one request on loopback, then its backend trace. */
+async function runRequest(options: McpOptions, input: RunRequestInput): Promise<string> {
+  const method = input.method ?? 'GET';
+  let found: { info: DaemonDiscovery; root: string };
+  try {
+    found = await findDaemonWithRoot(options.workspaceRoot);
+  } catch (err) {
+    return `${(err as Error).message} Nothing was sent.`;
+  }
+  const target = await resolveRequestTarget(
+    input.url,
+    await appUrl([found.root, options.workspaceRoot]),
+    options.resolver,
+  );
+  if (!target.ok) return `run_request did not send anything: ${target.code}. ${target.message}`;
+  const path = pathOnly(target.url.pathname);
+  const traceId = newRequestTraceId();
+  const client = await DaemonClient.connect(found.info.port, found.info.token);
+  try {
+    // Listen before sending: the backend delta can arrive before the response does.
+    let latest: Trace | undefined;
+    let wake: () => void = () => {};
+    const off = client.onTrace((t) => {
+      if (t.id !== traceId) return;
+      latest = t;
+      if (hasBackend(t)) wake();
+    });
+    try {
+      const sent = await sendRequest(target, input, traceId);
+      if (!sent.ok) {
+        return `run_request got no response: no_response. ${method} ${target.url.origin}${path} failed (${sent.message}). Is your server running under lightpath dev?`;
+      }
+      if (!hasBackend(latest)) {
+        await new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, options.requestTraceWaitMs ?? REQUEST_TRACE_WAIT_MS);
+          wake = () => {
+            clearTimeout(timer);
+            resolve();
+          };
+        });
+      }
+      const trace = hasBackend(latest) ? latest : await client.getTrace(traceId);
+      if (!trace || !hasBackend(trace)) {
+        const note = redirectNote(sent.status, loopbackLocation(sent.location, target.url));
+        return (
+          `run_request got ${method} ${path} → ${sent.status} (${sent.bytes.toLocaleString('en-US')} bytes, ${Math.round(sent.durationMs)} ms), but no trace: no_trace. ` +
+          "No backend lines arrived: the server isn't running under lightpath dev, or Lightpath skips this process." +
+          (note ? `\n${note}` : '')
+        );
+      }
+      return describeRequestResult(
+        method,
+        path,
+        { ...sent, redirect: loopbackLocation(sent.location, target.url) },
+        trace,
+      );
+    } finally {
+      off();
+    }
+  } finally {
+    client.close();
+  }
 }
 
 /** This package's version, read from package.json next to dist/ so it can't drift. */
@@ -48,10 +143,7 @@ const VERSION = (
 ).version;
 
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
-const traceIdSchema = z
-  .string()
-  .regex(/^t_[a-z0-9]{12}$/)
-  .describe('Trace id, like t_k3x9q0m2a7bz');
+const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
 
 /**
  * Builds the MCP server (docs/ARCHITECTURE.md section 9.3). Every call reads the discovery file
@@ -81,16 +173,13 @@ export function createMcpServer(options: McpOptions): McpServer {
         timeoutMs: z.number().int().min(500).max(30_000).optional().describe('Settle cap, default 5000'),
         fill: z
           .array(
-            // Same forms as target and within; their descriptions aren't repeated, to keep tools/list small.
-            z.object({
-              target: z.string().min(1).max(500),
-              within: z.string().min(1).max(200).optional(),
-              value: z.string().max(10_000),
-            }),
+            // Same forms as target and within. Bounds and descriptions aren't repeated here, to keep
+            // tools/list under 4,000 characters (D-129); the daemon checks them (400).
+            z.object({ target: z.string(), within: z.string().optional(), value: z.string() }),
           )
           .max(20)
           .optional()
-          .describe('Fields to fill first, in order. Values are never shown back'),
+          .describe('Filled first, in order; values never shown'),
       },
     },
     async (input) => {
@@ -105,6 +194,21 @@ export function createMcpServer(options: McpOptions): McpServer {
         return { ...text(redactFillValues((err as Error).message, values)), isError: true };
       }
     },
+  );
+
+  server.registerTool(
+    'run_request',
+    {
+      description: DESCRIPTIONS.run_request,
+      inputSchema: {
+        method: z.enum(REQUEST_METHODS).optional().describe('Default GET'),
+        url: z.string().min(1).max(2000).describe('Path or loopback URL'),
+        body: z.string().max(100_000).optional().describe('Never shown back'),
+        contentType: z.string().min(1).optional(),
+        timeoutMs: z.number().int().min(500).max(30_000).optional(),
+      },
+    },
+    async (input) => text(await runRequest(options, input)),
   );
 
   server.registerTool(
@@ -132,9 +236,9 @@ export function createMcpServer(options: McpOptions): McpServer {
       description: DESCRIPTIONS.get_trace,
       inputSchema: {
         traceId: traceIdSchema,
-        file: z.string().min(1).optional().describe('A path in the trace, or a unique part of one'),
-        function: z.string().min(1).optional().describe('A function name'),
-        page: z.number().int().min(1).max(10_000).optional(),
+        file: z.string().min(1).optional(),
+        function: z.string().min(1).optional(),
+        page: z.number().int().min(1).optional(),
       },
     },
     async ({ traceId, file, function: fn, page }) => {
@@ -153,7 +257,7 @@ export function createMcpServer(options: McpOptions): McpServer {
     {
       description: DESCRIPTIONS.list_traces,
       inputSchema: {
-        label: z.string().optional().describe('Only actions whose label contains this text, e.g. "Checkout"'),
+        label: z.string().optional(),
         limit: z.number().int().min(1).max(100).optional(),
       },
     },
@@ -222,10 +326,15 @@ async function connect(workspaceRoot: string): Promise<DaemonClient> {
 }
 
 async function findDaemon(workspaceRoot: string): Promise<DaemonDiscovery> {
+  return (await findDaemonWithRoot(workspaceRoot)).info;
+}
+
+async function findDaemonWithRoot(workspaceRoot: string): Promise<{ info: DaemonDiscovery; root: string }> {
   // The nearest folder at or above the root with a discovery file: editors don't always start
   // MCP servers in the project folder itself.
   let raw: string | undefined;
-  for (let dir = resolve(workspaceRoot); ; ) {
+  let dir = resolve(workspaceRoot);
+  for (;;) {
     raw = await readFile(join(dir, DISCOVERY_FILE), 'utf8').catch(() => undefined);
     const parent = dirname(dir);
     if (raw !== undefined || parent === dir) break;
@@ -236,5 +345,5 @@ async function findDaemon(workspaceRoot: string): Promise<DaemonDiscovery> {
       `Lightpath isn't running in ${workspaceRoot}. Start it with: lightpath dev -- <your dev command>`,
     );
   }
-  return DaemonDiscovery.parse(JSON.parse(raw));
+  return { info: DaemonDiscovery.parse(JSON.parse(raw)), root: dir };
 }

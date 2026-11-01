@@ -9,6 +9,7 @@ export {
   lineRanges,
 } from './format.js';
 export { MIN_SECRET_LENGTH, redactFillValues } from './redact.js';
+export { isLoopbackAddress, resolveTarget as resolveRequestTarget } from './request.js';
 export { createMcpServer, type McpOptions, RUN_ACTION_DESCRIPTION, runMcpServer } from './server.js';
 export { sliceTrace } from './slices.js';
 export { summarizeTrace } from './summary.js';
