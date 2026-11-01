@@ -1,5 +1,7 @@
 import type { ActionRequest, ActionResult, LineHit, Trace, TraceSummary } from '@lightpath-dev/protocol';
+import { fitText, MAX_CHARS } from './budget.js';
 import { redactFillValues } from './redact.js';
+import { summarizeTrace } from './summary.js';
 
 /** Compresses sorted line numbers into ranges: [1,2,3,7,9,10] → "1-3, 7, 9-10". */
 export function lineRanges(lines: readonly LineHit[]): string {
@@ -76,8 +78,9 @@ export function describeAction(input: ActionInput): string {
 
 /**
  * run_action's answer (design section 4.5): the trace's first line, the action and page lines,
- * warnings, then the trace body as describeTrace prints it. On failure, the outcome and the
- * candidates. Every fill value in the text is redacted (rule 6).
+ * warnings, then the summary by phase (section 6.1). On failure, the outcome and the candidates.
+ * Every fill value in the text is redacted (rule 6). itText runs again after redaction, which can lengthen
+ * the text.
  */
 export function describeActionResult(input: ActionInput, result: ActionResult): string {
   const values = (input.fill ?? []).map((f) => f.value);
@@ -90,13 +93,10 @@ export function describeActionResult(input: ActionInput, result: ActionResult): 
     }
     return redactFillValues(out.join('\n'), values);
   }
-  const [first = '', ...body] = describeTrace(result.trace).split('\n');
-  const out = [
-    first,
+  const text = summarizeTrace(result.trace, [
     `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
     `page: ${result.pageUrl}`,
     ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
-    ...body,
-  ];
-  return redactFillValues(out.join('\n'), values);
+  ]);
+  return fitText(redactFillValues(text, values), MAX_CHARS, result.trace.id);
 }

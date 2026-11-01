@@ -143,7 +143,18 @@ try {
   const requireMcp = createRequire(join(repo, 'packages', 'mcp', 'package.json'));
   const { Client } = requireMcp('@modelcontextprotocol/sdk/client/index.js');
   const { StdioClientTransport } = requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
-  const { lineRanges } = await import(dist('mcp'));
+  const { describeTrace, MAX_CHARS } = await import(dist('mcp'));
+  // 6.5 (D-116): the summary names every file; get_trace with `file` prints every lit line.
+  const namesFile = (out, path) =>
+    new RegExp(`^  ${path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`, 'm').test(out);
+  const printedLines = (out) =>
+    new Set(
+      out
+        .split('\n')
+        .map((l) => /^ {0,3}(\d+) {2}/.exec(l)?.[1])
+        .filter(Boolean)
+        .map(Number),
+    );
   const agent = new Client({ name: 'e2e-agent', version: '0.0.0' });
   await agent.connect(
     new StdioClientTransport({
@@ -160,12 +171,34 @@ try {
       'MCP: find_code_for_action returns the Checkout trace',
     );
     for (const f of checkout?.files ?? []) {
-      check(
-        text.includes(`${f.path} [${f.collector}] lines ${lineRanges(f.lines)}`),
-        `MCP: the answer lists ${f.path} with the trace's exact lines`,
-      );
+      check(namesFile(text, f.path), `MCP: the summary names ${f.path}`);
     }
     check(text.includes('request: POST /api/orders → 201'), 'MCP: the answer includes the request');
+    check(text.length <= MAX_CHARS, `MCP: find_code_for_action is at most 16,000 chars (${text.length})`);
+    check(
+      /^before POST \/api\/orders \[browser\]$/m.test(text) &&
+        /^POST \/api\/orders → 201 \[node, \d+ ms\]$/m.test(text),
+      'MCP: the summary has the "before POST /api/orders" and backend phases',
+    );
+    check(/^ {4}checkout 21-33 ×1/m.test(text), 'MCP: the summary lists Cart.tsx checkout 21-33 called once');
+    const before = checkout ? describeTrace(checkout) : '';
+    console.log(
+      `SIZE Checkout before (describeTrace): ${before.length} chars, ${before.length / 4} chars/4; after (summary): ${text.length} chars, ${text.length / 4} chars/4`,
+    );
+    for (const f of checkout?.files ?? []) {
+      const res = await agent.callTool({
+        name: 'get_trace',
+        arguments: { traceId: checkout.id, file: f.path },
+      });
+      const slice = res.content?.[0]?.text ?? '';
+      if (f.path === 'server/routes/orders.ts') console.log(`\nget_trace(file: ${f.path}) →\n${slice}\n`);
+      const shown = printedLines(slice);
+      const missing = f.lines.map((l) => l.line).filter((l) => !shown.has(l));
+      check(
+        missing.length === 0 && slice.length <= MAX_CHARS,
+        `MCP: get_trace with file ${f.path} prints every lit line (${f.lines.length}) in ${slice.length} chars${missing.length ? `; missing ${missing.join(',')}` : ''}`,
+      );
+    }
 
     // Build 1 (D-114): the agent clicks by itself with run_action. From here on the script sends no
     // press of its own; every action goes through `lightpath mcp` → POST /v1/action → this page.
@@ -195,11 +228,18 @@ try {
       agentCheckout.text.startsWith(`Trace ${ct?.id}: button: Checkout`),
       'run_action: Checkout returns its own trace in the same call',
     );
-    check(agentCheckout.text.includes('src/Cart.tsx [browser]'), 'run_action: the answer lists src/Cart.tsx');
+    check(namesFile(agentCheckout.text, 'src/Cart.tsx'), 'run_action: the answer lists src/Cart.tsx');
     check(
-      agentCheckout.text.includes('server/routes/orders.ts [node]'),
+      namesFile(agentCheckout.text, 'server/routes/orders.ts'),
       'run_action: the answer lists server/routes/orders.ts',
     );
+    check(
+      agentCheckout.text.length <= MAX_CHARS,
+      `run_action: the Checkout answer is at most 16,000 chars (${agentCheckout.text.length})`,
+    );
+    for (const f of ct?.files ?? []) {
+      check(namesFile(agentCheckout.text, f.path), `run_action: the summary names ${f.path}`);
+    }
     check(
       agentCheckout.text.includes('request: POST /api/orders → 201'),
       'run_action: the answer includes POST /api/orders → 201',

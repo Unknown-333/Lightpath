@@ -611,11 +611,32 @@ export class BrowserCollector {
         ? 'navigation'
         : request.resourceType();
     if (traceId && shouldTag(request.url(), type, this.#backendOrigins)) {
-      this.#tagged.get(traceId)?.push({ method: request.method(), path: new URL(request.url()).pathname });
+      const leaving = { method: request.method(), path: new URL(request.url()).pathname };
+      this.#tagged.get(traceId)?.push(leaving);
+      // The browser code up to this request leaving the page is its "before" phase (D-116). Not for
+      // a navigation: a read inside a held navigation deadlocks (ADR 0003); beforeunload covers it.
+      if (type !== 'navigation') await this.#readBeforeRequest(traceId, leaving);
       await route.continue({ headers: { ...request.headers(), [TRACE_HEADER]: traceId } });
       return;
     }
     await route.continue();
+  }
+
+  /** One coverage read as a tagged fetch or XHR leaves the page; its delta names the request. */
+  async #readBeforeRequest(traceId: TraceId, leaving: { method: string; path: string }): Promise<void> {
+    const startedAt = performance.now();
+    try {
+      const coverage = await this.#take();
+      const readMs = performance.now() - startedAt;
+      await this.#emit('action', coverage, Date.now(), traceId, leaving);
+      this.#log(
+        `request read for ${leaving.method} ${leaving.path}: ${readMs.toFixed(2)} ms, trace ${traceId}`,
+      );
+    } catch (err) {
+      this.#log(
+        `could not read coverage before ${leaving.method} ${leaving.path}: ${(err as Error).message}`,
+      );
+    }
   }
 
   /**
@@ -697,6 +718,7 @@ export class BrowserCollector {
     raw: ScriptCoverage[],
     startedAt: number,
     traceId?: TraceId,
+    beforeRequest?: { method: string; path: string },
   ): Promise<void> {
     const coverage = raw.filter((s) => !isNoiseScript(s.url));
     if (coverage.length === 0 && phase === 'background') return;
@@ -709,6 +731,7 @@ export class BrowserCollector {
       endedAt: Date.now(),
       coverage,
       ...(traceId ? { traceId } : {}),
+      ...(beforeRequest ? { beforeRequest } : {}),
     });
   }
 

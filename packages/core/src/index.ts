@@ -1,4 +1,5 @@
 export { countAt, flattenRanges, type Segment } from './flatten.js';
+export { type FunctionResult, mapFunctions, type NotRunSpan } from './functions.js';
 export { HEAT_BUCKETS, heatBucket, newTraceId } from './ids.js';
 export { compileIgnore } from './ignore.js';
 export { LineIndex } from './line-index.js';

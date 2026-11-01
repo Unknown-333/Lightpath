@@ -87,6 +87,44 @@ export const TraceRequest = z.object({
 });
 export type TraceRequest = z.infer<typeof TraceRequest>;
 
+/** One phase of an action (D-116): browser code before a request left, that request's backend, the rest. */
+export const TracePhase = z.object({
+  /** `browser`: a browser action with no tagged request read. */
+  kind: z.enum(['before-request', 'backend', 'after-response', 'browser']),
+  /** Index into `Trace.requests`, for `before-request` and `backend`. */
+  request: z.number().int().nonnegative().optional(),
+});
+export type TracePhase = z.infer<typeof TracePhase>;
+
+/** A function that ran in one phase (D-116, design section 5.3). Lines are original and 1-based. */
+export const FunctionHit = z.object({
+  /** Workspace-relative, like `FileHits.path`. */
+  path: z.string(),
+  collector: CollectorKind,
+  /** '' when V8 has no name; printed "(anonymous)". */
+  name: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  /** Calls in this phase; 0 means the function resumed (after an await) without a new call. */
+  count: z.number().int().nonnegative(),
+  /** Lines inside the function known not to have run (count 0), sorted. */
+  notRun: z.array(z.number().int().positive()).optional(),
+  /** Untaken blocks inside a line that ran. `text` is at most 40 characters, '' when unknown. */
+  notRunSpans: z
+    .array(
+      z.object({
+        line: z.number().int().positive(),
+        startColumn: z.number().int().nonnegative(),
+        endColumn: z.number().int().nonnegative(),
+        text: z.string().max(40),
+      }),
+    )
+    .optional(),
+  /** Index into `Trace.phases`. */
+  phase: z.number().int().nonnegative(),
+});
+export type FunctionHit = z.infer<typeof FunctionHit>;
+
 export const Trace = z.object({
   id: TraceId,
   label: z.string(),
@@ -96,6 +134,9 @@ export const Trace = z.object({
   files: z.array(FileHits),
   requests: z.array(TraceRequest),
   dropped: z.array(z.object({ reason: DropReason, count: z.number().int().nonnegative() })),
+  phases: z.array(TracePhase).optional(),
+  /** Outermost and nested; a function that runs in two phases appears twice. */
+  functions: z.array(FunctionHit).optional(),
 });
 export type Trace = z.infer<typeof Trace>;
 

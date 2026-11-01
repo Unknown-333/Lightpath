@@ -24,7 +24,7 @@ export function mapToOriginal(
   map: SourceMapInput,
   mapUrl?: string,
 ): OriginalCounts {
-  const tracer = new TraceMap(withWindowsSourcesAsUrls(map), mapUrl);
+  const tracer = newTraceMap(map, mapUrl);
   const out: OriginalCounts = new Map();
 
   /** Credits one mapping whose generated span is `[span.offset, end)`. */
@@ -55,6 +55,11 @@ export function mapToOriginal(
   });
   if (open) credit(open, lineEnd(generated, open.line));
   return out;
+}
+
+/** A TraceMap for a script's map, with Windows paths in `sources` fixed (see below). */
+export function newTraceMap(map: SourceMapInput, mapUrl?: string): TraceMap {
+  return new TraceMap(withWindowsSourcesAsUrls(map), mapUrl);
 }
 
 interface OpenSpan {
