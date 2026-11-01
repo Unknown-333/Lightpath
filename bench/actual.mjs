@@ -465,7 +465,7 @@ const requestReads = logs.flatMap((l) => {
   return m ? [Number(m[3])] : [];
 });
 console.log(
-  `\nRead before a tagged request (D-116): ${requestReads.length} reads (${REQUEST_READS} clicks, each with one fetch from the page); p50 ${ms(pct(requestReads, 50))} ms, p99 ${ms(pct(requestReads, 99))} ms, max ${ms(Math.max(...requestReads))} ms`,
+  `\nRead before an action's first tagged request (D-116, D-128): ${requestReads.length} reads (${REQUEST_READS} clicks, each with one fetch from the page); p50 ${ms(pct(requestReads, 50))} ms, p99 ${ms(pct(requestReads, 99))} ms, max ${ms(Math.max(...requestReads))} ms`,
 );
 for (const m of notices) console.log(`\nNOTICE: ${m}`);
 console.log(
