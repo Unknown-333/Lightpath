@@ -299,7 +299,7 @@ describe('diffFunctions (design section 6.4)', () => {
 
 describe('server texts (design section 3, D-119)', () => {
   it('keeps instructions under 1,000, each description under 300, and tools/list at most 4,000', async () => {
-    expect(INSTRUCTIONS.length).toBe(665);
+    expect(INSTRUCTIONS.length).toBe(730); // 665 plus build 5's run_request clause
     for (const d of Object.values(DESCRIPTIONS)) expect(d.length).toBeLessThan(300);
     const [a, b] = InMemoryTransport.createLinkedPair();
     const server = createMcpServer({ workspaceRoot: process.cwd() });
