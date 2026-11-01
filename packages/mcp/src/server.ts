@@ -13,6 +13,7 @@ import {
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { AUTO_START_WAIT_MS, AutoStarter, type AutoStartOptions, DEV_LOG } from './autostart.js';
 import { fitText } from './budget.js';
 import { diffFunctions, hasFunctions } from './diff.js';
 import {
@@ -22,7 +23,7 @@ import {
   diffTraces,
   redirectNote,
 } from './format.js';
-import { redactFillValues } from './redact.js';
+import { redact, redactFillValues } from './redact.js';
 import {
   hasBackend,
   loopbackLocation,
@@ -54,6 +55,10 @@ export interface McpOptions {
   resolver?: Resolver;
   /** How long run_request waits for the backend trace after the response (default 1,500 ms). */
   requestTraceWaitMs?: number;
+  /** Starting Lightpath when it isn't running (D-122): set by `lightpath mcp` from the config. */
+  autoStart?: AutoStartOptions;
+  /** How long to wait for an auto-started daemon and its browser (default 60 s). */
+  autoStartWaitMs?: number;
 }
 
 /**
@@ -74,14 +79,8 @@ async function appUrl(dirs: readonly string[]): Promise<string | undefined> {
 }
 
 /** run_request (design section 4A, D-125): one request on loopback, then its backend trace. */
-async function runRequest(options: McpOptions, input: RunRequestInput): Promise<string> {
+async function runRequest(options: McpOptions, found: Live, input: RunRequestInput): Promise<string> {
   const method = input.method ?? 'GET';
-  let found: { info: DaemonDiscovery; root: string };
-  try {
-    found = await findDaemonWithRoot(options.workspaceRoot);
-  } catch (err) {
-    return `${(err as Error).message} Nothing was sent.`;
-  }
   const target = await resolveRequestTarget(
     input.url,
     await appUrl([found.root, options.workspaceRoot]),
@@ -142,7 +141,13 @@ const VERSION = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
 ).version;
 
-const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
+/**
+ * Every tool result goes out through here: redaction rules 2 to 5 (D-123), then the 16,000-character
+ * cap again, since a `[redacted]` can be longer than what it hides.
+ */
+const text = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(redact(t)) }] });
+/** Source slices only: the user's own files are never redacted (design section 9). */
+const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
 
 /**
@@ -152,8 +157,39 @@ const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
 export function createMcpServer(options: McpOptions): McpServer {
   const server = new McpServer({ name: 'lightpath', version: VERSION }, { instructions: INSTRUCTIONS });
 
+  const starter = new AutoStarter(resolve(options.workspaceRoot), options.autoStart);
+  /** The auto-start line, printed at the start of the next tool result (D-122). */
+  let note: string | undefined;
+  const ensure = async (): Promise<Live> => {
+    const live = await liveDaemon(options.workspaceRoot);
+    if (live) return live;
+    if (!starter.enabled) throw new Error(redact(starter.notRunning()));
+    note = starter.start();
+    const deadline = Date.now() + (options.autoStartWaitMs ?? AUTO_START_WAIT_MS);
+    while (Date.now() < deadline) {
+      await sleep(250);
+      const up = await liveDaemon(options.workspaceRoot);
+      if (up) return { ...up, started: true };
+      if (starter.pid === undefined) break;
+    }
+    throw new Error(redact(`${note}, but it didn't start within 60 s, or it exited. See ${DEV_LOG}.`));
+  };
+  /** Every tool result: the auto-start line first, when this call started Lightpath. */
+  const reply = (t: string) => {
+    const n = note;
+    note = undefined;
+    return text(n ? `${n}\n${t}` : t);
+  };
+  /** A source slice: the start line, redacted like any other, then the user's lines as they are. */
+  const sourceReply = (t: string) => {
+    const n = note;
+    note = undefined;
+    return sourceText(n ? `${redact(n)}\n${t}` : t);
+  };
+
   const withClient = async <T>(fn: (c: DaemonClient) => Promise<T>): Promise<T> => {
-    const client = await connect(options.workspaceRoot);
+    const { info } = await ensure();
+    const client = await DaemonClient.connect(info.port, info.token);
     try {
       return await fn(client);
     } finally {
@@ -186,12 +222,28 @@ export function createMcpServer(options: McpOptions): McpServer {
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
       try {
-        const info = await findDaemon(options.workspaceRoot);
+        const { info, started } = await ensure();
         // The daemon answers after the settle cap, the backend wait (1.5 s) and the press wait (2 s).
-        const result = await postAction(info.port, info.token, request, (input.timeoutMs ?? 5000) + 30_000);
-        return { ...text(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
+        const send = () => postAction(info.port, info.token, request, (input.timeoutMs ?? 5000) + 30_000);
+        let result = await send();
+        // A daemon this server just started opens its browser a little later (design section 11),
+        // and the app may still be rendering its first data then (seen in CI: the shop's product
+        // rows weren't there yet). So right after a start, `no_browser` is retried up to the
+        // start wait, and `not_found` for up to 10 s more.
+        const deadline = Date.now() + (options.autoStartWaitMs ?? AUTO_START_WAIT_MS);
+        let renderDeadline = Number.POSITIVE_INFINITY;
+        while (started && !result.ok && Date.now() < deadline) {
+          if (result.error.code === 'not_found') {
+            if (renderDeadline === Number.POSITIVE_INFINITY)
+              renderDeadline = Date.now() + STARTED_RENDER_WAIT_MS;
+            if (Date.now() >= renderDeadline) break;
+          } else if (result.error.code !== 'no_browser') break;
+          await sleep(500);
+          result = await send();
+        }
+        return { ...reply(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
       } catch (err) {
-        return { ...text(redactFillValues((err as Error).message, values)), isError: true };
+        return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
     },
   );
@@ -208,7 +260,15 @@ export function createMcpServer(options: McpOptions): McpServer {
         timeoutMs: z.number().int().min(500).max(30_000).optional(),
       },
     },
-    async (input) => text(await runRequest(options, input)),
+    async (input) => {
+      let live: Live;
+      try {
+        live = await ensure();
+      } catch (err) {
+        return reply(`${(err as Error).message} Nothing was sent.`);
+      }
+      return reply(await runRequest(options, live, input));
+    },
   );
 
   server.registerTool(
@@ -222,7 +282,7 @@ export function createMcpServer(options: McpOptions): McpServer {
         const [match] = await c.listTraces({ label: action, limit: 1 });
         return match ? c.getTrace(match.id) : null;
       });
-      return text(
+      return reply(
         trace
           ? summarizeTrace(trace)
           : `No recorded action matches "${action}". Do it with run_action, or ask the user to click it in the app opened by \`lightpath dev\`, then try again.`,
@@ -246,9 +306,11 @@ export function createMcpServer(options: McpOptions): McpServer {
         trace: await c.getTrace(traceId),
         roots: c.workspaceRoots,
       }));
-      if (!found.trace) return text(`No trace ${traceId}; it may have been evicted.`);
-      if (file === undefined && fn === undefined) return text(summarizeTrace(found.trace));
-      return text(await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)));
+      if (!found.trace) return reply(`No trace ${traceId}; it may have been evicted.`);
+      if (file === undefined && fn === undefined) return reply(summarizeTrace(found.trace));
+      return sourceReply(
+        await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)),
+      );
     },
   );
 
@@ -262,7 +324,7 @@ export function createMcpServer(options: McpOptions): McpServer {
       },
     },
     async ({ label, limit }) =>
-      text(
+      reply(
         fitText(
           describeSummaries(
             await withClient((c) => c.listTraces({ limit: limit ?? 20, ...(label ? { label } : {}) })),
@@ -279,9 +341,9 @@ export function createMcpServer(options: McpOptions): McpServer {
     },
     async ({ a, b }) => {
       const [ta, tb] = await withClient((c) => Promise.all([c.getTrace(a), c.getTrace(b)]));
-      if (!ta || !tb) return text(`Trace not found: ${[!ta && a, !tb && b].filter(Boolean).join(', ')}`);
+      if (!ta || !tb) return reply(`Trace not found: ${[!ta && a, !tb && b].filter(Boolean).join(', ')}`);
       // Traces from a daemon before build 2 have no function list: compare lines.
-      return text(
+      return reply(
         hasFunctions(ta) && hasFunctions(tb)
           ? diffFunctions(ta, tb)
           : fitText(diffTraces(ta as Trace, tb as Trace)),
@@ -293,6 +355,36 @@ export function createMcpServer(options: McpOptions): McpServer {
 }
 
 /** Runs the MCP server over stdio. stdout belongs to the protocol, so nothing else may print to it. */
+/** A daemon that answers `GET /v1/health`, with the folder its discovery file is in. */
+interface Live {
+  info: DaemonDiscovery;
+  root: string;
+  started?: boolean;
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** After an auto-start, how long run_action retries a target that isn't on the page yet. */
+const STARTED_RENDER_WAIT_MS = 10_000;
+
+/** The discovery file's daemon, if it is up: a stale file (a hard-killed daemon) counts as none. */
+async function liveDaemon(workspaceRoot: string): Promise<Live | undefined> {
+  let found: Live;
+  try {
+    found = await findDaemonWithRoot(workspaceRoot);
+  } catch {
+    return undefined;
+  }
+  try {
+    const res = await fetch(`http://127.0.0.1:${found.info.port}/v1/health`, {
+      signal: AbortSignal.timeout(1500),
+    });
+    return res.ok ? found : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function runMcpServer(options: McpOptions): Promise<void> {
   await createMcpServer(options).connect(new StdioServerTransport());
 }
@@ -318,15 +410,6 @@ export function workspaceReader(roots: readonly string[]): ReadSource {
     }
     return undefined;
   };
-}
-
-async function connect(workspaceRoot: string): Promise<DaemonClient> {
-  const info = await findDaemon(workspaceRoot);
-  return DaemonClient.connect(info.port, info.token);
-}
-
-async function findDaemon(workspaceRoot: string): Promise<DaemonDiscovery> {
-  return (await findDaemonWithRoot(workspaceRoot)).info;
 }
 
 async function findDaemonWithRoot(workspaceRoot: string): Promise<{ info: DaemonDiscovery; root: string }> {

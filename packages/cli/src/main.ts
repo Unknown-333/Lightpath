@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { runMcpServer } from '@lightpath-dev/mcp';
 import { cac } from 'cac';
 import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
@@ -78,9 +79,23 @@ export async function main(argv: string[]): Promise<number> {
       'Where to look for .lightpath/daemon.json, then in each parent (default: current directory)',
     )
     .action((options: Record<string, unknown>) => {
-      result = runMcpServer({ workspaceRoot: (options.root as string | undefined) ?? process.cwd() }).then(
-        () => new Promise<number>(() => {}), // stays alive until the client closes stdin
-      );
+      const workspaceRoot = (options.root as string | undefined) ?? process.cwd();
+      // Auto-start (D-122) reads the config only in the folder the server starts in, like `dev`.
+      result = loadConfig(workspaceRoot)
+        .catch(() => undefined)
+        .then((loaded) =>
+          runMcpServer({
+            workspaceRoot,
+            autoStart: {
+              bin: fileURLToPath(new URL('./bin.js', import.meta.url)),
+              command: loaded?.config.command,
+              autoStart: loaded?.config.autoStart,
+            },
+          }),
+        )
+        .then(
+          () => new Promise<number>(() => {}), // stays alive until the client closes stdin
+        );
     });
 
   cli

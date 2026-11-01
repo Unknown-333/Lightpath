@@ -1,4 +1,11 @@
-import type { FileHits, FunctionHit, Trace, TracePhase, TraceRequest } from '@lightpath-dev/protocol';
+import type {
+  FileHits,
+  FunctionHit,
+  Trace,
+  TracePhase,
+  TraceProblem,
+  TraceRequest,
+} from '@lightpath-dev/protocol';
 import { type FileBlock, fit, type SummaryParts } from './budget.js';
 
 const MAX_REQUEST_LINES = 20;
@@ -43,6 +50,57 @@ export function phaseTitle(trace: Trace, phase: TracePhase): string {
 
 export const functionName = (f: Pick<FunctionHit, 'name'>) => f.name || '(anonymous)';
 
+const ERROR_KINDS = new Set(['exception', 'console-error', 'uncaught']);
+
+/** A problem message as one line of at most `max` characters, with where it happened. */
+export function problemText(p: TraceProblem, max = 200): string {
+  const first = p.message.split('\n')[0]?.trim() ?? '';
+  const where = p.path ? ` at ${p.path}${p.line ? `:${p.line}` : ''}` : '';
+  const text = `${first}${where}`;
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/** Errors (thrown, console.error, uncaught) in the order they happened, dropped ones counted. */
+export function errorsOf(trace: Trace): { list: TraceProblem[]; total: number } {
+  const list = (trace.problems ?? []).filter((p) => ERROR_KINDS.has(p.kind)).sort((a, b) => a.at - b.at);
+  return { list, total: list.length + (trace.problemsDropped ?? 0) };
+}
+
+/**
+ * Failed requests (D-121): status 400 and up from the browser or the backend, and network
+ * errors, once each by method, path and status (or failure).
+ */
+export function failedRequestsOf(trace: Trace): string[] {
+  const seen = new Map<string, string>();
+  for (const p of [...(trace.problems ?? [])].sort((a, b) => a.at - b.at)) {
+    if (p.kind !== 'request-failed' || !p.request) continue;
+    const r = p.request;
+    const key = `${r.method} ${r.path} ${r.status ?? r.failure ?? ''}`;
+    if (!seen.has(key))
+      seen.set(
+        key,
+        r.status ? `${r.method} ${r.path} → ${r.status}` : `${r.method} ${r.path} (${r.failure ?? 'failed'})`,
+      );
+  }
+  for (const r of trace.requests) {
+    if (r.status === undefined || r.status < 400) continue;
+    const key = `${r.method} ${r.path} ${r.status}`;
+    if (!seen.has(key)) seen.set(key, `${r.method} ${r.path} → ${r.status}`);
+  }
+  return [...seen.values()];
+}
+
+/** The summary's problem lines (design section 8): counts and the first message, when any. */
+export function problemLines(trace: Trace): string[] {
+  const out: string[] = [];
+  const errors = errorsOf(trace);
+  const first = errors.list[0];
+  if (errors.total > 0) out.push(`errors: ${errors.total}${first ? ` (first: ${problemText(first)})` : ''}`);
+  const failed = failedRequestsOf(trace);
+  if (failed.length > 0) out.push(`failed requests: ${failed.length} (first: ${failed[0]})`);
+  return out;
+}
+
 /** `checkout 21-33 ×1 not run: 29`. */
 export function functionLine(f: FunctionHit): string {
   const range = f.startLine === f.endLine ? `${f.startLine}` : `${f.startLine}-${f.endLine}`;
@@ -63,6 +121,7 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
   for (const r of trace.requests.slice(0, MAX_REQUEST_LINES)) header.push(`request: ${requestLine(r)}`);
   if (trace.requests.length > MAX_REQUEST_LINES)
     header.push(`+${trace.requests.length - MAX_REQUEST_LINES} more requests`);
+  header.push(...problemLines(trace));
   if (trace.files.length === 0) header.push('no workspace code ran');
   header.push('');
 

@@ -1117,3 +1117,17 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: Drop `preserveFocus` from Replay so the active editor follows (changes the product to suit a test: every step would pull keyboard focus out of the Actions view, and VS Code still ties the active editor to focus, so it is not certain to fix the test; not measured). Retry the test or add waits (hides the problem; the active editor never moves, so waiting longer doesn't help: the failed walks took the full 5 s). Delete the order check (weakens the test; rejected).
 - Test: with Replay's order reversed on purpose, the new check fails (2 of 2 runs, `goal/vscodeflake-raw/mutation-reversed-*`). With keyboard focus in the Output panel, it passes (2 of 2, `exp-output-new-*`), where the old check failed 2 of 2. Before/after counts are in the PR.
 - Revert: put back the `onDidChangeActiveTextEditor` watcher in `suite.cjs`.
+
+### D-132 Build 4 details: when problem lines print, what counts once, and two test assertions that grow
+
+- Date: 2026-11-01 (build 4, written before the assertion changes)
+- Decision, in the frame of D-121, D-122 and D-123:
+  - The `errors:` and `failed requests:` lines print only when their count is above 0, so a clean trace reads as before (the shop's Checkout stays 1,023 characters). They are header lines, so `fit()` never cuts them.
+  - Chrome's own console line "Failed to load resource: …" isn't a `console-error` problem: it repeats a failed request, which is reported once as `request-failed`.
+  - A Node `uncaught` problem whose trace the daemon doesn't know yet (a crash during `run_request`, before any delta) opens a backend trace labelled `uncaught error`. A browser problem with an unknown or missing trace id is dropped, as D-121 says.
+  - Failed requests and problem request paths print without their query (the browser collector sends the path only), and every tool result goes through `redact()` (rules 2 to 5) and then the 16,000-character cap again, since `[redacted]` can be longer than what it hides. Source slices from `get_trace` with `file` or `function` are never redacted (design section 9).
+  - `lightpath mcp` treats a discovery file whose daemon doesn't answer `GET /v1/health` as no daemon (a hard-killed one), so auto-start or the "isn't running" message follows.
+  - Right after an auto-start, run_action retries `no_browser` (up to the 60 s start wait) and also `not_found` for up to 10 s: the app can still be rendering its first data when the browser opens. Seen in CI: the first run_action found no "Add to cart" within "Coffee mug" because the product rows weren't there yet. Only the call that started Lightpath retries; later calls answer `not_found` at once.
+- Existing test assertions that change, each stricter (one more line or key checked, nothing removed): `packages/mcp/test/output.test.ts` (the function diff of a trace whose request went 500 → 201 now also expects `problems: errors 0 → 0, failed requests 1 → 0`, design 6.4 item 1); `packages/cli/test/init.test.ts` ("adds only the keys an existing config lacks" now also expects `autoStart: true`, which init writes once the schema knows the key, D-122).
+- Why: keep the default output unchanged for traces with no problems, count each failure once, and keep a crash during run_request visible.
+- Revert: print the lines always; count Chrome's lines; drop unknown-id crashes; restore the two assertions.

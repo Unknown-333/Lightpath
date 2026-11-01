@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
   CollectorKind,
+  ProblemKind,
+  ProblemRequest,
   RequestInfo,
   ScriptCoverage,
   ScriptInfo,
@@ -75,6 +77,23 @@ export const TraceEndMessage = z.object({
 // event loop alive and stop short-lived processes from exiting. Configuration comes
 // from environment variables that the CLI sets (see AgentEnv).
 
+/** An error or failed request during an action (D-121, design section 5.4). */
+export const ProblemMessage = z.object({
+  type: z.literal('problem'),
+  traceId: TraceId.optional(),
+  at: epochMs,
+  kind: ProblemKind,
+  /** At most 1,000 characters, cut by the sender. */
+  message: z.string().max(1000),
+  /** Generated position of the first app frame, if known. */
+  location: z
+    .object({ url: z.string(), line: z.number().int().nonnegative(), column: z.number().int().nonnegative() })
+    .optional(),
+  /** For `request-failed`. */
+  request: ProblemRequest.optional(),
+});
+export type ProblemMessage = z.infer<typeof ProblemMessage>;
+
 export const LinesIngest = z.object({
   type: z.literal('lines'),
   traceId: TraceId.optional(),
@@ -95,6 +114,7 @@ export const IngestMessage = z.discriminatedUnion('type', [
   TraceStartMessage,
   TraceEndMessage,
   LinesIngest,
+  ProblemMessage,
 ]);
 export type IngestMessage = z.infer<typeof IngestMessage>;
 export type HelloMessage = z.infer<typeof HelloMessage>;

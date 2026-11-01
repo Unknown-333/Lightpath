@@ -125,6 +125,34 @@ export const FunctionHit = z.object({
 });
 export type FunctionHit = z.infer<typeof FunctionHit>;
 
+export const ProblemKind = z.enum(['exception', 'console-error', 'request-failed', 'uncaught']);
+export type ProblemKind = z.infer<typeof ProblemKind>;
+
+export const ProblemRequest = z.object({
+  method: z.string(),
+  path: z.string(),
+  status: z.number().int().optional(),
+  failure: z.string().optional(),
+});
+export type ProblemRequest = z.infer<typeof ProblemRequest>;
+
+/** An error or failed request attached to a trace (D-121). Messages are stored as received. */
+export const TraceProblem = z.object({
+  collector: CollectorKind,
+  kind: ProblemKind,
+  /** Stored as received; redacted when printed (D-123). */
+  message: z.string(),
+  at: z.number(),
+  /** Workspace-relative, when the location maps into the workspace. */
+  path: z.string().optional(),
+  line: z.number().int().positive().optional(),
+  request: ProblemRequest.optional(),
+});
+export type TraceProblem = z.infer<typeof TraceProblem>;
+
+/** Most problems kept per trace; more are counted in `problemsDropped`. */
+export const MAX_TRACE_PROBLEMS = 50;
+
 export const Trace = z.object({
   id: TraceId,
   label: z.string(),
@@ -137,6 +165,9 @@ export const Trace = z.object({
   phases: z.array(TracePhase).optional(),
   /** Outermost and nested; a function that runs in two phases appears twice. */
   functions: z.array(FunctionHit).optional(),
+  /** At most MAX_TRACE_PROBLEMS (D-121). */
+  problems: z.array(TraceProblem).optional(),
+  problemsDropped: z.number().int().nonnegative().optional(),
 });
 export type Trace = z.infer<typeof Trace>;
 
@@ -145,5 +176,6 @@ export const TraceSummary = z.object({
   label: z.string(),
   startedAt: z.number(),
   fileCount: z.number().int().nonnegative(),
+  problemCount: z.number().int().nonnegative().optional(),
 });
 export type TraceSummary = z.infer<typeof TraceSummary>;

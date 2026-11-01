@@ -44,7 +44,10 @@ export function describeTrace(trace: Trace): string {
 export function describeSummaries(traces: readonly TraceSummary[]): string {
   if (traces.length === 0) return 'No traces yet. Click something in the app opened by `lightpath dev`.';
   return traces
-    .map((t) => `${t.id}  ${new Date(t.startedAt).toISOString()}  ${t.label}  (${t.fileCount} files)`)
+    .map(
+      (t) =>
+        `${t.id}  ${new Date(t.startedAt).toISOString()}  ${t.label}  (${t.fileCount} files${t.problemCount ? `, ${t.problemCount} problem${t.problemCount === 1 ? '' : 's'}` : ''})`,
+    )
     .join('\n');
 }
 

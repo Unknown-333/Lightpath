@@ -281,6 +281,46 @@ export class BrowserCollector {
     page.on('request', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestStarted());
     page.on('requestfinished', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
     page.on('requestfailed', (r) => countsTowardSettle(r.resourceType()) && this.#settle.requestEnded());
+    // Errors and failed requests during an action join its trace (D-121); outside one, dropped.
+    page.on('pageerror', (err) => {
+      const text = `${err.name && !err.message.startsWith(err.name) ? `${err.name}: ` : ''}${err.message}`;
+      this.#problem('exception', text, appFrame(err.stack));
+    });
+    page.on('console', (msg) => {
+      // Chrome's own "Failed to load resource" lines repeat a failed request, which is reported once.
+      if (msg.type() !== 'error' || msg.text().startsWith('Failed to load resource')) return;
+      const loc = msg.location();
+      this.#problem(
+        'console-error',
+        msg.text(),
+        loc.url && !isNoiseScript(loc.url)
+          ? { url: loc.url, line: loc.lineNumber + 1, column: loc.columnNumber }
+          : undefined,
+      );
+    });
+    page.on('response', (res) => {
+      const req = res.request();
+      if (res.status() < 400 || !['fetch', 'xhr', 'document'].includes(req.resourceType())) return;
+      const { method, path } = requestKey(req);
+      this.#problem('request-failed', `${method} ${path} → ${res.status()}`, undefined, {
+        method,
+        path,
+        status: res.status(),
+      });
+    });
+    page.on('requestfailed', (req) => {
+      const failure = req.failure()?.errorText ?? 'failed';
+      // The page leaving cancels its own pending loads; that's a navigation, not an error.
+      if (failure.includes('ERR_ABORTED') && (req.isNavigationRequest() || req.resourceType() === 'document'))
+        return;
+      if (!['fetch', 'xhr', 'document'].includes(req.resourceType())) return;
+      const { method, path } = requestKey(req);
+      this.#problem('request-failed', `${method} ${path} failed: ${failure}`, undefined, {
+        method,
+        path,
+        failure,
+      });
+    });
     // Page load compiles and runs most of the app. Reading that now keeps the first action's
     // pause as short as later ones (bench/README.md: 40 ms vs 8 ms at 12,000 functions).
     page.on('load', () => {
@@ -629,6 +669,26 @@ export class BrowserCollector {
     await route.continue();
   }
 
+  /** Sends one problem for the open trace (D-121). Fill values never leave the collector. */
+  #problem(
+    kind: 'exception' | 'console-error' | 'request-failed',
+    message: string,
+    location?: { url: string; line: number; column: number },
+    request?: { method: string; path: string; status?: number; failure?: string },
+  ): void {
+    const traceId = this.#active;
+    if (!traceId) return;
+    this.#opts.send({
+      type: 'problem',
+      traceId,
+      at: Date.now(),
+      kind,
+      message: this.#scrub(message).slice(0, 1000),
+      ...(location ? { location } : {}),
+      ...(request ? { request: { ...request, path: this.#scrub(request.path) } } : {}),
+    });
+  }
+
   /** One coverage read as the action's first tagged fetch or XHR leaves the page; its delta names it. */
   async #readBeforeRequest(traceId: TraceId, leaving: { method: string; path: string }): Promise<void> {
     const startedAt = performance.now();
@@ -837,4 +897,27 @@ async function isEditable(locator: Locator): Promise<boolean> {
   } catch {
     return false; // not an input, textarea, select or contenteditable element
   }
+}
+
+/** A request's method and path, no query (queries can hold secrets, and trace paths have none). */
+function requestKey(req: Request): { method: string; path: string } {
+  let path = req.url();
+  try {
+    path = new URL(req.url()).pathname;
+  } catch {
+    path = path.split('?')[0] ?? path;
+  }
+  return { method: req.method(), path };
+}
+
+/** The first stack frame in the app's own code: `at fn (http://…/src/Cart.tsx:26:11)`. */
+export function appFrame(
+  stack: string | undefined,
+): { url: string; line: number; column: number } | undefined {
+  for (const m of (stack ?? '').matchAll(/(https?:\/\/[^\s()]+):(\d+):(\d+)/g)) {
+    const [, url, line, column] = m;
+    if (url && !isNoiseScript(url))
+      return { url, line: Number(line), column: Math.max(0, Number(column) - 1) };
+  }
+  return undefined;
 }

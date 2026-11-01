@@ -1,4 +1,4 @@
-import { eachMapping, type SourceMapInput, TraceMap } from '@jridgewell/trace-mapping';
+import { eachMapping, originalPositionFor, type SourceMapInput, TraceMap } from '@jridgewell/trace-mapping';
 import { countAt, type Segment } from './flatten.js';
 import type { LineIndex } from './line-index.js';
 import type { LineCounts } from './lines.js';
@@ -55,6 +55,20 @@ export function mapToOriginal(
   });
   if (open) credit(open, lineEnd(generated, open.line));
   return out;
+}
+
+/**
+ * The original source and 1-based line of a generated position (1-based line, 0-based column),
+ * for an error's location (D-121). Undefined when the map has nothing there.
+ */
+export function originalLocation(
+  map: SourceMapInput,
+  mapUrl: string | undefined,
+  line: number,
+  column: number,
+): { source: string; line: number } | undefined {
+  const pos = originalPositionFor(newTraceMap(map, mapUrl), { line, column });
+  return pos.source != null && pos.line != null ? { source: pos.source, line: pos.line } : undefined;
 }
 
 /** A TraceMap for a script's map, with Windows paths in `sources` fixed (see below). */
