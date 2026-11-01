@@ -149,7 +149,7 @@ Ruling 2, D-114, D-115, [ADR 0007](../adr/0007-run-action.md). Method from [brow
 | `timeoutMs` | integer, 500 to 30,000                                                 | 5,000    | Settle cap for this action's trace (the collector's `maxSettleMs`)                    |
 | `fill`      | array of `{ target, value }`, at most 20; `value` at most 10,000 chars | none     | Fields to fill, in order, before the action. Same target forms and errors as `target` |
 
-**Typing (the lead's decision, 2026-11-01).** run_action takes an optional `fill` list. Each entry is filled in order with Playwright `locator.fill()` before the press or key. Typing opens no trace (D-079), so the trace is still the action's alone. There is no separate typing tool. The reason is the general need: a login form (tududi, one of the tested apps, needs a login before anything else), a search box, any form with fields. Fill values are treated as secrets: they never appear in tool output, traces, labels or logs (section 9, rule 6).
+**Typing (the lead's decision, 2026-11-01).** run_action takes an optional `fill` list. Each entry is filled in order with Playwright `locator.fill()` before the press or key. Typing opens no trace (D-079), so the trace is still the action's alone and the boundary stays at the press. There is no separate typing tool: one call stays one action. The reason is the general need: a login form (tududi, one of the tested apps, needs a login before anything else), a search box, any form with fields. Fill values are treated as secrets: they never appear in tool output, traces, labels or logs (section 9, rule 6).
 
 Target forms, tried in this order:
 
