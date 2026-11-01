@@ -104,9 +104,16 @@ exports.run = async () => {
   const order = [...trace.files].sort(
     (a, b) => a.firstSeenAt - b.firstSeenAt || a.path.localeCompare(b.path),
   );
+  // Watch the tab in front of the active editor group: what the user sees. Not the active text
+  // editor: VS Code gives that to whichever text editor has keyboard focus, and Replay keeps focus
+  // where it was, so it may never move (D-131).
   const opened = [];
-  const watch = vscode.window.onDidChangeActiveTextEditor((e) => {
-    if (e) opened.push(e.document.uri.fsPath);
+  const watch = vscode.window.tabGroups.onDidChangeTabs((e) => {
+    for (const tab of [...e.opened, ...e.changed]) {
+      if (tab.isActive && tab.group.isActive && tab.input instanceof vscode.TabInputText) {
+        opened.push(tab.input.uri.fsPath);
+      }
+    }
   });
   await vscode.commands.executeCommand('lightpath.replay');
   watch.dispose();
