@@ -31,7 +31,7 @@ import {
   runAgent,
   writeAgentFiles,
 } from './lib/agent.mjs';
-import { runCheck } from './lib/check.mjs';
+import * as shopCheck from './lib/check.mjs';
 import {
   BUGS_DIR,
   cpuLoad,
@@ -44,18 +44,55 @@ import {
   TRIALS_ROOT,
 } from './lib/common.mjs';
 import { prepareLightpath } from './lib/lightpath.mjs';
-import { assertPortsFree, cleanupTrial } from './lib/shop.mjs';
-import { createTrial, prepareTemplate, typecheck } from './lib/trial.mjs';
+import * as shopApp from './lib/shop.mjs';
+import * as shopTrial from './lib/trial.mjs';
+import * as realapp from './realapp/lib/app.mjs';
 
 const args = parseArgs(process.argv.slice(2));
 const bug = String(args.bug ?? '');
 const condition = String(args.condition ?? '');
 const runNo = Number(args.run);
-if (!bug || !CONDITIONS.includes(condition) || !Number.isInteger(runNo) || runNo < 1) {
-  console.error('usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--dry-run]');
+const suite = String(args.suite ?? 'shop');
+if (
+  !bug ||
+  !CONDITIONS.includes(condition) ||
+  !Number.isInteger(runNo) ||
+  runNo < 1 ||
+  !['shop', 'realapp'].includes(suite)
+) {
+  console.error(
+    'usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--suite shop|realapp] [--dry-run]',
+  );
   process.exit(2);
 }
-const bugsDir = resolve(args['bugs-dir'] ?? BUGS_DIR);
+// The shop suite (D-108) and the real-app suite (D-110) share everything but the app.
+const SUITES = {
+  shop: {
+    bugsDir: BUGS_DIR,
+    ports: SHOP_PORTS,
+    assertPortsFree: shopApp.assertPortsFree,
+    cleanupTrial: shopApp.cleanupTrial,
+    createTrial: shopTrial.createTrial,
+    prepareTemplate: shopTrial.prepareTemplate,
+    typecheck: shopTrial.typecheck,
+    runCheck: shopCheck.runCheck,
+    agentDiff: null,
+  },
+  realapp: {
+    bugsDir: realapp.BUGS_DIR,
+    ports: realapp.PORTS,
+    assertPortsFree: realapp.assertPortsFree,
+    cleanupTrial: realapp.cleanupTrial,
+    createTrial: realapp.createTrial,
+    prepareTemplate: realapp.prepareTemplate,
+    typecheck: realapp.typecheck,
+    runCheck: realapp.runCheck,
+    agentDiff: realapp.agentDiff,
+  },
+};
+const S = SUITES[suite];
+const { assertPortsFree, cleanupTrial, createTrial, prepareTemplate, typecheck, runCheck } = S;
+const bugsDir = resolve(args['bugs-dir'] ?? S.bugsDir);
 const bugDir = join(bugsDir, bug);
 if (!existsSync(join(bugDir, 'bug.patch'))) throw new Error(`no bug ${bug} in ${bugsDir}`);
 const resultsFile = resolve(args.results ?? join(TRIALS_ROOT, 'results.jsonl'));
@@ -148,7 +185,9 @@ async function main() {
     bug,
     condition,
     run: runNo,
-    heldout: bugsDir !== BUGS_DIR,
+    suite,
+    ...(suite === 'realapp' ? { app: realapp.APP } : {}),
+    heldout: bugsDir !== S.bugsDir,
     suiteCommit: run('git', ['rev-parse', 'HEAD'], { cwd: REPO_DIR }).stdout.trim(),
     model: MODEL,
     effort: EFFORT,
@@ -215,20 +254,28 @@ async function main() {
   writeFileSync(join(outDir, 'final-text.md'), `${parsed.finalText ?? ''}\n`);
 
   // Score: the hidden check passes, the shop typechecks, and the check files are unchanged.
-  const check = await runCheck({ bugDir, trialDir, logFile: join(outDir, 'check-shop.log') });
+  const checkLog = join(outDir, suite === 'shop' ? 'check-shop.log' : 'check-app.log');
+  const check = await runCheck({ bugDir, trialDir, logFile: checkLog });
   const types = typecheck(trialDir);
   const hashesAfter = hashBugDir();
   record.check = { pass: check.pass, detail: check.detail, ms: check.ms };
   record.typecheck = { ok: types.ok, output: types.ok ? '' : types.output.slice(0, 2000) };
   record.checkUntouched = JSON.stringify(hashesBefore) === JSON.stringify(hashesAfter);
   record.correct = check.pass && types.ok && record.checkUntouched;
-  // Diff against the single initial commit, so agent commits and new files are included.
-  const root = run('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: trialDir })
-    .stdout.trim()
-    .split('\n')[0];
-  run('git', ['add', '-A', '-N'], { cwd: trialDir });
-  record.diff = run('git', ['diff', '--stat', root], { cwd: trialDir }).stdout.trim();
-  writeFileSync(join(outDir, 'agent.diff'), run('git', ['diff', root], { cwd: trialDir }).stdout);
+  if (S.agentDiff) {
+    // The real-app trial has no .git (owner's rule): diff against its clean copy instead.
+    const changes = S.agentDiff(trialDir);
+    record.diff = changes.stat;
+    writeFileSync(join(outDir, 'agent.diff'), changes.diff);
+  } else {
+    // Diff against the single initial commit, so agent commits and new files are included.
+    const root = run('git', ['rev-list', '--max-parents=0', 'HEAD'], { cwd: trialDir })
+      .stdout.trim()
+      .split('\n')[0];
+    run('git', ['add', '-A', '-N'], { cwd: trialDir });
+    record.diff = run('git', ['diff', '--stat', root], { cwd: trialDir }).stdout.trim();
+    writeFileSync(join(outDir, 'agent.diff'), run('git', ['diff', root], { cwd: trialDir }).stdout);
+  }
 
   const voidReasons = [];
   const harnessFailed =
@@ -236,7 +283,9 @@ async function main() {
   if (harnessFailed)
     voidReasons.push(`harness: kiro-cli exit ${agent.exitCode}${agent.error ? ` ${agent.error}` : ''}`);
   if (record.cleanup.leftAlone.length > 0)
-    voidReasons.push('harness: a process the harness did not start held a shop port');
+    voidReasons.push(
+      `harness: a process the harness did not start held ${suite === 'shop' ? 'a shop port' : 'an app port'}`,
+    );
   if (agent.timedOut) voidReasons.push('timeout');
   if (record.outsidePaths.length > 0)
     voidReasons.push(`read outside the trial folder (${record.outsidePaths.length})`);
@@ -254,7 +303,7 @@ async function main() {
       `wall=${(record.wallMs / 1000).toFixed(0)} s -> ${resultsFile}`,
   );
   log(
-    `ports after cleanup: ${SHOP_PORTS.join(', ')}; result ${relative(TRIALS_ROOT, join(outDir, 'result.json'))}`,
+    `ports after cleanup: ${S.ports.join(', ')}; result ${relative(TRIALS_ROOT, join(outDir, 'result.json'))}`,
   );
 }
 

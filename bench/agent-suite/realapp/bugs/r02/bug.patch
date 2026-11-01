@@ -1,0 +1,49 @@
+diff --git a/frontend/components/Task/TaskRow/index.tsx b/frontend/components/Task/TaskRow/index.tsx
+index 0dfe4354..9f113ec2 100644
+--- a/frontend/components/Task/TaskRow/index.tsx
++++ b/frontend/components/Task/TaskRow/index.tsx
+@@ -578,9 +578,6 @@ const TaskRow: React.FC<TaskRowProps> = ({
+                                     }}
+                                     projects={projects}
+                                     hideProjectName
+-                                    // The handler above only updates this
+-                                    // list, so the row saves its own status.
+-                                    saveStatusChanges
+                                     compact
+                                 />
+                             ))
+diff --git a/frontend/components/Task/__tests__/TaskRow.test.tsx b/frontend/components/Task/__tests__/TaskRow.test.tsx
+index 75926f76..faa55e55 100644
+--- a/frontend/components/Task/__tests__/TaskRow.test.tsx
++++ b/frontend/components/Task/__tests__/TaskRow.test.tsx
+@@ -552,30 +552,4 @@ describe('TaskRow', () => {
+             expect(onTaskUpdate).not.toHaveBeenCalled();
+         });
+     });
+-
+-    describe('status picked on a subtask row (#1914)', () => {
+-        const updateTaskMock = tasksService.updateTask as jest.Mock;
+-        beforeEach(() => updateTaskMock.mockReset());
+-
+-        it('saves the subtask status even though the page does not', async () => {
+-            const subtask = baseTask({
+-                id: 2,
+-                uid: 'sub-1',
+-                name: 'Book hotel',
+-            });
+-            updateTaskMock.mockResolvedValue({
+-                ...subtask,
+-                status: 'in_progress',
+-            });
+-            renderRow(baseTask({ subtasks: [subtask] }));
+-            fireEvent.click(screen.getByTitle('Show subtasks'));
+-            const picks = await screen.findAllByLabelText('pick in_progress');
+-            fireEvent.click(picks[picks.length - 1]);
+-            await waitFor(() =>
+-                expect(updateTaskMock).toHaveBeenCalledWith('sub-1', {
+-                    status: 'in_progress',
+-                })
+-            );
+-        });
+-    });
+ });

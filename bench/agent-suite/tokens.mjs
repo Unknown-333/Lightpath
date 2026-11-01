@@ -16,7 +16,9 @@ if (typeof args.results !== 'string') {
   process.exit(2);
 }
 const file = resolve(args.results);
-const lines = readFileSync(file, 'utf8').split('\n').filter((l) => l.trim());
+const lines = readFileSync(file, 'utf8')
+  .split('\n')
+  .filter((l) => l.trim());
 const out = [];
 const perBug = new Map();
 for (const line of lines) {

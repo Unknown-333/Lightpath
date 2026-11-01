@@ -179,6 +179,11 @@ export function runAgent({
     'chat',
     '--no-interactive',
     '--trust-all-tools',
+    // D-112: without these, kiro-cli 2.37 may not start a trial folder's MCP servers (the
+    // workspace-trust prompt), so `with` and `browser` would run with no extra tools. The same
+    // flags go to every condition; `without` has no MCP server, and its tool list is unchanged.
+    '--trust-workspace',
+    '--require-mcp-startup',
     '--agent',
     'bench',
     '--model',
@@ -304,9 +309,7 @@ export function estimateTokens(events, prompt = '') {
       if (typeof text === 'string') outChars += text.length;
     } else if (kind === 'tool_call' || kind === 'tool_call_update') {
       if (update.rawInput !== undefined) inputs.set(update.toolCallId, JSON.stringify(update.rawInput));
-      const text = (update.content ?? [])
-        .map((c) => c?.content?.text ?? '')
-        .join('\n');
+      const text = (update.content ?? []).map((c) => c?.content?.text ?? '').join('\n');
       if (text) outputs.set(update.toolCallId, text);
     }
   }

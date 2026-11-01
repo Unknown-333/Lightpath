@@ -1,0 +1,817 @@
+diff --git b/backend/modules/tasks/recurringTaskService.js a/backend/modules/tasks/recurringTaskService.js
+index f6127678..b032a4dd 100644
+--- b/backend/modules/tasks/recurringTaskService.js
++++ a/backend/modules/tasks/recurringTaskService.js
+@@ -307,19 +307,76 @@ const calculateVirtualOccurrences = (
+             break;
+         }
+ 
+-        // Convert UTC date to user timezone date string
++        // Date-only occurrences stay a calendar string. A timed occurrence
++        // must keep the real instant: a YYYY-MM-DD string is parsed as UTC
++        // midnight, so Upcoming would show that clock (00:00, or 12:00 in
++        // UTC+12) instead of the stored due time.
+         const dateInUserTz = moment
+             .utc(currentDate)
+             .tz(userTimezone)
+             .format('YYYY-MM-DD');
+ 
+         occurrences.push({
+-            due_date: dateInUserTz,
++            due_date: task.due_has_time ? new Date(currentDate) : dateInUserTz,
+             is_virtual: true,
+         });
+ 
+-        currentDate = calculateNextDueDate(task, currentDate, userTimezone);
+-        if (!currentDate) break;
++        if (task.due_has_time) {
++            // For timed recurrences, advance the calendar date using local
++            // calendar arithmetic in userTimezone so advancing days/weeks is
++            // immune to UTC hour shifts across DST (e.g. 00:30 on the autumn
++            // fall-back day). Then rebuild the next instant with the parent's
++            // local wall-clock time.
++            const currentLocal = moment.tz(currentDate, userTimezone);
++            let nextDateInUserTz;
++            if (task.recurrence_type === 'daily') {
++                nextDateInUserTz = currentLocal
++                    .add(task.recurrence_interval || 1, 'days')
++                    .format('YYYY-MM-DD');
++            } else if (
++                task.recurrence_type === 'weekly' &&
++                !task.recurrence_weekdays &&
++                (task.recurrence_weekday === null ||
++                    task.recurrence_weekday === undefined ||
++                    task.recurrence_weekday === currentLocal.day())
++            ) {
++                nextDateInUserTz = currentLocal
++                    .add(task.recurrence_interval || 1, 'weeks')
++                    .format('YYYY-MM-DD');
++            } else {
++                const localMidday = moment
++                    .tz(
++                        `${currentLocal.format('YYYY-MM-DD')} 12:00:00`,
++                        'YYYY-MM-DD HH:mm:ss',
++                        userTimezone
++                    )
++                    .toDate();
++                const nextMidday = calculateNextDueDate(
++                    task,
++                    localMidday,
++                    userTimezone
++                );
++                if (!nextMidday) break;
++                nextDateInUserTz = moment(nextMidday)
++                    .tz(userTimezone)
++                    .format('YYYY-MM-DD');
++            }
++
++            const parentInstant = task.due_date
++                ? moment.utc(task.due_date)
++                : moment.utc(startFrom || currentDate);
++            const parentLocal = parentInstant.tz(userTimezone);
++            currentDate = moment
++                .tz(
++                    `${nextDateInUserTz} ${parentLocal.format('HH:mm:ss.SSS')}`,
++                    'YYYY-MM-DD HH:mm:ss.SSS',
++                    userTimezone
++                )
++                .toDate();
++        } else {
++            currentDate = calculateNextDueDate(task, currentDate, userTimezone);
++            if (!currentDate) break;
++        }
+ 
+         iterationCount++;
+     }
+diff --git b/backend/tests/integration/upcoming-due-time.test.js a/backend/tests/integration/upcoming-due-time.test.js
+new file mode 100644
+index 00000000..483d5c28
+--- /dev/null
++++ a/backend/tests/integration/upcoming-due-time.test.js
+@@ -0,0 +1,294 @@
++const request = require('supertest');
++const app = require('../../app');
++const moment = require('moment-timezone');
++const { createTestUser } = require('../helpers/testUtils');
++
++// Issue #1932: Upcoming shows a recurring due time as the local clock of UTC
++// midnight (00:00 in UTC, 19:00 in Chicago, 12:00 in Pacific/Fiji). Editing
++// the time to 06:00 stores 06:00, but the Upcoming read path still returns
++// that wrong instant.
++async function login(timezone) {
++    const user = await createTestUser({
++        email: `upcoming-due-${timezone.replace(/\//g, '-')}@example.com`,
++        timezone,
++    });
++    const agent = request.agent(app);
++    await agent.post('/api/login').send({
++        email: user.email,
++        password: 'password123',
++    });
++    return agent;
++}
++
++function tasksInGroups(groupedTasks) {
++    return Object.values(groupedTasks || {}).flat();
++}
++
++function seriesNamed(groupedTasks, name) {
++    return tasksInGroups(groupedTasks).filter(
++        (task) => task.original_name === name || task.name === name
++    );
++}
++
++// What Upcoming shows when a timed instant has been replaced by a calendar
++// date: that string is UTC midnight, then converted to the user's clock.
++function droppedClock(date, timezone) {
++    return moment.utc(date).tz(timezone).format('HH:mm');
++}
++
++describe('Upcoming due time (#1932)', () => {
++    const zones = ['UTC', 'America/Chicago', 'Pacific/Fiji'];
++
++    describe.each(zones)('timezone %s', (timezone) => {
++        let agent;
++
++        beforeEach(async () => {
++            agent = await login(timezone);
++        });
++
++        it('shows a recurring series at its saved time, not UTC midnight', async () => {
++            const today = moment.tz(timezone).format('YYYY-MM-DD');
++
++            const created = await agent.post('/api/task').send({
++                name: 'Review Inbox',
++                due_date: today,
++                due_time: '15:30',
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            });
++            expect(created.status).toBe(201);
++            expect(created.body.due_time).toBe('15:30');
++            expect(created.body.due_has_time).toBe(true);
++
++            const listed = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            expect(listed.status).toBe(200);
++
++            const occurrences = seriesNamed(
++                listed.body.groupedTasks,
++                'Review Inbox'
++            );
++            expect(occurrences.length).toBeGreaterThan(0);
++
++            const todayRow = occurrences.find(
++                (task) => task.due_date === today
++            );
++            expect(todayRow).toEqual(
++                expect.objectContaining({
++                    due_date: today,
++                    due_time: '15:30',
++                    due_has_time: true,
++                })
++            );
++            expect(occurrences.map((task) => task.due_time)).not.toContain(
++                droppedClock(today, timezone)
++            );
++        });
++
++        it('keeps 06:00 on Upcoming after the inline edit is saved', async () => {
++            const today = moment.tz(timezone).format('YYYY-MM-DD');
++
++            const created = await agent.post('/api/task').send({
++                name: 'Review Inbox',
++                due_date: today,
++                due_time: '15:30',
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            });
++            expect(created.status).toBe(201);
++
++            const listed = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            const rows = seriesNamed(listed.body.groupedTasks, 'Review Inbox');
++            expect(rows.length).toBeGreaterThan(0);
++            const target =
++                rows.find((task) => task.due_date === today) || rows[0];
++
++            const edited = await agent
++                .patch(`/api/task/${created.body.uid}`)
++                .send({ due_date: target.due_date, due_time: '06:00' });
++            expect(edited.status).toBe(200);
++            expect(edited.body.due_time).toBe('06:00');
++            expect(edited.body.due_has_time).toBe(true);
++
++            // Upcoming's handleTaskUpdate PATCHes the merged task again.
++            const second = await agent
++                .patch(`/api/task/${created.body.uid}`)
++                .send({
++                    ...target,
++                    ...edited.body,
++                    subtasks: edited.body.subtasks || target.subtasks || [],
++                });
++            expect(second.status).toBe(200);
++            expect(second.body.due_time).toBe('06:00');
++
++            const again = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            const after = seriesNamed(again.body.groupedTasks, 'Review Inbox');
++            const todayRow = after.find((task) => task.due_date === today);
++            expect(todayRow).toEqual(
++                expect.objectContaining({
++                    due_date: today,
++                    due_time: '06:00',
++                    due_has_time: true,
++                })
++            );
++            expect(after.map((task) => task.due_time)).not.toContain(
++                droppedClock(today, timezone)
++            );
++        });
++
++        it('leaves a date-only recurring series without a time', async () => {
++            const today = moment.tz(timezone).format('YYYY-MM-DD');
++
++            const created = await agent.post('/api/task').send({
++                name: 'Date Only',
++                due_date: today,
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            });
++            expect(created.status).toBe(201);
++            expect(created.body.due_has_time).toBe(false);
++            expect(created.body.due_time).toBeNull();
++
++            const listed = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            const occurrences = seriesNamed(
++                listed.body.groupedTasks,
++                'Date Only'
++            );
++            expect(occurrences.length).toBeGreaterThan(0);
++            expect(
++                occurrences.every(
++                    (task) =>
++                        task.due_has_time === false && task.due_time == null
++                )
++            ).toBe(true);
++        });
++
++        it('keeps a non-recurring timed due when only the date changes', async () => {
++            const today = moment.tz(timezone).format('YYYY-MM-DD');
++            const tomorrow = moment
++                .tz(timezone)
++                .add(1, 'day')
++                .format('YYYY-MM-DD');
++
++            const created = await agent.post('/api/task').send({
++                name: 'One off',
++                due_date: today,
++                due_time: '13:45',
++            });
++            expect(created.status).toBe(201);
++
++            const moved = await agent
++                .patch(`/api/task/${created.body.uid}`)
++                .send({ due_date: tomorrow, due_time: '13:45' });
++            expect(moved.status).toBe(200);
++            expect(moved.body.due_date).toBe(tomorrow);
++            expect(moved.body.due_time).toBe('13:45');
++            expect(moved.body.due_has_time).toBe(true);
++        });
++    });
++
++    describe('DST transition wall-clock (Europe/Berlin)', () => {
++        // Upcoming starts today, so pin the clock before the 2026-10-25 shift.
++        // Only Date is faked; timers stay real for the app and supertest.
++        beforeEach(() => {
++            jest.useFakeTimers({
++                now: new Date('2026-10-23T12:00:00Z'),
++                doNotFake: [
++                    'hrtime',
++                    'nextTick',
++                    'performance',
++                    'queueMicrotask',
++                    'requestAnimationFrame',
++                    'cancelAnimationFrame',
++                    'requestIdleCallback',
++                    'cancelIdleCallback',
++                    'setImmediate',
++                    'clearImmediate',
++                    'setInterval',
++                    'clearInterval',
++                    'setTimeout',
++                    'clearTimeout',
++                ],
++            });
++        });
++
++        afterEach(() => {
++            jest.useRealTimers();
++        });
++
++        it('keeps 09:00 across the autumn DST shift on Upcoming', async () => {
++            const agent = await login('Europe/Berlin');
++            const created = await agent.post('/api/task').send({
++                name: 'Morning Sync',
++                due_date: '2026-10-24',
++                due_time: '09:00',
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            });
++            expect(created.status).toBe(201);
++            expect(created.body.due_time).toBe('09:00');
++
++            const listed = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            expect(listed.status).toBe(200);
++
++            const occurrences = seriesNamed(
++                listed.body.groupedTasks,
++                'Morning Sync'
++            );
++            expect(occurrences.length).toBeGreaterThanOrEqual(4);
++
++            const byDate = {};
++            for (const occ of occurrences) {
++                byDate[occ.due_date] = occ.due_time;
++            }
++
++            expect(byDate['2026-10-24']).toBe('09:00');
++            expect(byDate['2026-10-25']).toBe('09:00');
++            expect(byDate['2026-10-26']).toBe('09:00');
++            expect(byDate['2026-10-27']).toBe('09:00');
++        });
++
++        it('keeps 00:30 across the autumn DST shift on Upcoming without getting stuck', async () => {
++            const agent = await login('Europe/Berlin');
++            const created = await agent.post('/api/task').send({
++                name: 'Midnight Sync',
++                due_date: '2026-10-24',
++                due_time: '00:30',
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            });
++            expect(created.status).toBe(201);
++            expect(created.body.due_time).toBe('00:30');
++
++            const listed = await agent.get(
++                '/api/tasks?type=upcoming&groupBy=day&maxDays=7'
++            );
++            expect(listed.status).toBe(200);
++
++            const occurrences = seriesNamed(
++                listed.body.groupedTasks,
++                'Midnight Sync'
++            );
++            expect(occurrences.length).toBeGreaterThanOrEqual(4);
++
++            const byDate = {};
++            for (const occ of occurrences) {
++                byDate[occ.due_date] = occ.due_time;
++            }
++
++            expect(byDate['2026-10-24']).toBe('00:30');
++            expect(byDate['2026-10-25']).toBe('00:30');
++            expect(byDate['2026-10-26']).toBe('00:30');
++            expect(byDate['2026-10-27']).toBe('00:30');
++        });
++    });
++});
+diff --git b/backend/tests/unit/modules/tasks/recurringTaskService.test.js a/backend/tests/unit/modules/tasks/recurringTaskService.test.js
+index 7fb9a4ce..bdd0bb38 100644
+--- b/backend/tests/unit/modules/tasks/recurringTaskService.test.js
++++ a/backend/tests/unit/modules/tasks/recurringTaskService.test.js
+@@ -1,3 +1,4 @@
++const moment = require('moment-timezone');
+ const {
+     calculateNextDueDate,
+     calculateDailyRecurrence,
+@@ -344,6 +345,65 @@ describe('RecurringTaskService - UTC Consistency', () => {
+             expect(occurrences[6].due_date).toBe('2026-01-07');
+         });
+ 
++        it('keeps the clock when the series has a due time', () => {
++            const task = {
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++                due_has_time: true,
++            };
++            const startDate = new Date(Date.UTC(2026, 0, 1, 15, 30, 0, 0));
++
++            const occurrences = calculateVirtualOccurrences(
++                task,
++                3,
++                startDate,
++                'UTC'
++            );
++
++            expect(occurrences).toHaveLength(3);
++            expect(occurrences[0].due_date).toBeInstanceOf(Date);
++            expect(occurrences[0].due_date.toISOString()).toBe(
++                '2026-01-01T15:30:00.000Z'
++            );
++            expect(occurrences[1].due_date.toISOString()).toBe(
++                '2026-01-02T15:30:00.000Z'
++            );
++            expect(occurrences[2].due_date.toISOString()).toBe(
++                '2026-01-03T15:30:00.000Z'
++            );
++        });
++
++        it('keeps wall-clock due time across autumn DST transition in Europe/Berlin', () => {
++            const timezone = 'Europe/Berlin';
++            // 2026-10-24 09:00 CEST (UTC+2) is 2026-10-24T07:00:00.000Z
++            const task = {
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++                due_has_time: true,
++                due_date: moment.tz('2026-10-24 09:00', timezone).toDate(),
++            };
++
++            const occurrences = calculateVirtualOccurrences(
++                task,
++                4,
++                null,
++                timezone
++            );
++
++            expect(occurrences).toHaveLength(4);
++            const formatted = occurrences.map((o) => ({
++                date: moment(o.due_date).tz(timezone).format('YYYY-MM-DD'),
++                time: moment(o.due_date).tz(timezone).format('HH:mm'),
++            }));
++
++            expect(formatted).toEqual([
++                { date: '2026-10-24', time: '09:00' },
++                { date: '2026-10-25', time: '09:00' },
++                { date: '2026-10-26', time: '09:00' },
++                { date: '2026-10-27', time: '09:00' },
++            ]);
++        });
++
+         it('should respect end date limit', () => {
+             const task = {
+                 recurrence_type: 'daily',
+@@ -407,6 +467,172 @@ describe('RecurringTaskService - UTC Consistency', () => {
+             });
+         });
+ 
++        it('keeps Europe/Berlin wall clock across autumn DST for daily timed virtual rows', () => {
++            const moment = require('moment-timezone');
++            // 2026-10-24 09:00 Europe/Berlin is still CEST (UTC+2) → 07:00Z
++            // 2026-10-25 is the first day after the clocks fall back (CET UTC+1).
++            const start = moment
++                .tz('2026-10-24 09:00:00', 'Europe/Berlin')
++                .toDate();
++            const task = {
++                due_date: start,
++                due_has_time: true,
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            };
++
++            const occurrences = calculateVirtualOccurrences(
++                task,
++                4,
++                start,
++                'Europe/Berlin'
++            );
++
++            expect(occurrences).toHaveLength(4);
++            const localHours = occurrences.map((o) =>
++                moment(o.due_date)
++                    .tz('Europe/Berlin')
++                    .format('YYYY-MM-DD HH:mm')
++            );
++            expect(localHours).toEqual([
++                '2026-10-24 09:00',
++                '2026-10-25 09:00',
++                '2026-10-26 09:00',
++                '2026-10-27 09:00',
++            ]);
++        });
++
++        it('advances daily 00:30 task across autumn DST without getting stuck', () => {
++            const moment = require('moment-timezone');
++            const start = moment
++                .tz('2026-10-24 00:30:00', 'Europe/Berlin')
++                .toDate();
++            const task = {
++                due_date: start,
++                due_has_time: true,
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            };
++
++            const occurrences = calculateVirtualOccurrences(
++                task,
++                5,
++                start,
++                'Europe/Berlin'
++            );
++
++            expect(occurrences).toHaveLength(5);
++            const localFormatted = occurrences.map((o) =>
++                moment(o.due_date)
++                    .tz('Europe/Berlin')
++                    .format('YYYY-MM-DD HH:mm')
++            );
++            expect(localFormatted).toEqual([
++                '2026-10-24 00:30',
++                '2026-10-25 00:30',
++                '2026-10-26 00:30',
++                '2026-10-27 00:30',
++                '2026-10-28 00:30',
++            ]);
++        });
++
++        it('advances weekly 00:30 task across autumn DST to next Sunday without landing on Saturday', () => {
++            const moment = require('moment-timezone');
++            const start = moment
++                .tz('2026-10-18 00:30:00', 'Europe/Berlin')
++                .toDate();
++            const task = {
++                due_date: start,
++                due_has_time: true,
++                recurrence_type: 'weekly',
++                recurrence_interval: 1,
++                recurrence_weekday: 0,
++            };
++
++            const occurrences = calculateVirtualOccurrences(
++                task,
++                4,
++                start,
++                'Europe/Berlin'
++            );
++
++            expect(occurrences).toHaveLength(4);
++            const localFormatted = occurrences.map((o) =>
++                moment(o.due_date)
++                    .tz('Europe/Berlin')
++                    .format('YYYY-MM-DD HH:mm')
++            );
++            expect(localFormatted).toEqual([
++                '2026-10-18 00:30',
++                '2026-10-25 00:30',
++                '2026-11-01 00:30',
++                '2026-11-08 00:30',
++            ]);
++        });
++
++        it('advances daily 00:30 and 02:30 tasks across spring 2027 DST change', () => {
++            const moment = require('moment-timezone');
++            const start0030 = moment
++                .tz('2027-03-27 00:30:00', 'Europe/Berlin')
++                .toDate();
++            const task0030 = {
++                due_date: start0030,
++                due_has_time: true,
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            };
++
++            const occurrences0030 = calculateVirtualOccurrences(
++                task0030,
++                4,
++                start0030,
++                'Europe/Berlin'
++            );
++
++            expect(occurrences0030).toHaveLength(4);
++            const formatted0030 = occurrences0030.map((o) =>
++                moment(o.due_date)
++                    .tz('Europe/Berlin')
++                    .format('YYYY-MM-DD HH:mm')
++            );
++            expect(formatted0030).toEqual([
++                '2027-03-27 00:30',
++                '2027-03-28 00:30',
++                '2027-03-29 00:30',
++                '2027-03-30 00:30',
++            ]);
++
++            const start0230 = moment
++                .tz('2027-03-27 02:30:00', 'Europe/Berlin')
++                .toDate();
++            const task0230 = {
++                due_date: start0230,
++                due_has_time: true,
++                recurrence_type: 'daily',
++                recurrence_interval: 1,
++            };
++
++            const occurrences0230 = calculateVirtualOccurrences(
++                task0230,
++                4,
++                start0230,
++                'Europe/Berlin'
++            );
++
++            expect(occurrences0230).toHaveLength(4);
++            const formatted0230 = occurrences0230.map((o) =>
++                moment(o.due_date)
++                    .tz('Europe/Berlin')
++                    .format('YYYY-MM-DD HH:mm')
++            );
++            expect(formatted0230).toEqual([
++                '2027-03-27 02:30',
++                '2027-03-28 03:30',
++                '2027-03-29 02:30',
++                '2027-03-30 02:30',
++            ]);
++        });
++
+         it('should respect MAX_ITERATIONS to prevent infinite loops', () => {
+             const task = {
+                 recurrence_type: 'daily',
+diff --git b/frontend/components/Tasks.tsx a/frontend/components/Tasks.tsx
+index 7e430665..df37d351 100644
+--- b/frontend/components/Tasks.tsx
++++ a/frontend/components/Tasks.tsx
+@@ -7,6 +7,10 @@ import { Task } from '../entities/Task';
+ import { getTitleAndIcon } from './Task/getTitleAndIcon';
+ import { getDescription } from './Task/getDescription';
+ import { createTask, GroupedTasks, saveTaskOrder } from '../utils/tasksService';
++import {
++    mergeUpdatedGroupedTasks,
++    mergeUpdatedTaskList,
++} from '../utils/taskUpdateMerge';
+ import { mergeVisibleOrder } from './Shared/sortableList';
+ import { useStore } from '../store/useStore';
+ import { appendFocusParams, focusKey, useFocus } from '../utils/focus';
+@@ -422,17 +426,17 @@ const Tasks: React.FC = () => {
+             if (response.ok) {
+                 const updatedTaskFromServer = await response.json();
+                 setTasks((prevTasks) =>
+-                    prevTasks.map((task) =>
+-                        task.id === updatedTask.id
+-                            ? {
+-                                  ...task,
+-                                  ...updatedTaskFromServer,
+-                                  subtasks:
+-                                      updatedTaskFromServer.subtasks ||
+-                                      task.subtasks ||
+-                                      [],
+-                              }
+-                            : task
++                    mergeUpdatedTaskList(
++                        prevTasks,
++                        updatedTask,
++                        updatedTaskFromServer
++                    )
++                );
++                setGroupedTasks((prevGroupedTasks) =>
++                    mergeUpdatedGroupedTasks(
++                        prevGroupedTasks,
++                        updatedTask,
++                        updatedTaskFromServer
+                     )
+                 );
+             } else {
+diff --git b/frontend/utils/__tests__/taskUpdateMerge.test.ts a/frontend/utils/__tests__/taskUpdateMerge.test.ts
+new file mode 100644
+index 00000000..df6f2752
+--- /dev/null
++++ a/frontend/utils/__tests__/taskUpdateMerge.test.ts
+@@ -0,0 +1,75 @@
++import { Task } from '../../entities/Task';
++import { mergeUpdatedGroupedTasks, mergeUpdatedTask } from '../taskUpdateMerge';
++
++const virtual = (day: string, index: number): Task =>
++    ({
++        id: 7,
++        uid: 'parent-uid',
++        name: 'Daily',
++        original_name: 'Review Inbox',
++        due_date: day,
++        due_time: '00:00',
++        due_has_time: true,
++        is_virtual_occurrence: true,
++        virtual_id: `7_occurrence_${index}`,
++        occurrence_index: index,
++        completed_at: null,
++    }) as Task;
++
++describe('mergeUpdatedTask', () => {
++    it('keeps each Upcoming day and applies the saved due time', () => {
++        const server = {
++            id: 7,
++            uid: 'parent-uid',
++            name: 'Daily',
++            original_name: 'Review Inbox',
++            due_date: '2026-10-20',
++            due_time: '06:00',
++            due_has_time: true,
++            completed_at: null,
++        } as Task;
++
++        const grouped = mergeUpdatedGroupedTasks(
++            {
++                Today: [virtual('2026-10-20', 0)],
++                Tomorrow: [virtual('2026-10-21', 1)],
++            },
++            virtual('2026-10-20', 0),
++            server
++        );
++
++        expect(grouped?.Today[0]).toEqual(
++            expect.objectContaining({
++                due_date: '2026-10-20',
++                due_time: '06:00',
++                due_has_time: true,
++                virtual_id: '7_occurrence_0',
++            })
++        );
++        expect(grouped?.Tomorrow[0]).toEqual(
++            expect.objectContaining({
++                due_date: '2026-10-21',
++                due_time: '06:00',
++                virtual_id: '7_occurrence_1',
++            })
++        );
++    });
++
++    it('replaces a non-virtual due date with the saved one', () => {
++        const row = {
++            id: 3,
++            uid: 'one-off',
++            due_date: '2026-10-20',
++            due_time: '13:45',
++            due_has_time: true,
++            completed_at: null,
++        } as Task;
++        const server = {
++            ...row,
++            due_date: '2026-10-21',
++        } as Task;
++
++        expect(mergeUpdatedTask(row, server).due_date).toBe('2026-10-21');
++        expect(mergeUpdatedTask(row, server).due_time).toBe('13:45');
++    });
++});
+diff --git b/frontend/utils/taskUpdateMerge.ts a/frontend/utils/taskUpdateMerge.ts
+new file mode 100644
+index 00000000..960a92a8
+--- /dev/null
++++ a/frontend/utils/taskUpdateMerge.ts
+@@ -0,0 +1,53 @@
++import { Task } from '../entities/Task';
++import { GroupedTasks } from './tasksService';
++
++// Upcoming virtual rows share the parent uid. The save response is that
++// parent, so copying it wholesale would stamp every day with one due date.
++// Keep each occurrence's calendar day and identity; take the saved time.
++export function mergeUpdatedTask(task: Task, serverTask: Task): Task {
++    const merged: Task = {
++        ...task,
++        ...serverTask,
++        subtasks: serverTask.subtasks || task.subtasks || [],
++    };
++
++    if (task.virtual_id) {
++        merged.virtual_id = task.virtual_id;
++        merged.is_virtual_occurrence = task.is_virtual_occurrence;
++        merged.occurrence_index = task.occurrence_index;
++        merged.due_date = task.due_date;
++    }
++
++    return merged;
++}
++
++export function mergeUpdatedTaskList(
++    tasks: Task[],
++    edited: Task,
++    serverTask: Task
++): Task[] {
++    return tasks.map((task) =>
++        sameUpdatedTask(task, edited)
++            ? mergeUpdatedTask(task, serverTask)
++            : task
++    );
++}
++
++export function mergeUpdatedGroupedTasks(
++    grouped: GroupedTasks | null,
++    edited: Task,
++    serverTask: Task
++): GroupedTasks | null {
++    if (!grouped) return grouped;
++
++    const next: GroupedTasks = {};
++    Object.entries(grouped).forEach(([groupName, tasks]) => {
++        next[groupName] = mergeUpdatedTaskList(tasks, edited, serverTask);
++    });
++    return next;
++}
++
++function sameUpdatedTask(task: Task, edited: Task): boolean {
++    if (edited.uid) return task.uid === edited.uid;
++    return task.id === edited.id;
++}
