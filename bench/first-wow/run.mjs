@@ -201,7 +201,8 @@ async function main() {
   try {
     const opened = await new Promise((resolveOpen) => {
       const timer = setInterval(() => {
-        if (/watching \S*http/.test(devText.replace(/\u001b\[[0-9;]*m/g, ''))) {
+        // `lightpath dev` prints "watching <url>" (the URL may be wrapped in a color code).
+        if (/watching .{0,12}http/.test(devText)) {
           clearInterval(timer);
           resolveOpen(true);
         } else if (Date.now() - clock > APP_OPEN_TIMEOUT_MS || dev.exitCode !== null) {
