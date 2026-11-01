@@ -11,7 +11,7 @@ The owner's metric: "from npx to the agent's first useful answer on a fresh clon
 5. **The clock stops** when the agent's answer names the right files (`check.mjs`, against the expected files in `apps/<app>.mjs`, both written before the first run). An answer that doesn't name them is a fail; its time is still recorded as `totalMs`.
 6. Stops everything it started by PID (the `npx` process tree: Lightpath, the app's servers, Chrome), checks the app's ports are free, reads CPU load again, and appends one JSON line to `results/results.jsonl`: each phase's time, the answer word for word, the check, credits, steps, tool calls, the kiro-cli version and the model ID.
 
-The pinned agent: `kiro-cli chat --no-interactive --trust-all-tools --agent bench --model claude-sonnet-5.5 --effort medium`, with an agent config that has only the Lightpath MCP server (`npx -y --package=<same Lightpath> lightpath mcp --root <clone>`) and its tools, no built-in tools, `includeMcpJson: false` (the owner's global MCP servers never load) and no steering. With no file tools, a right answer can only come from a Lightpath trace, not from reading the source. The agent's time limit is 5 minutes.
+The pinned agent: `kiro-cli chat --no-interactive --trust-all-tools --trust-workspace --require-mcp-startup --agent bench --model claude-sonnet-5.5 --effort medium`, with an agent config that has only the Lightpath MCP server (`npx -y --package=<same Lightpath> lightpath mcp --root <clone>`) and its tools, no built-in tools, `includeMcpJson: false` (the owner's global MCP servers never load) and no steering. With no file tools, a right answer can only come from a Lightpath trace, not from reading the source. The agent's time limit is 5 minutes.
 
 ```sh
 node bench/first-wow/run.mjs --app stepful
@@ -28,11 +28,11 @@ Rule: a real app from `docs/tested-apps.md` that runs under Lightpath 0.0.2 with
 | Ports           | web 3310, API 3311 (the shop uses 3001 and 5173), set in `.env` files, not in code                 |
 | Setup           | `npm install better-sqlite3@12.11.1 --workspace backend`, `npm run db:migrate --workspace backend` |
 | Dev command     | `npm run dev` (the app's README)                                                                   |
-| Lightpath flags | `--url http://localhost:3310 --web-root frontend`                                                  |
+| Lightpath flags | `--web-root frontend` (run 1 also had `--url http://localhost:3310`)                               |
 | Action          | "Take quiz"                                                                                        |
 | Right answer    | `frontend/src/pages/quiz.tsx` or `frontend/src/components/quiz.tsx`, and `backend/server.ts`       |
 - better-sqlite3 11.6.0 (the app's lockfile) has no prebuilt binary for Node 24, so setup moves it to 12.11.1, as the October trial did. That changes `backend/package.json` and the lockfile, not app code.
-- The two Lightpath flags are needed because the app's dev command starts two servers that both print a local URL, and Vite serves from `frontend/`. A first-time user would have to know this; it counts against the first wow.
+- `--web-root frontend` is needed because Vite serves from `frontend/`. A first-time user would have to know this; it counts against the first wow. Lightpath takes the first local URL the dev command prints; here Vite's line came before the API's in every run, but that is a race between two servers.
 - The expected files come from the October trial's trace of "Take quiz": the click ran `pages/quiz.tsx` (and `card.tsx`, `utils.ts`, `paths.ts`) in the frontend and the `GET /quizzes/:id` route at `backend/server.ts:27-31`. The link itself is in `components/quiz.tsx`, so either frontend file counts.
 
 ## Limits
@@ -43,7 +43,14 @@ Rule: a real app from `docs/tested-apps.md` that runs under Lightpath 0.0.2 with
 
 ## Results
 
-See `results/2026-11-01.md`.
+See `results/2026-11-01.md`. Today: fail, as expected. The agent's "please click" answer came 34.1 s after `npx` started.
+
+## Changes after results
+
+The check (`check.mjs`) and the expected files didn't change. Two setup changes, each after one failed run, both kept in `results/results.jsonl`:
+
+1. After run 1: dropped `--url http://localhost:3310`. With it, Lightpath 0.0.2 opened the page before Vite was up, got `ERR_CONNECTION_REFUSED` and didn't retry, so the app never opened.
+2. After run 2: added `--trust-workspace` and `--require-mcp-startup` to kiro-cli. Without them kiro-cli didn't load the MCP server from the clone's agent config, and the agent had no tools.
 
 ## Proposed decisions
 

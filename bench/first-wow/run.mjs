@@ -6,9 +6,11 @@
 import { spawn } from 'node:child_process';
 import {
   appendFileSync,
+  closeSync,
   createWriteStream,
   existsSync,
   mkdirSync,
+  openSync,
   readFileSync,
   writeFileSync,
 } from 'node:fs';
@@ -23,7 +25,6 @@ import {
   MODEL,
   parseTranscript,
   readJsonl,
-  runAgent,
 } from '../agent-suite/lib/agent.mjs';
 import { isWindows, killTree, powershell, run } from '../agent-suite/lib/common.mjs';
 import { checkAnswer } from './check.mjs';
@@ -101,6 +102,56 @@ export function agentConfig(lightpathSpec, appDir) {
     resources: [],
     model: MODEL,
   };
+}
+
+/**
+ * kiro-cli with the suite's flags plus two: `--trust-workspace`, because kiro-cli 2.37 doesn't load
+ * MCP servers from an untrusted folder's agent config (run 2 had no Lightpath tools), and
+ * `--require-mcp-startup`, so a server that fails to start ends the run (exit 3) instead of
+ * leaving the agent without tools.
+ */
+export const KIRO_ARGS = (prompt) => [
+  'chat',
+  '--no-interactive',
+  '--trust-all-tools',
+  '--trust-workspace',
+  '--require-mcp-startup',
+  '--agent',
+  'bench',
+  '--model',
+  MODEL,
+  '--effort',
+  EFFORT,
+  '--output-format',
+  'stream-json',
+  '--wrap',
+  'never',
+  prompt,
+];
+
+function runKiro({ cwd, prompt, outDir }) {
+  const transcript = join(outDir, 'transcript.jsonl');
+  const args = KIRO_ARGS(prompt);
+  writeFileSync(join(outDir, 'kiro-cli.args.json'), `${JSON.stringify([KIRO_CLI, ...args], null, 2)}\n`);
+  const out = openSync(transcript, 'w');
+  const err = openSync(join(outDir, 'kiro-cli.stderr.log'), 'w');
+  const child = spawn(KIRO_CLI, args, { cwd, stdio: ['ignore', out, err], windowsHide: true });
+  closeSync(out);
+  closeSync(err);
+  return new Promise((done) => {
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killTree(child.pid);
+    }, AGENT_TIMEOUT_MS);
+    const finish = (exitCode) => {
+      clearTimeout(timer);
+      killTree(child.pid);
+      done({ exitCode, timedOut, transcript, pid: child.pid });
+    };
+    child.on('error', () => finish(-1));
+    child.on('exit', (code) => finish(code ?? -1));
+  });
 }
 
 async function main() {
@@ -216,12 +267,7 @@ async function main() {
     if (!opened) throw new Error('app did not open');
 
     const agentStart = Date.now();
-    const res = await runAgent({
-      trialDir: appDir,
-      prompt: question(app.action),
-      outDir: runDir,
-      timeoutMs: AGENT_TIMEOUT_MS,
-    });
+    const res = await runKiro({ cwd: appDir, prompt: question(app.action), outDir: runDir });
     const end = Date.now();
     const parsed = parseTranscript(readJsonl(res.transcript));
     const answer = (parsed.finalText ?? '').trim();

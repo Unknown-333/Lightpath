@@ -24,8 +24,13 @@ export default {
   ],
   /** The app's own dev command, from its README. */
   dev: 'npm run dev',
-  /** Lightpath flags this app needs: two dev servers print URLs, and Vite serves from frontend/. */
-  lightpathFlags: ['--url', 'http://localhost:3310', '--web-root', 'frontend'],
+  /**
+   * Lightpath flags this app needs: Vite serves from frontend/. Run 1 also passed
+   * `--url http://localhost:3310`; Lightpath 0.0.2 opened that URL before Vite was up, got
+   * ERR_CONNECTION_REFUSED and never retried, so the app never opened. From run 2 the URL is
+   * detected from the dev command's output instead (README.md, "Changes after results").
+   */
+  lightpathFlags: ['--web-root', 'frontend'],
   action: 'Take quiz',
   /** The check, fixed before the run: one right frontend file and the right backend file. */
   expected: {
