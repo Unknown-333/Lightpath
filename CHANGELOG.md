@@ -2,6 +2,40 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## [0.1.0] - TBD (not published yet)
+
+Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages and the VS Code extension move to 0.1.0, because every one of them ships changed files (D-133). Needs Node.js 22.12 or newer, as before.
+
+> **Benchmark results: placeholder.** The numbers from the seeded-bug suites (shop and tududi), with and without Lightpath, go here in release prep part 2. Nothing here claims a result yet.
+
+### Added
+
+- **`run_action`**: a new MCP tool. The agent names a button or link (`button "Checkout"`, visible text, or `css=…`), and Lightpath clicks it, or presses Enter or Space, in the browser it opened. The answer is that action's trace, frontend and backend, in one call. It can fill form fields first; the values it types never show up in any output. It runs on 127.0.0.1 with the daemon's token, through a new `POST /v1/action` endpoint, and opens no debug port (D-113, D-114, D-115, D-127, [ADR 0007](docs/adr/0007-run-action.md)).
+- **Compact output by default**: every tool answer is at most 16,000 characters, about 4,000 tokens (D-109). A trace now reads as a list of functions, grouped by what ran before the request, on the server, and after the response, each with its line range, call count and the lines that didn't run (D-116, D-128). When a trace is too big, whole files are left out, least-used first, and the last line says how to see them.
+- **A deeper look on request**: `get_trace` with a `file` or a `function` shows the lines that ran, with the ones that didn't run folded and marked, in pages (D-117).
+- **Fix checking**: `diff_traces` compares two traces by function, not line number, so a fix that moves lines still compares: which functions and branches ran in only one, changed call counts, changed request status, errors that appeared or went away (D-118).
+- **`lightpath init --agent <claude-code|cursor|vscode|kiro>`**: one command per agent writes its MCP config and a short `AGENTS.md` block that says when to use Lightpath. `lightpath doctor` checks what init wrote. CI tests all four on Windows, macOS and Linux with no agent installed (D-120).
+- **Errors in traces**: thrown errors, `console.error`, failed requests (status 400 and up, or network errors) and a Node server's crash show in the trace of the action they belong to, as counts plus the first message (D-121, D-132).
+- **Auto-start**: with `"autoStart": true` in `lightpath.config.json` (`lightpath init` writes it), `lightpath mcp` starts `lightpath dev` by itself the first time a tool needs it, and stops it when the agent closes. Every answer from that first call says the command it ran (D-122).
+- **`run_request`**: a new MCP tool for API-only backends. The agent sends one HTTP request to the app on localhost and gets the backend code it ran, with no browser. It sends only to `localhost`, `127.0.0.1` or `[::1]`, follows no redirect and uses no proxy (D-125).
+- The MCP server tells agents what Lightpath is for, in its `instructions`, and its six tool descriptions start with what each tool does (D-119, D-129).
+- `mcpName` in `@lightpath-dev/cli`'s `package.json`, for the Official MCP Registry.
+
+### Security
+
+- **Secrets hidden** in everything a tool returns: query values and `key=value` pairs whose name holds `token`, `key`, `secret`, `pass`, `auth`, `session` or `sig`, `Bearer` tokens, and JWT-like strings become `[redacted]`. Request and response bodies and headers are never collected. Your source code, shown by `get_trace`, isn't changed (D-123).
+
+### Fixed
+
+- `lightpath dev --url <url>` opened the page before the dev server was listening, and nothing retried, so no browser opened. It now waits until the URL answers, up to 60 s (D-126).
+- The VS Code editor test failed now and then at its Replay check on a Windows desktop. It now checks the tab in front instead of an editor event that VS Code doesn't always send. Test only (D-131).
+
+### Changed
+
+- Wire protocol, still version 1 (every addition is optional): `POST /v1/action`, the `problem` ingest message, `beforeRequest` on browser deltas, and `phases`, `functions`, `problems` on traces ([docs/PROTOCOL.md](docs/PROTOCOL.md)).
+- Config: a new key, `autoStart` (D-122).
+- The browser reads coverage once more per action, as its first request leaves the page: 27.99 / 38.82 ms p50 / p99 on Actual Budget, measured on a busy machine ([bench/README.md](bench/README.md), D-128).
+
 ## [0.0.2] - 2026-10-30
 
 A fix for the browser collector. Only the npm packages whose published files changed get 0.0.2: `@lightpath-dev/browser` and `@lightpath-dev/cli` (D-107). `npx @lightpath-dev/cli@0.0.2` installs browser 0.0.2 with the 0.0.1 packages below.

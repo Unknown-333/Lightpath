@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/node-agent",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "In-process Node.js agent for Lightpath. Loaded with --require; has no runtime dependencies.",
   "keywords": [
     "coverage",
