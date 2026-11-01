@@ -88,7 +88,7 @@ export function auditShellCommands(toolCalls, trialDir) {
  * same permission rules, no prompt override, and includeMcpJson: false, so the owner's global
  * MCP servers (~/.kiro/settings/mcp.json) are never loaded.
  */
-export function agentConfig(condition, { lightpathBin } = {}) {
+export function agentConfig(condition, { lightpathServer } = {}) {
   if (!CONDITIONS.includes(condition)) throw new Error(`unknown condition ${condition}`);
   const config = {
     name: 'bench',
@@ -103,9 +103,12 @@ export function agentConfig(condition, { lightpathBin } = {}) {
     model: MODEL,
   };
   if (condition === 'with') {
-    if (!lightpathBin) throw new Error('condition "with" needs the packed Lightpath CLI');
-    config.mcpServers.lightpath = { command: process.execPath, args: [lightpathBin, 'mcp'] };
+    // D-130: the server entry `lightpath init --agent kiro` wrote (with the packed CLI in place of
+    // npx), and AGENTS.md as a resource, which init's Kiro note asks for.
+    if (!lightpathServer) throw new Error('condition "with" needs the server entry from lightpath init');
+    config.mcpServers.lightpath = { command: lightpathServer.command, args: [...lightpathServer.args] };
     config.tools.push('@lightpath');
+    config.resources.push('file://AGENTS.md');
   }
   if (condition === 'browser') {
     // --isolated: a throwaway profile, never the owner's Chrome profile. --headless: nothing on screen.
@@ -118,37 +121,26 @@ export function agentConfig(condition, { lightpathBin } = {}) {
   return config;
 }
 
-/**
- * Stub of the agent instructions `lightpath init` will write for Kiro. Replace with the real
- * output once `lightpath init` exists; the suite's bugs and scoring don't change when it does.
- */
-export function lightpathSteering(lightpathBin) {
-  return `# Lightpath
-
-This project can be run under Lightpath, which records the code that actually ran (frontend and backend, line level) for each click or request.
-
-- Start the app under Lightpath: \`node "${lightpathBin}" dev -- npm run dev\`
-- Then use the \`lightpath\` MCP tools to read what ran for an action.
-`;
+/** Keeps .kiro/ (the harness's agent file, init's mcp.json) out of `git status` in a shop trial. */
+export function excludeKiroDir(trialDir) {
+  if (!existsSync(join(trialDir, '.git'))) return;
+  const exclude = join(trialDir, '.git', 'info', 'exclude');
+  mkdirSync(join(trialDir, '.git', 'info'), { recursive: true });
+  const text = existsSync(exclude) ? readFileSync(exclude, 'utf8') : '';
+  if (!text.split(/\r?\n/).includes('.kiro/')) writeFileSync(exclude, '.kiro/\n', { flag: 'a' });
 }
 
-/** Writes .kiro/agents/bench.json (and the steering stub for "with") into the trial folder. */
-export function writeAgentFiles(trialDir, condition, { lightpathBin } = {}) {
+/**
+ * Writes .kiro/agents/bench.json into the trial folder. For "with", `lightpath init` has already
+ * written its own files (D-130); the steering stub that stood in for it is gone.
+ */
+export function writeAgentFiles(trialDir, condition, { lightpathServer } = {}) {
   const agentsDir = join(trialDir, '.kiro', 'agents');
   mkdirSync(agentsDir, { recursive: true });
-  const config = agentConfig(condition, { lightpathBin });
+  const config = agentConfig(condition, { lightpathServer });
   writeFileSync(join(agentsDir, 'bench.json'), `${JSON.stringify(config, null, 2)}\n`);
-  if (condition === 'with') {
-    const steeringDir = join(trialDir, '.kiro', 'steering');
-    mkdirSync(steeringDir, { recursive: true });
-    writeFileSync(join(steeringDir, 'lightpath.md'), lightpathSteering(lightpathBin));
-  }
   // Keep the harness files out of `git status`, as if they were the user's local config.
-  const exclude = join(trialDir, '.git', 'info', 'exclude');
-  if (existsSync(join(trialDir, '.git'))) {
-    mkdirSync(join(trialDir, '.git', 'info'), { recursive: true });
-    writeFileSync(exclude, '.kiro/\n', { flag: 'a' });
-  }
+  excludeKiroDir(trialDir);
   return config;
 }
 
