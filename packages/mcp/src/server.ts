@@ -81,9 +81,10 @@ export function createMcpServer(options: McpOptions): McpServer {
         timeoutMs: z.number().int().min(500).max(30_000).optional().describe('Settle cap, default 5000'),
         fill: z
           .array(
+            // Same forms as target and within; their descriptions aren't repeated, to keep tools/list small.
             z.object({
-              target: targetSchema,
-              within: withinSchema.optional(),
+              target: z.string().min(1).max(500),
+              within: z.string().min(1).max(200).optional(),
               value: z.string().max(10_000),
             }),
           )
@@ -133,7 +134,7 @@ export function createMcpServer(options: McpOptions): McpServer {
         traceId: traceIdSchema,
         file: z.string().min(1).optional().describe('A path in the trace, or a unique part of one'),
         function: z.string().min(1).optional().describe('A function name'),
-        page: z.number().int().min(1).optional(),
+        page: z.number().int().min(1).max(10_000).optional(),
       },
     },
     async ({ traceId, file, function: fn, page }) => {

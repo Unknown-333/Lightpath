@@ -46,13 +46,16 @@ describe('run_action description (design section 3)', () => {
 });
 
 describe('describeActionResult (design section 4.5)', () => {
-  it('puts the action and page lines after the trace line, then the trace body', () => {
+  it('puts the action and page lines after the trace line, then the summary (build 2)', () => {
+    // This trace has no phases (a daemon before build 2), so its files print by line range.
     expect(describeActionResult({ target: 'button "Checkout"' }, ok())).toBe(
       [
         'Trace t_abc123def456: button: Checkout',
         'action: click button "Checkout" (boundary press, settled quiet)',
         'page: http://localhost:5173/',
-        '  request: POST /api/orders → 201 (node, 3 ms)',
+        'request: POST /api/orders → 201 (node, 3 ms)',
+        '',
+        'files',
         '  src/Cart.tsx [browser] lines 21',
         '  server/routes/orders.ts [node] lines 12',
       ].join('\n'),

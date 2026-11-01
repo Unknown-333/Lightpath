@@ -72,7 +72,10 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
   const byPhase = new Map<number, Map<string, FunctionHit[]>>();
   for (const fn of trace.functions ?? []) {
     let files = byPhase.get(fn.phase);
-    if (!files) byPhase.set(fn.phase, (files = new Map()));
+    if (!files) {
+      files = new Map();
+      byPhase.set(fn.phase, files);
+    }
     files.set(fn.path, [...(files.get(fn.path) ?? []), fn]);
   }
   const placed = new Set<string>();
@@ -119,7 +122,10 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
     const section = i >= 0 ? sections[i] : undefined;
     if (section) section.files.push(block);
     else {
-      if (!other) sections.push((other = { title: phases.length ? 'other files' : 'files', files: [] }));
+      if (!other) {
+        other = { title: phases.length ? 'other files' : 'files', files: [] };
+        sections.push(other);
+      }
       other.files.push(block);
     }
   }

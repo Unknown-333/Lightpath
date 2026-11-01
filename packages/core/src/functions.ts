@@ -114,7 +114,8 @@ export function mapFunctions(
   const out: FunctionResult[] = [];
   for (const fn of input.coverage.functions) {
     const top = fn.ranges[0];
-    if (!top || top.startOffset === 0) continue; // the script's own top-level code
+    // The script's own top-level code: V8 lists it first, unnamed, from offset 0.
+    if (!top || (top.startOffset === 0 && fn.functionName === '')) continue;
     if (!fn.ranges.some((r) => r.count > 0)) continue;
     const range = mappedRange(fn, locate);
     if (!range) continue;

@@ -1,4 +1,4 @@
-import type { FunctionHit, Trace } from '@lightpath-dev/protocol';
+import type { Trace } from '@lightpath-dev/protocol';
 import { fitText } from './budget.js';
 import { functionName, numberRanges } from './summary.js';
 
