@@ -282,6 +282,41 @@ export function parseTranscript(events) {
   };
 }
 
+export const TOKENS_METHOD = 'transcript-chars/4';
+
+/**
+ * Token estimate for one run (D-111): characters / 4 of what the transcript shows was sent and
+ * received, each item counted once. In: the prompt and every tool result text. Out: every agent
+ * message and thought chunk, and each tool call's final input. Leaves out the system prompt, the
+ * tool specs and the context re-sent on each request, so it is a lower bound, not a bill.
+ */
+export function estimateTokens(events, prompt = '') {
+  let inChars = prompt.length;
+  let outChars = 0;
+  const inputs = new Map();
+  const outputs = new Map();
+  for (const event of events) {
+    const update = event.data?.update;
+    if (!update) continue;
+    const kind = update.sessionUpdate;
+    if (kind === 'agent_message_chunk' || kind === 'agent_thought_chunk') {
+      const text = update.content?.text;
+      if (typeof text === 'string') outChars += text.length;
+    } else if (kind === 'tool_call' || kind === 'tool_call_update') {
+      if (update.rawInput !== undefined) inputs.set(update.toolCallId, JSON.stringify(update.rawInput));
+      const text = (update.content ?? [])
+        .map((c) => c?.content?.text ?? '')
+        .join('\n');
+      if (text) outputs.set(update.toolCallId, text);
+    }
+  }
+  for (const text of inputs.values()) outChars += text.length;
+  for (const text of outputs.values()) inChars += text.length;
+  const tokensEstIn = Math.round(inChars / 4);
+  const tokensEstOut = Math.round(outChars / 4);
+  return { tokensEst: tokensEstIn + tokensEstOut, tokensEstIn, tokensEstOut, tokensMethod: TOKENS_METHOD };
+}
+
 export function readJsonl(path) {
   const events = [];
   for (const line of readFileSync(path, 'utf8').split('\n')) {

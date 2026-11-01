@@ -22,6 +22,7 @@ import {
   buildPrompt,
   CONDITIONS,
   EFFORT,
+  estimateTokens,
   KIRO_CLI,
   kiroCliVersion,
   MODEL,
@@ -202,6 +203,7 @@ async function main() {
   record.tokensIn = null;
   record.tokensOut = null;
   record.tokensNote = 'kiro-cli 2.37 stream-json reports credits, not tokens';
+  Object.assign(record, estimateTokens(events, prompt));
   record.credits = parsed.credits;
   record.contextPctMax = parsed.contextPctMax;
   record.agentStatus = parsed.status;
@@ -248,6 +250,7 @@ async function main() {
   copyFileSync(join(bugDir, 'report.md'), join(outDir, 'report.md'));
   log(
     `correct=${record.correct} void=${record.void} steps=${record.steps} credits=${record.credits?.toFixed(3)} ` +
+      `tokensEst=${record.tokensEst} ` +
       `wall=${(record.wallMs / 1000).toFixed(0)} s -> ${resultsFile}`,
   );
   log(
