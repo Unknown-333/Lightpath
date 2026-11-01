@@ -23,6 +23,7 @@ import {
   CONDITIONS,
   EFFORT,
   estimateTokens,
+  excludeKiroDir,
   KIRO_CLI,
   kiroCliVersion,
   MODEL,
@@ -43,7 +44,7 @@ import {
   sleep,
   TRIALS_ROOT,
 } from './lib/common.mjs';
-import { prepareLightpath } from './lib/lightpath.mjs';
+import { initTrial, prepareLightpath, probeTools, startLightpathDev } from './lib/lightpath.mjs';
 import * as shopApp from './lib/shop.mjs';
 import * as shopTrial from './lib/trial.mjs';
 import * as realapp from './realapp/lib/app.mjs';
@@ -77,6 +78,9 @@ const SUITES = {
     typecheck: shopTrial.typecheck,
     runCheck: shopCheck.runCheck,
     agentDiff: null,
+    // "with" (D-130): keys written before `lightpath init`; init adds `command` from the dev script.
+    lightpathConfig: { headless: true },
+    afterInit: (dir) => shopTrial.foldIntoInitialCommit(dir),
   },
   realapp: {
     bugsDir: realapp.BUGS_DIR,
@@ -88,6 +92,9 @@ const SUITES = {
     typecheck: realapp.typecheck,
     runCheck: realapp.runCheck,
     agentDiff: realapp.agentDiff,
+    // tududi has no `dev` script and its start scripts need bash, so the command and URL are set.
+    lightpathConfig: { command: 'node dev.mjs', url: realapp.WEB_URL, headless: true },
+    afterInit: (dir) => realapp.refreshPristine(dir),
   },
 };
 const S = SUITES[suite];
@@ -201,24 +208,52 @@ async function main() {
   const template = prepareTemplate(log);
   const trialDir = createTrial({ id: trialId, bugDir, template, fresh: Boolean(args.fresh) });
   record.trialDir = trialDir;
+  if (args.label) record.label = String(args.label);
   let lightpath = null;
+  let lightpathServer;
   if (condition === 'with') {
+    // D-130: set up the way a Kiro user does, from the packed branch under test.
     lightpath = prepareLightpath(log);
-    record.lightpath = { commit: lightpath.commit, dirty: lightpath.dirty, version: lightpath.version };
+    const setup = initTrial(trialDir, lightpath, S.lightpathConfig, join(outDir, 'lightpath-init.log'));
+    excludeKiroDir(trialDir);
+    const folded = S.afterInit(trialDir);
+    lightpathServer = setup.serverEntry;
+    record.lightpath = {
+      commit: lightpath.commit,
+      dirty: lightpath.dirty,
+      version: lightpath.version,
+      initEntry: setup.initEntry,
+      serverEntry: setup.serverEntry,
+      configWritten: setup.configWritten,
+      initOutput: setup.initOutput,
+      ...(typeof folded === 'string' ? { initialCommit: folded } : {}),
+    };
   }
-  const config = writeAgentFiles(trialDir, condition, { lightpathBin: lightpath?.bin });
-  record.denyGlobs = checkDenyConversion(agentConfig(condition, { lightpathBin: lightpath?.bin }));
+  const config = writeAgentFiles(trialDir, condition, { lightpathServer });
+  record.denyGlobs = checkDenyConversion(agentConfig(condition, { lightpathServer }));
   record.agentConfig = config;
   const prompt = buildPrompt(readFileSync(join(bugDir, 'report.md'), 'utf8'));
   writeFileSync(join(outDir, 'prompt.txt'), prompt);
   const hashesBefore = hashBugDir();
 
+  if (lightpathServer) {
+    // The tools the agent gets on top of the built-in ones, read from the server itself (no model call).
+    record.lightpathTools = await probeTools(lightpathServer, trialDir);
+    log(`lightpath tools: ${record.lightpathTools.tools.join(', ')}`);
+  }
   if (args['dry-run']) {
     log(`dry run: trial ${trialDir}, ${record.denyGlobs} deny globs, prompt ${outDir}\\prompt.txt`);
     writeFileSync(join(outDir, 'dry-run.json'), `${JSON.stringify(record, null, 2)}\n`);
     return;
   }
 
+  let devServer = null;
+  if (lightpath) {
+    // D-130: the app runs under `lightpath dev` before the agent starts, so run_action can act on it.
+    devServer = await startLightpathDev(trialDir, lightpath, join(outDir, 'lightpath-dev.log'));
+    record.lightpathDev = { pid: devServer.pid, readyMs: devServer.readyMs };
+    log(`lightpath dev ready in ${devServer.readyMs} ms (pid ${devServer.pid})`);
+  }
   const load = await loadBeforeRun();
   record.cpuLoadStart = load;
   const agentStartIso = new Date().toISOString();
@@ -228,6 +263,11 @@ async function main() {
     `agent stopped: exit ${agent.exitCode}${agent.timedOut ? ' (timed out)' : ''} after ${agent.wallMs} ms`,
   );
   record.cpuLoadEnd = cpuLoad();
+  if (devServer) {
+    // Stopped by PID before the usual cleanup and the check, which start the app on their own.
+    devServer.stop();
+    await sleep(2000);
+  }
   record.cleanup = cleanupTrial(trialDir, agentStartIso);
   record.wallMs = agent.wallMs;
   record.exitCode = agent.exitCode;
@@ -248,6 +288,25 @@ async function main() {
   record.agentStatus = parsed.status;
   record.stopReason = parsed.stopReason;
   record.blockedCalls = parsed.toolCalls.filter((c) => c.blocked).length;
+  if (record.lightpathTools) {
+    // Which Lightpath tools the agent called, and how often (by the tool name in the call's title).
+    const counts = {};
+    for (const call of parsed.toolCalls) {
+      const name = record.lightpathTools.tools.find((t) =>
+        `${call.title ?? ''} ${call.kind ?? ''}`.includes(t),
+      );
+      if (name) counts[name] = (counts[name] ?? 0) + 1;
+    }
+    record.lightpathCalls = counts;
+    // kiro-cli defers MCP tools: the agent loads them with tool_load before it can call them.
+    record.lightpathLoaded = [
+      ...new Set(
+        parsed.toolCalls.flatMap((c) =>
+          (c.input?.tool_ids ?? []).filter((id) => String(id).startsWith('lightpath::')),
+        ),
+      ),
+    ];
+  }
   record.shellFlags = auditShellCommands(parsed.toolCalls, trialDir);
   record.outsidePaths = outsidePaths(parsed.toolCalls, trialDir);
   writeFileSync(join(outDir, 'tool-calls.json'), `${JSON.stringify(parsed.toolCalls, null, 2)}\n`);

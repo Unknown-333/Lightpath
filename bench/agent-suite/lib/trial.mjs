@@ -123,6 +123,17 @@ export function applyPatch(dir, patch, { reverse = false } = {}) {
   run('git', [...args, patch], { cwd: dir, check: true });
 }
 
+/**
+ * "with" only (D-130): folds the files `lightpath init` wrote into the trial's single commit, so
+ * they aren't counted as the agent's changes and history still has one commit. .kiro/ must be
+ * excluded first.
+ */
+export function foldIntoInitialCommit(dir) {
+  run('git', ['add', '-A'], { cwd: dir, check: true });
+  run('git', [...GIT_ID, 'commit', '-q', '--amend', '--no-edit'], { cwd: dir, check: true });
+  return run('git', ['show', '--stat', '--format=', 'HEAD'], { cwd: dir }).stdout.trim();
+}
+
 /** Runs the shop's own typecheck (tsc -p .) in a trial folder. */
 export function typecheck(dir) {
   const res = npm(['run', 'typecheck', '--silent'], { cwd: dir, timeoutMs: 180_000 });

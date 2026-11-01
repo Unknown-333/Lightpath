@@ -140,6 +140,18 @@ export function createTrial({ id, bugDir, template, fresh = false }) {
   return dir;
 }
 
+/**
+ * "with" only (D-130): copies the clean source copy again after `lightpath init` wrote its files,
+ * so they aren't counted as the agent's changes.
+ */
+export function refreshPristine(trialDir) {
+  const pristine = join(TRIALS_ROOT, '_pristine', basename(trialDir));
+  if (!pristine.startsWith(TRIALS_ROOT + sep)) throw new Error(`refusing to delete ${pristine}`);
+  rmSync(pristine, { recursive: true, force: true });
+  mkdirSync(pristine, { recursive: true });
+  sourceCopy(trialDir, pristine);
+}
+
 function listSource(root, dir = root, out = []) {
   for (const name of readdirSync(dir)) {
     const path = join(dir, name);
