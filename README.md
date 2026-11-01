@@ -80,14 +80,18 @@ Each line is a file and the lines in it that ran. `×N` is the most times any of
 | `get_trace`            | Every file and line one action ran, frontend and backend    |
 | `diff_traces`          | Lines that ran in only one of two actions                   |
 
-Add it once:
+Add it once, with one command in your project folder:
 
-| Agent       | Setup                                                                                                                                    |
-| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Claude Code | `claude mcp add lightpath -- npx -y @lightpath-dev/cli mcp`                                                                              |
-| Cursor      | `.cursor/mcp.json`: `{ "mcpServers": { "lightpath": { "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }`               |
-| VS Code     | `.vscode/mcp.json`: `{ "servers": { "lightpath": { "type": "stdio", "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }` |
-| Kiro        | `.kiro/settings/mcp.json`: `{ "mcpServers": { "lightpath": { "command": "npx", "args": ["-y", "@lightpath-dev/cli", "mcp"] } } }`        |
+| Agent       | Command                                           | Writes                    |
+| ----------- | ------------------------------------------------- | ------------------------- |
+| Claude Code | `npx @lightpath-dev/cli init --agent claude-code` | `.mcp.json`               |
+| Cursor      | `npx @lightpath-dev/cli init --agent cursor`      | `.cursor/mcp.json`        |
+| VS Code     | `npx @lightpath-dev/cli init --agent vscode`      | `.vscode/mcp.json`        |
+| Kiro        | `npx @lightpath-dev/cli init --agent kiro`        | `.kiro/settings/mcp.json` |
+
+Each also writes a short block in `AGENTS.md` (and in `CLAUDE.md` if you have one) that tells the agent when to call Lightpath, and the keys `lightpath.config.json` lacks. Other servers in the file stay. A file with comments is left alone and init prints the entry to paste. Running it again changes nothing. Then restart the agent and run `npx @lightpath-dev/cli doctor`: it checks the files and starts the server offline to list its tools. CI runs all four on Linux, macOS and Windows with no agent installed (`scripts/setup-check.mjs`).
+
+On Windows, init writes `cmd /c npx …`, because a client can't start the `npx` shim without a shell. That form doesn't run on macOS or Linux, so a teammate there runs init again; doctor flags the wrong form for the OS.
 
 The server looks for `.lightpath/daemon.json` in its folder and then each parent, so it finds the `lightpath dev` running in your project. Pass `--root <folder>` if your agent starts it somewhere else.
 
