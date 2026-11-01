@@ -614,12 +614,12 @@ Ruling 10. Unchanged rules, now also covering the new endpoint:
 
 Ruling 11. Another worker is building the measuring scripts now: `bench/first-wow` (time from `npx` to the agent's first useful answer on a fresh clone of a real app, target under 2 minutes) and `bench/readme-test` (what 3 to 5 fresh agents or people say after 10 seconds of the README top section).
 
-| Measure               | Where the numbers go                                                                               | When it is run                                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Time to first wow     | `bench/first-wow/results/<date>.md` plus `.jsonl`, the same layout as `bench/agent-suite/results/` | First baseline as that item defines it; again after build 1 merges; once more after builds 3 and 4, which change the steps it times |
-| README 10-second test | `bench/readme-test/results/<date>.md`, every answer verbatim                                       | After build 1 merges, once the README's first screen can say the agent clicks; again whenever the top section changes               |
-| Shop trace size       | `pnpm e2e` output (the 16,000-character check)                                                     | Every CI run from build 2                                                                                                           |
-| Agent suite, `with`   | `bench/agent-suite/results/` (D-108 rules, unchanged)                                              | After builds 1 and 2, within the credit cap; held-out bugs only at the end                                                          |
+| Measure               | Where the numbers go                                                              | When it is run                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Time to first wow     | `bench/first-wow/results/<date>.md` plus `results.jsonl` (layout from PR #26)     | First baseline as that item defines it; again after build 1 merges; once more after builds 3 and 4, which change the steps it times |
+| README 10-second test | `bench/readme-test/results/<date>.md` plus `results.jsonl`, every answer verbatim | After build 1 merges, once the README's first screen can say the agent clicks; again whenever the top section changes               |
+| Shop trace size       | `pnpm e2e` output (the 16,000-character check)                                    | Every CI run from build 2                                                                                                           |
+| Agent suite, `with`   | `bench/agent-suite/results/` (D-108 rules, unchanged)                             | After builds 1 and 2, within the credit cap; held-out bugs only at the end                                                          |
 
 README claims cite these files, never this doc.
 
