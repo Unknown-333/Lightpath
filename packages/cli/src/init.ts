@@ -69,14 +69,15 @@ export function agentsBlock(tools: readonly string[]): string {
   ];
   if (has('run_action')) {
     lines.push(
-      '- Asked which code handles a button, page or request, or why an action fails? Call the Lightpath MCP tool `run_action` with the target, like `button "Checkout"`, before searching files.' +
+      // D-134: a user's bug report comes first, and a flow is replayed one call per step.
+      '- When the user reports a bug they see in the app, or asks which code handles a button, page or request, reproduce it with the Lightpath MCP tool `run_action` before searching files. Each call is one step, like `button "Save"`, and the page, sign-in and data stay between calls: sign in with `fill`, do the setup steps, then the step that shows the bug.' +
         (has('find_code_for_action')
           ? ' To read the last recorded action instead, call `find_code_for_action`.'
           : ''),
     );
   } else if (has('find_code_for_action')) {
     lines.push(
-      '- Asked which code handles a button, page or request, or why an action fails? Call the Lightpath MCP tool `find_code_for_action` with words from the button or link label, like `Checkout`, before searching files.',
+      '- When the user reports a bug they see in the app, or asks which code handles a button, page or request, do that action in the app, then call the Lightpath MCP tool `find_code_for_action` with words from the button or link label, like `Save`, before searching files.',
     );
   }
   lines.push('- Output is capped. To see more, follow its "not shown" line.');

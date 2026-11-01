@@ -207,7 +207,8 @@ describe('agentsBlock', () => {
         '',
         'This app runs under `lightpath dev`, which records the source files, functions and lines that ran, frontend and backend, for each click, key press or request.',
         '',
-        '- Asked which code handles a button, page or request, or why an action fails? Call the Lightpath MCP tool `run_action` with the target, like `button "Checkout"`, before searching files. To read the last recorded action instead, call `find_code_for_action`.',
+        // D-134: the bug-report trigger and one step per call.
+        '- When the user reports a bug they see in the app, or asks which code handles a button, page or request, reproduce it with the Lightpath MCP tool `run_action` before searching files. Each call is one step, like `button "Save"`, and the page, sign-in and data stay between calls: sign in with `fill`, do the setup steps, then the step that shows the bug. To read the last recorded action instead, call `find_code_for_action`.',
         '- Output is capped. To see more, follow its "not shown" line.',
         '- After a fix, call `run_action` again with the same target and compare the two traces with `diff_traces`.',
         "- If Lightpath says it isn't running, start `lightpath dev` in the project folder, or ask the user to.",

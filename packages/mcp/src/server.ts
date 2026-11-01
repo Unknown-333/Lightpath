@@ -40,13 +40,16 @@ import { type ReadSource, sliceTrace } from './slices.js';
 import { summarizeTrace } from './summary.js';
 import { DESCRIPTIONS, INSTRUCTIONS } from './texts.js';
 
-/** The design's run_action description (docs/design/agent-loop.md section 3, D-119): under 300 characters. */
+/**
+ * The run_action description (docs/design/agent-loop.md section 3, D-119; bug-report trigger and
+ * one step per call, D-134): under 300 characters.
+ */
 export const RUN_ACTION_DESCRIPTION =
-  "Click a button or link, or press Enter or Space, in the user's running app, and return the code that ran, " +
-  'frontend and backend. Can fill fields first. Use it to see which code handles a UI action, or to ' +
-  'rerun a bug after a fix.';
+  "Do one step in the user's running app (click a button or link, or press Enter or Space, after filling " +
+  'fields) and return the code it ran, browser and server. Page, sign-in and data stay between calls. ' +
+  'Use it first to reproduce a reported bug step by step, and again after the fix.';
 
-const targetSchema = z.string().min(1).max(500).describe('button "Checkout", text, or css=<selector>');
+const targetSchema = z.string().min(1).max(500).describe('button "Save", text, or css=<selector>');
 const withinSchema = z.string().min(1).max(200).describe('Text of its row or section');
 
 export interface McpOptions {
