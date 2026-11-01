@@ -96,6 +96,9 @@ export async function dev(options: DevOptions): Promise<number> {
     });
     try {
       await collector.start();
+      // run_action (POST /v1/action) acts on this page from now on (D-115).
+      const runner = collector;
+      daemon.setActionRunner((request) => runner.runAction(request));
       say(`watching ${pc.cyan(url)}. Click anything in the browser window.`);
     } catch (err) {
       say(pc.red((err as Error).message));
@@ -116,6 +119,7 @@ export async function dev(options: DevOptions): Promise<number> {
 
   const code = await waitForExit(child);
   unsubscribe();
+  daemon.setActionRunner(undefined);
   await collector?.stop();
   await daemon.close();
   return code;

@@ -2,14 +2,18 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { ResolveContext } from '@lightpath-dev/core';
 import {
+  ActionRequest,
+  type ActionRunner,
   ClientMessage,
   CloseCode,
   type DaemonToClientMessage,
   IngestBatch,
+  MAX_ACTION_BYTES,
   MAX_MESSAGE_BYTES,
   PROTOCOL_VERSION,
 } from '@lightpath-dev/protocol';
 import { type WebSocket, WebSocketServer } from 'ws';
+import { BACKEND_WAIT_MS, runAction } from './actions.js';
 import { authorize, newToken } from './auth.js';
 import { Correlator } from './correlator.js';
 import { removeDiscovery, writeDiscovery } from './discovery.js';
@@ -27,6 +31,8 @@ export interface DaemonOptions {
   store?: Store;
   writeDiscoveryFile?: boolean;
   log?: (msg: string) => void;
+  /** Longest wait after an action's `traceEnd` for its backend lines (default 1,500 ms). */
+  backendWaitMs?: number;
 }
 
 export interface RunningDaemon {
@@ -36,6 +42,11 @@ export interface RunningDaemon {
   startedAt: number;
   store: Store;
   correlator: Correlator;
+  /**
+   * Registers what runs `POST /v1/action` (the browser collector, once its page is open), or
+   * removes it. Without one, every action answers `no_browser` (D-115).
+   */
+  setActionRunner(runner: ActionRunner | undefined): void;
   close(): Promise<void>;
 }
 
@@ -45,6 +56,8 @@ export async function startDaemon(options: DaemonOptions): Promise<RunningDaemon
   const store = options.store ?? new MemoryStore();
   const log = options.log ?? (() => {});
   const startedAt = Date.now();
+  const backendWaitMs = options.backendWaitMs ?? BACKEND_WAIT_MS;
+  let actionRunner: ActionRunner | undefined;
   const correlator = new Correlator(store, {
     workspaceRoots: options.workspaceRoots,
     ...(options.devServers ? { devServers: options.devServers } : {}),
@@ -81,6 +94,29 @@ export async function startDaemon(options: DaemonOptions): Promise<RunningDaemon
       for (const message of batch.data.messages) correlator.ingest(batch.data.agentId, message);
       res.writeHead(204, { 'x-lightpath-started-at': String(startedAt) }).end();
       return;
+    }
+    if (req.method === 'POST' && path === '/v1/action') {
+      // Same rules as /v1/ingest (D-115). The body holds `fill` values, which are secrets: it is
+      // never logged, and a schema error reply names fields, never values.
+      const auth = authorize(req, token);
+      if (auth !== 'ok') return json(res, auth === 'forbidden' ? 403 : 401, { error: auth });
+      // Drain an oversized body instead of dropping the connection, so the caller sees the 413.
+      const body = await readBody(req, MAX_ACTION_BYTES, true);
+      if (body === undefined) return json(res, 413, { error: 'body too large' });
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: 'invalid JSON' });
+      }
+      const request = ActionRequest.safeParse(parsed);
+      if (!request.success) {
+        const issues = request.error.issues.slice(0, 5).map((i) => ({ path: i.path, message: i.message }));
+        return json(res, 400, { error: issues });
+      }
+      if (request.data.protocolVersion !== PROTOCOL_VERSION)
+        return json(res, 426, { error: 'protocol version mismatch' });
+      return json(res, 200, await runAction(actionRunner, store, request.data, backendWaitMs));
     }
     json(res, 404, { error: 'not found' });
   }
@@ -153,6 +189,9 @@ export async function startDaemon(options: DaemonOptions): Promise<RunningDaemon
     startedAt,
     store,
     correlator,
+    setActionRunner(runner) {
+      actionRunner = runner;
+    },
     async close() {
       for (const client of wss.clients) client.close();
       wss.close();
@@ -166,21 +205,26 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(body));
 }
 
-/** Reads a request body as UTF-8, or returns undefined if it exceeds `limit` bytes. */
-function readBody(req: IncomingMessage, limit: number): Promise<string | undefined> {
+/**
+ * Reads a request body as UTF-8, or returns undefined if it exceeds `limit` bytes. Past the limit
+ * it drops the connection, or with `drain` reads the rest without keeping it.
+ */
+function readBody(req: IncomingMessage, limit: number, drain = false): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let size = 0;
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > limit) {
+        chunks.length = 0;
+        if (drain) return;
         resolve(undefined);
         req.destroy();
         return;
       }
       chunks.push(chunk);
     });
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('end', () => resolve(size > limit ? undefined : Buffer.concat(chunks).toString('utf8')));
     req.on('error', reject);
   });
 }

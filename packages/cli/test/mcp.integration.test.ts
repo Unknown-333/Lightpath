@@ -54,6 +54,7 @@ describe('lightpath mcp over stdio', () => {
         'find_code_for_action',
         'get_trace',
         'list_traces',
+        'run_action', // build 1 (design section 6.5, D-116)
       ]);
 
       const result = await client.callTool({

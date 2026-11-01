@@ -162,7 +162,7 @@ Target forms, tried in this order:
 ### 4.2 How the action is sent
 
 - **Fill first.** For each `fill` entry, find the field with the same rules as `target`, then `locator.fill(value)`. A field that isn't found, is ambiguous or isn't editable stops the call with that outcome and the entry's index, before any press. Filling happens outside any trace: `locator.fill` sets the value and fires `input` events but sends no key events, so the hook's `keydown` listener never pauses for it.
-- **Click: the synced press.** Scroll the target into view and check it with Playwright's actionability checks (`locator.click({ trial: true })`, which clicks nothing). Move the mouse to the target's center. Mouse down. Wait until the collector has taken the boundary and resumed the page (a promise `#click()` resolves right after `#resume()`), capped at 2 s. Mouse up. On the release boundary (D-082) the press doesn't pause, so the mouse goes up at once and the pause happens at `pointerup`. Measured: 20 of 20 Add to cart and 20 of 20 Checkout traces matched the 80 ms human-style press, headless and headed; Checkout ready in 329.6 ms p50 against 408.8 ms for the hold.
+- **Click: the synced press.** Scroll the target into view and check it with no input (D-127): visible, enabled, its box unchanged over two animation frames, and `elementFromPoint` at its center inside the target. Not `locator.click({ trial: true })`: in Playwright 1.64 a trial run still sends a real press, which the hook sees, so every action opened two traces (measured in build 1). Move the mouse to the target's center. Mouse down. Wait until the collector has taken the boundary and resumed the page (a promise `#click()` resolves right after `#resume()`), capped at 2 s. Mouse up. On the release boundary (D-082) the press doesn't pause, so the mouse goes up at once and the pause happens at `pointerup`. Measured: 20 of 20 Add to cart and 20 of 20 Checkout traces matched the 80 ms human-style press, headless and headed; Checkout ready in 329.6 ms p50 against 408.8 ms for the hold.
 - **Key: `locator.press`.** `Enter` or `Space` on the target. Key events aren't dropped during a pause (ADR 0003). Measured 20 of 20; the label gets " (Enter)" (D-079).
 - **One action at a time.** Calls queue in the collector. A call also waits for any open trace (a person's click) to end first, so a response never lands in the next action's trace (the two-press split in browser-control.md).
 - **Headless.** The browser `lightpath mcp` auto-starts is headless (browser-control.md recommendation 5). A `lightpath dev` the user started keeps its own setting.
@@ -645,7 +645,7 @@ Every build: its D-entries are already written (this item); it updates `docs/PRO
 Tests:
 - Unit: target parsing (each form, `within`), outcome mapping.
 - Daemon: `/v1/action` without token → 401, with `Origin` → 403, oversized → 413, no runner → `no_browser`; the backend wait ends early when the backend delta arrives and at 1.5 s when it doesn't.
-- Real browser (`LIGHTPATH_BROWSER_TESTS=1`): synced press gives the same files and lines as an 80 ms held press, at the press and at the release boundary; Enter; `ambiguous` and `not_found` with candidates; `not_actionable` on a disabled button; `no_trace` on a plain `div`; two calls in a row give two whole traces; `fill` then click gives a trace with no extra boundary from the typing; a `fill` entry that isn't found stops before any press and names its index.
+- Real browser (`LIGHTPATH_BROWSER_TESTS=1`): synced press gives the same files and lines as an 80 ms held press, at the press and at the release boundary; Enter; `ambiguous` and `not_found` with candidates; `not_actionable` on a disabled button; `no_trace` on a Space press on a plain `div` (a click on a plain `div` does open a trace, with "no workspace code ran": the hook pauses on every primary press; the lead's ruling, 2026-11-01, during build 1); two calls in a row give two whole traces; `fill` then click gives a trace with no extra boundary from the typing; a `fill` entry that isn't found stops before any press and names its index.
 - Fill secrecy (rule 6): the test page echoes the filled value into a `console.error`, the page URL and a label; no tool output holds it, and the collector's debug log doesn't either.
 - e2e: after the existing human-press checks, an MCP client calls `run_action` for Add to cart (`within` the product row) and then Checkout (a second Checkout run fills the coupon field with `fill` first and checks the order's discount line ran). The Checkout trace has the same files and lines as the human-press Checkout, and `POST /api/orders 201`. No Playwright press in that part of the script.
 
@@ -765,21 +765,22 @@ Each cut is something that could not move a success metric enough to be worth it
 
 ## 18. Decision index
 
-| D     | Title                                                              | Tier | Build |
-| ----- | ------------------------------------------------------------------ | ---- | ----- |
-| D-113 | The lead's five tools, no page_snapshot (sixth: D-125)             | 1    | 1, 2  |
-| D-114 | run_action: synced press on the collector's own page               | 1    | 1     |
-| D-115 | `POST /v1/action` on the daemon                                    | 2    | 1     |
-| D-116 | Function summary by phase; trace model `phases` and `functions`    | 2    | 2     |
-| D-117 | Drill-down slices from disk, paged                                 | 1    | 2     |
-| D-118 | Fix verification with run_action and a function-level diff_traces  | 1    | 2     |
-| D-119 | Server instructions and trigger-first tool descriptions            | 1    | 2     |
-| D-120 | `lightpath init --agent`, doctor checks, CI `setup` job            | 1    | 3     |
-| D-121 | Errors and failed requests in traces; `problem` ingest message     | 2    | 4     |
-| D-122 | Auto-start from `lightpath mcp`; config key `autoStart`            | 2    | 4     |
-| D-123 | Redaction rules for tool output                                    | 1    | 4     |
-| D-124 | Phase 2 build order, gate and measures                             | 1    | all   |
-| D-125 | `run_request`: one HTTP request to the app on loopback, no browser | 1    | 5     |
+| D     | Title                                                                 | Tier | Build |
+| ----- | --------------------------------------------------------------------- | ---- | ----- |
+| D-113 | The lead's five tools, no page_snapshot (sixth: D-125)                | 1    | 1, 2  |
+| D-114 | run_action: synced press on the collector's own page                  | 1    | 1     |
+| D-115 | `POST /v1/action` on the daemon                                       | 2    | 1     |
+| D-116 | Function summary by phase; trace model `phases` and `functions`       | 2    | 2     |
+| D-117 | Drill-down slices from disk, paged                                    | 1    | 2     |
+| D-118 | Fix verification with run_action and a function-level diff_traces     | 1    | 2     |
+| D-119 | Server instructions and trigger-first tool descriptions               | 1    | 2     |
+| D-120 | `lightpath init --agent`, doctor checks, CI `setup` job               | 1    | 3     |
+| D-121 | Errors and failed requests in traces; `problem` ingest message        | 2    | 4     |
+| D-122 | Auto-start from `lightpath mcp`; config key `autoStart`               | 2    | 4     |
+| D-123 | Redaction rules for tool output                                       | 1    | 4     |
+| D-124 | Phase 2 build order, gate and measures                                | 1    | all   |
+| D-125 | `run_request`: one HTTP request to the app on loopback, no browser    | 1    | 5     |
+| D-127 | Actionability checked with no input, not a trial click (amends D-114) | 1    | 1     |
 
 ## Sources
 

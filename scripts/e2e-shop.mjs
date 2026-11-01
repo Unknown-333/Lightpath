@@ -1,7 +1,8 @@
 // Golden end-to-end test (docs/ARCHITECTURE.md section 11): runs the example shop under Lightpath,
 // clicks "Add to cart" and "Checkout" in a real browser, and checks that one trace contains the
 // React component and the backend route, service, and payment code. Then asks for the same code
-// through `lightpath mcp`, the way a coding agent would (the M5 exit check).
+// through `lightpath mcp`, the way a coding agent would (the M5 exit check), and has the agent do
+// Add to cart and Checkout itself with run_action, with no press from this script (build 1).
 //
 // Usage: pnpm build && node scripts/e2e-shop.mjs [--headed]
 import { execSync, spawn } from 'node:child_process';
@@ -61,6 +62,8 @@ try {
     send: (m) => daemon.correlator.ingest('browser', m),
   });
   await collector.start();
+  // What `lightpath dev` does once the browser is open: run_action acts on this page (D-115).
+  daemon.setActionRunner((request) => collector.runAction(request));
   const page = collector.page;
   await page.waitForSelector('li:has-text("Desk lamp") button');
 
@@ -163,6 +166,100 @@ try {
       );
     }
     check(text.includes('request: POST /api/orders → 201'), 'MCP: the answer includes the request');
+
+    // Build 1 (D-114): the agent clicks by itself with run_action. From here on the script sends no
+    // press of its own; every action goes through `lightpath mcp` → POST /v1/action → this page.
+    const runAction = async (args) => {
+      const res = await agent.callTool({ name: 'run_action', arguments: args });
+      const out = res.content?.[0]?.text ?? '';
+      console.log(`\nrun_action(${JSON.stringify(args)}) →\n${out}\n`);
+      const id = /^Trace (t_[a-z0-9]{12}):/.exec(out)?.[1];
+      return { text: out, isError: res.isError === true, trace: id ? traces.get(id) : undefined };
+    };
+    const linesOf = (f) => f.lines.map((l) => l.line).join(',');
+
+    const agentAdd = await runAction({ target: 'button "Add to cart"', within: 'Coffee mug' });
+    check(
+      agentAdd.text.includes('action: click button "Add to cart" within "Coffee mug" (boundary press'),
+      'run_action: Add to cart (within "Coffee mug") was clicked at the press boundary',
+    );
+    check(
+      agentAdd.trace?.label === 'button: Add to cart' &&
+        agentAdd.trace.files.some((f) => f.path === 'src/App.tsx'),
+      'run_action: the Add to cart trace includes src/App.tsx',
+    );
+
+    const agentCheckout = await runAction({ target: 'button "Checkout"' });
+    const ct = agentCheckout.trace;
+    check(
+      agentCheckout.text.startsWith(`Trace ${ct?.id}: button: Checkout`),
+      'run_action: Checkout returns its own trace in the same call',
+    );
+    check(agentCheckout.text.includes('src/Cart.tsx [browser]'), 'run_action: the answer lists src/Cart.tsx');
+    check(
+      agentCheckout.text.includes('server/routes/orders.ts [node]'),
+      'run_action: the answer lists server/routes/orders.ts',
+    );
+    check(
+      agentCheckout.text.includes('request: POST /api/orders → 201'),
+      'run_action: the answer includes POST /api/orders → 201',
+    );
+    check(!agentCheckout.text.includes('warning ('), 'run_action: Checkout came back with no warnings');
+    // The agent's Checkout must light exactly what the human-style press lit.
+    const sameFiles =
+      ct &&
+      checkout &&
+      ct.files
+        .map((f) => f.path)
+        .sort()
+        .join() ===
+        checkout.files
+          .map((f) => f.path)
+          .sort()
+          .join() &&
+      checkout.files.every(
+        (f) => linesOf(f) === linesOf(ct.files.find((g) => g.path === f.path) ?? { lines: [] }),
+      );
+    check(
+      Boolean(sameFiles),
+      'run_action: Checkout has the same files and lines as the human-press Checkout',
+    );
+    if (!sameFiles && ct && checkout) {
+      for (const f of [...checkout.files, ...ct.files]) console.log(`  ${f.path}: ${linesOf(f)}`);
+    }
+
+    // Typing first (fill), then the press: the coupon reaches the server and its discount line runs.
+    await runAction({ target: 'button "Add to cart"', within: 'Coffee mug' });
+    const coupon = await runAction({
+      target: 'button "Checkout"',
+      fill: [{ target: 'textbox "Coupon"', value: 'WELCOME10' }],
+    });
+    const pricingSrc = (await import('node:fs'))
+      .readFileSync(join(shop, 'server/services/pricing.ts'), 'utf8')
+      .split('\n');
+    const discountLine = pricingSrc.findIndex((l) => l.includes('Math.round(subtotalCents * 0.1)')) + 1;
+    const pricing = (t) => t?.files.find((f) => f.path === 'server/services/pricing.ts');
+    check(
+      discountLine > 0 && Boolean(pricing(coupon.trace)?.lines.some((l) => l.line === discountLine)),
+      `run_action with fill: pricing.ts line ${discountLine} (the coupon discount) ran`,
+    );
+    check(
+      !pricing(checkout)?.lines.some((l) => l.line === discountLine),
+      `the human Checkout (no coupon) did not run pricing.ts line ${discountLine}`,
+    );
+    check(!coupon.text.includes('WELCOME10'), 'run_action: the filled value is not in the answer');
+
+    // Nearby inputs on the real shop: a disabled button and a target that isn't there.
+    const soldOut = await runAction({ target: 'button "Sold out"' });
+    check(
+      soldOut.isError && soldOut.text.includes('not_actionable') && soldOut.text.includes('disabled'),
+      'run_action: the disabled "Sold out" button is not_actionable',
+    );
+    const typo = await runAction({ target: 'button "Chekout"' });
+    check(
+      typo.isError && typo.text.includes('not_found') && typo.text.includes('  button "Checkout"'),
+      'run_action: a misspelled target is not_found and lists button "Checkout"',
+    );
   } finally {
     await agent.close();
   }
