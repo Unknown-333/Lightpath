@@ -100,3 +100,28 @@ export function describeActionResult(input: ActionInput, result: ActionResult): 
   ]);
   return fitText(redactFillValues(text, values), MAX_CHARS, result.trace.id);
 }
+
+/**
+ * run_request's answer (design section 4A): one `sent:` line with the method, the path (never the
+ * query), status, response size and time, then the backend trace summary. The request body, its
+ * headers and the response's body and headers never appear.
+ */
+export function describeRequestResult(
+  method: string,
+  path: string,
+  sent: { status: number; bytes: number; durationMs: number; redirect?: string | undefined },
+  trace: Trace,
+): string {
+  const lines = [
+    `sent: ${method} ${path} → ${sent.status} (${sent.bytes.toLocaleString('en-US')} bytes, ${Math.round(sent.durationMs)} ms)`,
+  ];
+  const note = redirectNote(sent.status, sent.redirect);
+  if (note) lines.push(note);
+  return fitText(summarizeTrace(trace, lines), MAX_CHARS, trace.id);
+}
+
+/** For a 3xx: that it wasn't followed, and where it points when that is loopback. */
+export function redirectNote(status: number, loopbackTarget: string | undefined): string | undefined {
+  if (status < 300 || status >= 400) return undefined;
+  return `redirect not followed${loopbackTarget ? `: it points to ${loopbackTarget}` : ' (it points off loopback, or nowhere)'}`;
+}
