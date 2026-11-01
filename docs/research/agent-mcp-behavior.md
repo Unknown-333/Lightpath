@@ -11,12 +11,12 @@ Phase 1 research, work item it_8e29b34a. Written 2026-11-01. Owner's ask served:
 | 10k tokens            | 40,062  | 0 of 3                              | first 500 + last 500 chars and a file path |
 | 25k tokens            | 100,046 | 0 of 3                              | same                                       |
 | 50k tokens            | 200,050 | 0 of 3                              | same                                       |
-- **Proposed N = 4,000 tokens, enforced as at most 16,000 characters** per Lightpath tool result. It is the largest size that passed 3 of 3, and it sits under every cap found: Kiro CLI cuts at 30,000 chars (measured), Copilot CLI saves to a file past 30 KB (issue S15), Claude Code saves to a file past 50,000 chars or 25,000 tokens and warns past 10,000 tokens (docs S1).
+- **Proposed N = 4,000 tokens, enforced as at most 16,000 characters** per Lightpath tool result. It is the largest size that passed 3 of 3, and it sits under every cap found: Kiro CLI cuts at 30,000 chars (measured, not documented by Kiro; a first result, 3 runs per size), Copilot CLI saves to a file past 30 KB (from docs: issue S15), Claude Code saves to a file past 50,000 chars or 25,000 tokens and warns past 10,000 tokens (from docs: S1). The owner accepted N on 2026-11-01 ([D-109](../../decisions.md)).
 - Kiro CLI's cut is a wall, not a slope. Past 30,000 chars the model saw only the head and tail (1,757 to 1,759 chars in all), and the fact in the middle was gone. All 9 cut runs said they could not answer; none made up an answer.
 - Every agent now hides long output in a file instead of sending it inline (Claude Code, Cursor, Kiro, Copilot CLI). An agent without a shell or file-read tool can't get it back. So Lightpath must cut its own output to fit, ranked, with a line naming the drill-down call.
 - Tool search is now the default in Claude Code, Kiro (IDE 1.3+, CLI V3) and Cursor: at session start the model sees tool names and the server's `instructions`, not full descriptions. Lightpath sets no `instructions` today.
 
-Numbers from Claude Code, Cursor and VS Code come from their docs and issue trackers only. None of them can run headless here. Only Kiro CLI was measured.
+Numbers from Claude Code, Cursor and VS Code come from their docs and issue trackers only. None of them can run headless here. Only Kiro CLI was measured. Every claim about Claude Code, Cursor or VS Code in this doc is from docs.
 
 ## The experiment
 
@@ -72,6 +72,8 @@ All sources were read 2026-11-01. Vendor docs describe the vendor's own product;
 
 ### How each agent picks a tool
 
+Claude Code, Cursor and VS Code columns: from docs. Kiro: from docs and the runs above.
+
 |                           | Claude Code                                                                                    | Cursor                                                                        | VS Code (Copilot agent mode)                                                       | Kiro (IDE and CLI)                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | What the model sees first | Tool names and server `instructions`; full definitions load through tool search (default) (S1) | Tool names; descriptions are synced to files the agent reads when needed (S5) | Full tools up to a threshold; past it, groups hide behind `activate_*` stubs (S13) | IDE 1.3+ and CLI V3: a deferred catalog, then `tool_load`, then `tool_call` (S17); seen in every run here |
@@ -83,16 +85,20 @@ Anthropic's guidance (S2) applies to all four: a few tools aimed at real tasks i
 
 ### Output limits for one tool result
 
+Claude Code, Cursor and VS Code rows: from docs. Kiro CLI row: measured.
+
 |                     | Documented or measured cap                                                                                                                                                                                      | Past the cap                                                                                                                                                                         |
 | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Claude Code         | Warning at 10,000 tokens; `MAX_MCP_OUTPUT_TOKENS` default 25,000; 50,000 chars for text whatever the token count; a tool can raise its own cap with `_meta["anthropic/maxResultSizeChars"]`, up to 500,000 (S1) | Saved to a file under `~/.claude/projects/`; the model gets the path. Error results over ~11,000 chars keep the first and last 5,000 (S1)                                            |
 | Cursor              | No number documented                                                                                                                                                                                            | Saved to a workspace file with a pointer; the agent tails or reads it (S5, S6). Inline cut only if the file write fails (S6). A January 2026 regression caused compaction loops (S7) |
 | VS Code             | No number documented; an issue shows results of 50 KB+ cut (S14)                                                                                                                                                | Cut with `isTruncated` and a resource URI the agent could not read (S14, closed 2026-10-26). Copilot CLI saves past 30 KB to a file (S15)                                            |
-| Kiro CLI 2.37.0, V3 | **30,000 chars, measured here**, not documented                                                                                                                                                                 | Model gets 500 head + 500 tail chars and a file path; full text in the session's `tool-outputs/` folder                                                                              |
+| Kiro CLI 2.37.0, V3 | **30,000 chars: measured, not documented by Kiro** (first result, 3 runs per size)                                                                                                                              | Model gets 500 head + 500 tail chars and a file path; full text in the session's `tool-outputs/` folder                                                                              |
 
 Other result types (S1, S4, S10, S20): MCP lets a result carry `structuredContent` that matches an `outputSchema`, and the spec says such a tool SHOULD also send the same JSON as text. Claude Code shows images inline and saves the original. Cursor and VS Code support MCP Apps (interactive UI). VS Code can browse resources. Plain text is the one format every client sends to the model, so Lightpath should keep text as the main result.
 
 ### Where each agent reads project instructions
+
+All rows: from docs.
 
 | Agent             | Files                                                                                                                        | Note                                                                                                                                                                            |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -104,6 +110,8 @@ Other result types (S1, S4, S10, S20): MCP lets a result carry `structuredConten
 `AGENTS.md` reaches all four, with one gap: Claude Code skips it when the repo already has a `CLAUDE.md`.
 
 ### MCP config file and format per agent
+
+All rows: from docs.
 
 | Agent             | Project file                      | User file                                                     | Shape                                                                                               | Command line                                                                                                                                                         |
 | ----------------- | --------------------------------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
