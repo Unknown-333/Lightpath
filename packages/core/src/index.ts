@@ -13,4 +13,4 @@ export {
   resolveFile,
   webpackModulePath,
 } from './resolve.js';
-export { decodeDataUrlSourceMap, mapToOriginal, type OriginalCounts } from './sourcemap.js';
+export { decodeDataUrlSourceMap, mapToOriginal, type OriginalCounts, originalLocation } from './sourcemap.js';

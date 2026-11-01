@@ -38,6 +38,12 @@ export const LightpathConfig = z.strictObject({
   maxSettleMs: z.number().int().min(500).max(60_000).optional().describe('Longest a click can last (ms)'),
   browser: z.boolean().optional().describe('false: trace backend requests only'),
   headless: z.boolean().optional().describe('Run the browser without a window'),
+  autoStart: z
+    .boolean()
+    .optional()
+    .describe(
+      'true: lightpath mcp runs "command" with lightpath dev when a tool needs it and it isn\'t running',
+    ),
 });
 export type LightpathConfig = z.infer<typeof LightpathConfig>;
 

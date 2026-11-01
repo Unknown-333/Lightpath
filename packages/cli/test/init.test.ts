@@ -148,6 +148,8 @@ describe('lightpath init --agent', () => {
       command: 'make dev',
       ignore: ['gen/**'],
       $schema: './node_modules/@lightpath-dev/cli/lightpath.config.schema.json',
+      // Build 4 (D-122, D-132): the schema knows autoStart now, so init turns it on.
+      autoStart: true,
     });
   });
 

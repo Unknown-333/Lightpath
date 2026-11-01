@@ -73,6 +73,10 @@
     "headless": {
       "description": "Run the browser without a window",
       "type": "boolean"
+    },
+    "autoStart": {
+      "description": "true: lightpath mcp runs \"command\" with lightpath dev when a tool needs it and it isn't running",
+      "type": "boolean"
     }
   },
   "additionalProperties": false
