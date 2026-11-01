@@ -1,0 +1,13 @@
+diff --git a/server/services/quote.ts b/server/services/quote.ts
+index 34c8463..ab53768 100644
+--- a/server/services/quote.ts
++++ b/server/services/quote.ts
+@@ -18,7 +18,7 @@ export function quoteOrder(lines: { productId: string; qty: number }[], coupon?:
+   }
+ 
+   const percent = coupon ? (COUPON_PERCENT[coupon] ?? 0) : 0;
+-  const discountCents = Math.round((subtotalCents * percent) / 1000);
++  const discountCents = Math.round((subtotalCents * percent) / 100);
+ 
+   const afterDiscount = subtotalCents - discountCents;
+   const shippingCents = afterDiscount >= FREE_SHIPPING_CENTS ? 0 : SHIPPING_CENTS;

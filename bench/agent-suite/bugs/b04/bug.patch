@@ -1,0 +1,14 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 74ad58f..d6bdb2b 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -15,7 +15,8 @@ export function App() {
+     setCart((lines) => {
+       const existing = lines.find((l) => l.productId === product.id);
+       if (existing) {
+-        return lines.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + 1 } : l));
++        existing.qty += 1;
++        return lines;
+       }
+       return [...lines, { productId: product.id, qty: 1 }];
+     });

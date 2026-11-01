@@ -1,0 +1,18 @@
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+index 27bfbde..638a645 100644
+--- a/src/Cart.tsx
++++ b/src/Cart.tsx
+@@ -36,7 +36,12 @@ export function Cart({ lines, products, onCheckedOut }: CartProps) {
+     <section>
+       <h2>Cart</h2>
+       {lines.length === 0 ? <p>Your cart is empty.</p> : <p>Subtotal: {formatCents(subtotal)}</p>}
+-      <form onSubmit={checkout}>
++      <form
++        onSubmit={(e) => {
++          e.preventDefault();
++          void checkout();
++        }}
++      >
+         <input
+           placeholder="Coupon (try WELCOME10)"
+           value={coupon}

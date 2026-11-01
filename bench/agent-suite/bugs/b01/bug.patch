@@ -1,0 +1,54 @@
+diff --git a/server/routes/orders.ts b/server/routes/orders.ts
+index 9ffbe3d..3fbaca4 100644
+--- a/server/routes/orders.ts
++++ b/server/routes/orders.ts
+@@ -1,7 +1,7 @@
+ import type { Request, Response } from 'express';
+ import { findProduct, saveOrder } from '../db.ts';
+ import { charge } from '../services/payment.ts';
+-import { priceCart } from '../services/pricing.ts';
++import { quoteOrder } from '../services/quote.ts';
+ 
+ interface OrderBody {
+   lines?: { productId: string; qty: number }[];
+@@ -28,7 +28,7 @@ export function createOrder(req: Request, res: Response): void {
+     }
+   }
+ 
+-  const quote = priceCart(lines, body.coupon);
++  const quote = quoteOrder(lines, body.coupon);
+   const payment = charge(quote.totalCents);
+   if (!payment.ok) {
+     res.status(402).json({ error: payment.reason });
+diff --git a/server/services/quote.ts b/server/services/quote.ts
+new file mode 100644
+index 0000000..34c8463
+--- /dev/null
++++ b/server/services/quote.ts
+@@ -0,0 +1,26 @@
++import { findProduct } from '../db.ts';
++import type { Quote } from './pricing.ts';
++
++const FREE_SHIPPING_CENTS = 5000;
++const SHIPPING_CENTS = 499;
++
++/** Percent off the subtotal, per coupon code. */
++const COUPON_PERCENT: Record<string, number> = {
++  WELCOME10: 10,
++};
++
++/** Prices an order at checkout: subtotal, then the coupon, then shipping on what is left. */
++export function quoteOrder(lines: { productId: string; qty: number }[], coupon?: string): Quote {
++  let subtotalCents = 0;
++  for (const line of lines) {
++    const product = findProduct(line.productId);
++    if (product) subtotalCents += product.priceCents * line.qty;
++  }
++
++  const percent = coupon ? (COUPON_PERCENT[coupon] ?? 0) : 0;
++  const discountCents = Math.round((subtotalCents * percent) / 1000);
++
++  const afterDiscount = subtotalCents - discountCents;
++  const shippingCents = afterDiscount >= FREE_SHIPPING_CENTS ? 0 : SHIPPING_CENTS;
++  return { subtotalCents, discountCents, shippingCents, totalCents: afterDiscount + shippingCents };
++}
