@@ -1100,3 +1100,11 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Cost: code that runs between the first and a later request (after the first response, before the second request) lands in the "after" phase, not in a phase of its own.
 - Test: `packages/browser/test/action.integration.test.ts`: an action that sends 3 tagged requests gets exactly one `beforeRequest` delta and one read.
 - Revert: drop the `#readBefore` check in `packages/browser/src/collector.ts` `#onRoute`; every tagged request is read again.
+
+### D-129 Six tools fit in 4,000 characters: shorter tool and parameter descriptions (amends D-119)
+
+- Date: 2026-11-01 (build 5)
+- Decision: With `run_request` added, `tools/list` was 4,819 characters, over the 4,000 cap (D-113). As design section 2 says ("build 5 shortens descriptions, not the cap"), the descriptions got shorter. Tool descriptions drop the parts their parameters or the server instructions already say, and the parts not built yet: run_action 295 → 227 characters ("with errors and failed requests" and "Target: button "Checkout" or text."), find_code_for_action 280 → 193 ("Input: …" and "To do the action yourself, use run_action."), get_trace 249 → 185, list_traces 169 → 124 ("error counts" and the action kinds), diff_traces 218 → 183 ("errors that appeared or went away"), run_request 282 → 228 ("and errors", "Input: …"). Parameter descriptions got shorter or went where the name says it (`traceId`'s, `file`, `function`, `label`), and `fill` items no longer repeat the target bounds (the daemon checks them and answers 400). The instructions gain the run_request clause from design section 3: 665 → 730 characters. Result: `tools/list` 3,950 characters; tests check all three limits.
+- Why: the cap is the rule; the descriptions are the part the design said to cut. Error wording comes back with build 4, when traces carry errors, if it fits.
+- Alternatives: raising the cap (the design says no); stripping each tool's `$schema` key by replacing the SDK's `tools/list` handler (about 340 characters, but it patches the SDK's internals).
+- Revert: restore the texts in `packages/mcp/src/texts.ts` and `RUN_ACTION_DESCRIPTION` in `packages/mcp/src/server.ts`, and the parameter descriptions; `tools/list` goes back over 4,000.
