@@ -36,3 +36,26 @@ In r01, the first grep found `backend/modules/tasks/recurringTaskService.js`. Th
 - Say that each call is one step, and that the page, sign-in and data stay between calls. Sign in with `fill`, do the setup steps, then do the step that shows the bug.
 - Use a neutral example (`button "Save"`), not the shop's Checkout, so no suite gets help from the example's wording.
 - Keep the limits: each description under 300 characters, instructions under 1,000, `tools/list` at most 4,000 (D-119, D-129).
+
+## Check runs with the new texts (D-134)
+
+These are checks, not benchmark results. They ran on tududi `with`, on r02 and r03 (not r01, the bug this note studied), with Lightpath packed from `7e9005d`. kiro-cli 2.37.0, `claude-sonnet-5.5`, effort `medium`. Data: `2026-11-01-d134-checks.jsonl` here.
+
+| Run        | Called Lightpath | Tools called                           | Did run_action work                                                   | Fixed | Steps | Tokens est. | Credits | Agent time |
+| ---------- | ---------------- | -------------------------------------- | --------------------------------------------------------------------- | ----- | ----- | ----------- | ------- | ---------- |
+| r02-with-1 | yes              | run_action x2                          | no: `No element matches css=input[type=email]`, then `text=All Tasks` | yes   | 11    | 8,501       | 1.232   | 51.2 s     |
+| r03-with-1 | yes              | find_code_for_action x1, run_action x2 | no: `No element matches button "Focus"`, then the same sign-in miss   | yes   | 11    | 4,610       | 0.858   | 45.1 s     |
+
+The CPU was busy at both starts (34.2% then 39.0% for r02; 29.2% then 34.7% for r03), so both runs are marked busy in their JSON lines. The 2 runs cost 2.090 credits of the item's 4.5. A third run was not made: it would hit the same sign-in problem below, so it would measure that bug and not the texts.
+
+- r02's first message: "Start by reproducing: sign in." Then run_action with `fill` on the email and password fields.
+- r03's first thought: "Reproducing this would take many steps, so let me just try clicking Focus directly in case the state already exists, or search the code instead." Then find_code_for_action, then run_action.
+- Both fell back to text search after the misses and fixed the bug. r03's end: "I couldn't reproduce it through Lightpath, because the page it controls had no Focus button or sign-in".
+
+So the texts now get the agent to call Lightpath by itself in 2 of 2 runs, up from 0 of 1 (r01). The calls failed for a different reason.
+
+## A product bug the checks found: the collector's page never shows tududi's sign-in form
+
+A no-model probe reproduced it (raw output in the worker's `mcpcall-raw/`). It started `lightpath dev` in the r03 trial as the harness does, waited 30 s after "watching", then called run_action over MCP with the agent's exact arguments: `not_found. fill[0]: No element matches css=input[type=email].` A separate headless page on the same URL, opened next to it, showed "Loading..." at first and was on `/login` with the email and password fields 5 s later (`page-probe.out`).
+
+So the page that `lightpath dev` opens stays on something other than the sign-in form, and run_action can't act on it. The cause isn't known yet. It needs its own fix, test and D-entry, in a separate PR. It is not part of this text change.
