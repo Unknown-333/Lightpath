@@ -107,6 +107,9 @@ describe.skipIf(!existsSync(registerPath))('node agent loaded with --import', ()
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     );
+    // Listen for the exit before the request: the crash can end the process before the
+    // request's own rejection reaches this test (seen on macOS), and a late `once` never fires.
+    const exited = once(child, 'exit') as Promise<[number]>;
     const [line] = (await once(child.stdout, 'data')) as [Buffer];
     const port = /ready (\d+)/.exec(line.toString())?.[1];
     // The server never answers: it crashes first.
@@ -114,7 +117,7 @@ describe.skipIf(!existsSync(registerPath))('node agent loaded with --import', ()
       method: 'POST',
       headers: { 'x-lightpath-trace': 't_abc123def457' },
     }).catch(() => {});
-    const [code] = (await once(child, 'exit')) as [number];
+    const [code] = await exited;
     expect(code).not.toBe(0); // the app still crashes as it would without Lightpath
     const problem = received.find((m) => m.type === 'problem');
     expect(problem).toMatchObject({
