@@ -96,4 +96,32 @@ describe.skipIf(!existsSync(registerPath))('node agent loaded with --import', ()
     const source = received.find((m) => m.type === 'source' && m.url === handlerUrl);
     expect(source?.type === 'source' && source.source).toContain('export function handleOrder');
   }, 20_000);
+
+  it('sends an uncaught error during a tagged request before the process exits (D-121)', async () => {
+    received.length = 0;
+    const child = spawn(
+      process.execPath,
+      [`--import=${pathToFileURL(registerPath).href}`, `${fixtures}crash.mjs`],
+      {
+        env: { ...process.env, LIGHTPATH_URL: daemonUrl, LIGHTPATH_TOKEN: TOKEN, LIGHTPATH_ROOTS: fixtures },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    );
+    const [line] = (await once(child.stdout, 'data')) as [Buffer];
+    const port = /ready (\d+)/.exec(line.toString())?.[1];
+    // The server never answers: it crashes first.
+    await fetch(`http://127.0.0.1:${port}/api/orders`, {
+      method: 'POST',
+      headers: { 'x-lightpath-trace': 't_abc123def457' },
+    }).catch(() => {});
+    const [code] = (await once(child, 'exit')) as [number];
+    expect(code).not.toBe(0); // the app still crashes as it would without Lightpath
+    const problem = received.find((m) => m.type === 'problem');
+    expect(problem).toMatchObject({
+      traceId: 't_abc123def457',
+      kind: 'uncaught',
+      message: 'TypeError: crash: total is not a number',
+      location: { url: pathToFileURL(`${fixtures}crash.mjs`).href, line: 5 },
+    });
+  }, 20_000);
 });

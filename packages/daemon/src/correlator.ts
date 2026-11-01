@@ -157,9 +157,13 @@ export class Correlator {
   /** Attaches an error or failed request to its trace (D-121). Without an open trace, dropped. */
   #onProblem(agentId: string, msg: ProblemMessage): void {
     if (!msg.traceId) return;
-    const pending = this.#pending.get(msg.traceId) ?? this.#fromStore(msg.traceId);
-    if (!pending) return;
     const agent = this.#agent(agentId);
+    // A backend crash during run_request comes before any delta for its trace: it opens one.
+    const pending =
+      this.#pending.get(msg.traceId) ??
+      this.#fromStore(msg.traceId) ??
+      (agent.kind === 'browser' ? undefined : this.#pendingFor(msg.traceId, 'uncaught error', msg.at));
+    if (!pending) return;
     pending.trace.problems ??= [];
     const problems = pending.trace.problems;
     if (problems.length >= MAX_TRACE_PROBLEMS) {
