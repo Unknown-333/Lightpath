@@ -1,0 +1,207 @@
+diff --git a/frontend/components/Focus/FocusPopover.tsx b/frontend/components/Focus/FocusPopover.tsx
+index 627082fe..4b954fde 100644
+--- a/frontend/components/Focus/FocusPopover.tsx
++++ b/frontend/components/Focus/FocusPopover.tsx
+@@ -46,16 +46,24 @@ const FocusPopover: React.FC<FocusPopoverProps> = ({ focus, onClose }) => {
+         return () => document.removeEventListener('keydown', onKey);
+     }, [onClose]);
+ 
+-    // Only projects of the chosen area can be picked; without an area any
+-    // project can.
++    // Only open projects of the chosen area can be picked (without an area,
++    // any open project). A finished project that is the current focus stays
++    // listed so the picker still shows it.
+     const projectOptions = useMemo(
+         () =>
+             projects.filter((project) => {
++                if (
++                    project.uid !== projectUid &&
++                    (project.status === 'done' ||
++                        project.status === 'cancelled')
++                ) {
++                    return false;
++                }
+                 if (!areaUid) return true;
+                 const projectAreaUid = project.area?.uid ?? project.area_uid;
+                 return projectAreaUid === areaUid;
+             }),
+-        [projects, areaUid]
++        [projects, areaUid, projectUid]
+     );
+ 
+     const changeArea = (uid: string) => {
+@@ -115,6 +123,7 @@ const FocusPopover: React.FC<FocusPopoverProps> = ({ focus, onClose }) => {
+                             value={areaUid}
+                             onChange={changeArea}
+                             fullWidth
++                            searchable
+                         />
+                     </div>
+                 </div>
+@@ -137,6 +146,7 @@ const FocusPopover: React.FC<FocusPopoverProps> = ({ focus, onClose }) => {
+                             value={projectUid}
+                             onChange={setProjectUid}
+                             fullWidth
++                            searchable
+                         />
+                     </div>
+                 </div>
+diff --git a/frontend/components/Focus/__tests__/FocusChip.test.tsx b/frontend/components/Focus/__tests__/FocusChip.test.tsx
+index d2fc7e80..9b707757 100644
+--- a/frontend/components/Focus/__tests__/FocusChip.test.tsx
++++ b/frontend/components/Focus/__tests__/FocusChip.test.tsx
+@@ -55,6 +55,20 @@ describe('FocusChip', () => {
+         state.projectsStore.setProjects([
+             { id: 10, uid: 'launch', name: 'Launch', area_uid: 'work' },
+             { id: 11, uid: 'garden', name: 'Garden', area_uid: 'home' },
++            {
++                id: 12,
++                uid: 'shipped',
++                name: 'Shipped',
++                area_uid: 'work',
++                status: 'done',
++            },
++            {
++                id: 13,
++                uid: 'dropped',
++                name: 'Dropped',
++                area_uid: 'work',
++                status: 'cancelled',
++            },
+         ] as unknown as Project[]);
+         state.userSettingsStore.setFocus(null);
+     });
+@@ -87,7 +101,7 @@ describe('FocusChip', () => {
+             fireEvent.click(field.getByRole('button', { name: label }));
+         };
+         pick('focus-area', 'Work');
+-        // Only projects of the chosen area are offered
++        // Only open projects of the chosen area are offered
+         const projectField = within(screen.getByTestId('focus-project'));
+         fireEvent.click(projectField.getAllByRole('button')[0]);
+         expect(
+@@ -96,6 +110,15 @@ describe('FocusChip', () => {
+                 .slice(1)
+                 .map((button) => button.textContent)
+         ).toEqual(['Any project', 'Launch']);
++        fireEvent.change(projectField.getByTestId('filter-dropdown-search'), {
++            target: { value: 'lau' },
++        });
++        expect(
++            projectField
++                .getAllByRole('button')
++                .slice(1)
++                .map((button) => button.textContent)
++        ).toEqual(['Launch']);
+         fireEvent.click(projectField.getByRole('button', { name: 'Launch' }));
+         fireEvent.change(screen.getByTestId('focus-tags'), {
+             target: { value: 'urgent' },
+diff --git a/frontend/components/Shared/FilterDropdown.tsx b/frontend/components/Shared/FilterDropdown.tsx
+index f0cc62bf..b1480bae 100644
+--- a/frontend/components/Shared/FilterDropdown.tsx
++++ b/frontend/components/Shared/FilterDropdown.tsx
+@@ -1,4 +1,5 @@
+ import React, { useState, useRef, useEffect } from 'react';
++import { useTranslation } from 'react-i18next';
+ import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
+ 
+ export interface FilterOption {
+@@ -16,9 +17,11 @@ interface FilterDropdownProps {
+     // Takes its share of a row on phones, cutting long labels short; a
+     // fixed width from sm up. The menu still shows labels in full.
+     fill?: boolean;
+-    // Fills its container at every width, menu included (for forms and
+-    // popovers)
++    // Fills its container at every width, menu included, and keeps a long
++    // menu scrollable (for forms and popovers)
+     fullWidth?: boolean;
++    // A search box at the top of the menu narrows the options by label
++    searchable?: boolean;
+     className?: string;
+ }
+ 
+@@ -31,10 +34,31 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
+     autoWidth = false,
+     fill = false,
+     fullWidth = false,
++    searchable = false,
+     className = '',
+ }) => {
++    const { t } = useTranslation();
+     const [isOpen, setIsOpen] = useState(false);
++    const [search, setSearch] = useState('');
+     const dropdownRef = useRef<HTMLDivElement>(null);
++    const searchRef = useRef<HTMLInputElement>(null);
++
++    // A fresh search each time the menu opens, with the box ready to type in
++    useEffect(() => {
++        if (!isOpen) return;
++        setSearch('');
++        if (searchable) searchRef.current?.focus();
++    }, [isOpen, searchable]);
++
++    const query = search.trim().toLowerCase();
++    const visibleOptions =
++        searchable && query
++            ? options.filter(
++                  (option) =>
++                      option.value !== 'divider' &&
++                      option.label.toLowerCase().includes(query)
++              )
++            : options;
+ 
+     // Close dropdown when clicking outside
+     useEffect(() => {
+@@ -125,8 +149,37 @@ const FilterDropdown: React.FC<FilterDropdownProps> = ({
+                     className={`origin-top-right absolute right-0 mt-1 ${fill ? 'min-w-full' : ''} ${fullWidth ? 'left-0 w-full' : !autoWidth ? (isMobile ? 'w-36' : 'w-40') : ''} rounded-md shadow-lg bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:outline-none z-50`}
+                     style={autoWidth && !fullWidth ? dynamicStyles : {}}
+                 >
+-                    <div className="p-1">
+-                        {options.map((option, index) =>
++                    {searchable && (
++                        <div className="p-1 pb-0">
++                            <input
++                                ref={searchRef}
++                                type="text"
++                                value={search}
++                                onChange={(event) =>
++                                    setSearch(event.target.value)
++                                }
++                                onKeyDown={(event) => {
++                                    if (event.key === 'Escape') {
++                                        event.stopPropagation();
++                                        setIsOpen(false);
++                                    }
++                                }}
++                                placeholder={t('common.search', 'Search')}
++                                aria-label={t('common.search', 'Search')}
++                                className="w-full rounded bg-gray-100 px-2 py-1.5 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:bg-gray-700 dark:text-gray-100 dark:placeholder-gray-400"
++                                data-testid="filter-dropdown-search"
++                            />
++                        </div>
++                    )}
++                    <div
++                        className={`p-1${fullWidth ? ' max-h-60 overflow-y-auto' : ''}`}
++                    >
++                        {visibleOptions.length === 0 && (
++                            <div className="px-4 py-2 text-sm text-gray-500 dark:text-gray-400">
++                                {t('search.noResults', 'No results found')}
++                            </div>
++                        )}
++                        {visibleOptions.map((option, index) =>
+                             option.value === 'divider' ? (
+                                 <div
+                                     key={`divider-${index}`}
+diff --git a/frontend/i18n.ts b/frontend/i18n.ts
+index 03f5ad32..63631b35 100644
+--- a/frontend/i18n.ts
++++ b/frontend/i18n.ts
+@@ -87,7 +87,7 @@ i18nInstance
+         ns: ['translation'],
+         backend: {
+             loadPath: 'locales/{{lng}}/{{ns}}.json',
+-            queryStringParams: { v: '1' },
++            queryStringParams: { v: '2' },
+             requestOptions: {
+                 cache: 'default',
+                 credentials: 'same-origin',
