@@ -283,6 +283,8 @@ describe('diffFunctions (design section 6.4)', () => {
     expect(diffFunctions(before, after)).toBe(
       [
         'Trace t_000000000001 (button: Checkout) → t_000000000002 (button: Checkout):',
+        // Build 4 (design 6.4 item 1, D-132): the 500 was a failed request in A.
+        'problems: errors 0 → 0, failed requests 1 → 0',
         'requests:',
         '  POST /api/orders 500 → 201',
         'ran only in t_000000000001:',

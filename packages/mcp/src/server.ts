@@ -22,7 +22,7 @@ import {
   diffTraces,
   redirectNote,
 } from './format.js';
-import { redactFillValues } from './redact.js';
+import { redact, redactFillValues } from './redact.js';
 import {
   hasBackend,
   loopbackLocation,
@@ -142,7 +142,13 @@ const VERSION = (
   JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string }
 ).version;
 
-const text = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
+/**
+ * Every tool result goes out through here: redaction rules 2 to 5 (D-123), then the 16,000-character
+ * cap again, since a `[redacted]` can be longer than what it hides.
+ */
+const text = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(redact(t)) }] });
+/** Source slices only: the user's own files are never redacted (design section 9). */
+const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
 const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
 
 /**
@@ -248,7 +254,9 @@ export function createMcpServer(options: McpOptions): McpServer {
       }));
       if (!found.trace) return text(`No trace ${traceId}; it may have been evicted.`);
       if (file === undefined && fn === undefined) return text(summarizeTrace(found.trace));
-      return text(await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)));
+      return sourceText(
+        await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)),
+      );
     },
   );
 

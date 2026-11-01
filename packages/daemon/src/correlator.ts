@@ -5,22 +5,25 @@ import {
   mapScript,
   mergeLineCounts,
   newTraceId,
+  originalLocation,
   PeriodicFunctions,
   type ResolveContext,
   resolveFile,
 } from '@lightpath-dev/core';
-import type {
-  CollectorKind,
-  DeltaMessage,
-  DropReason,
-  FileHits,
-  FunctionHit,
-  IngestMessage,
-  LinesIngest,
-  ScriptInfo,
-  Trace,
-  TraceId,
-  TracePhase,
+import {
+  type CollectorKind,
+  type DeltaMessage,
+  type DropReason,
+  type FileHits,
+  type FunctionHit,
+  type IngestMessage,
+  type LinesIngest,
+  MAX_TRACE_PROBLEMS,
+  type ProblemMessage,
+  type ScriptInfo,
+  type Trace,
+  type TraceId,
+  type TracePhase,
 } from '@lightpath-dev/protocol';
 import type { Store } from './store.js';
 
@@ -145,7 +148,58 @@ export class Correlator {
       case 'lines':
         this.#onLines(agentId, message);
         return;
+      case 'problem':
+        this.#onProblem(agentId, message);
+        return;
     }
+  }
+
+  /** Attaches an error or failed request to its trace (D-121). Without an open trace, dropped. */
+  #onProblem(agentId: string, msg: ProblemMessage): void {
+    if (!msg.traceId) return;
+    const pending = this.#pending.get(msg.traceId) ?? this.#fromStore(msg.traceId);
+    if (!pending) return;
+    const agent = this.#agent(agentId);
+    const problems = (pending.trace.problems ??= []);
+    if (problems.length >= MAX_TRACE_PROBLEMS) {
+      pending.trace.problemsDropped = (pending.trace.problemsDropped ?? 0) + 1;
+      this.#publish(pending);
+      return;
+    }
+    const where = msg.location ? this.#locate(agent, msg.location) : undefined;
+    problems.push({
+      collector: agent.kind,
+      kind: msg.kind,
+      message: msg.message,
+      at: msg.at,
+      ...(where ? { path: where.path, line: where.line } : {}),
+      ...(msg.request ? { request: msg.request } : {}),
+    });
+    this.#publish(pending);
+  }
+
+  /** A problem's generated location as a workspace path and original line, if it maps there. */
+  #locate(
+    agent: AgentState,
+    loc: { url: string; line: number; column: number },
+  ): { path: string; line: number } | undefined {
+    if (loc.line < 1) return undefined;
+    const info = [...agent.scripts.values()].reverse().find((s) => s.url === loc.url);
+    let source = loc.url;
+    let line = loc.line;
+    if (info?.sourceMapURL) {
+      try {
+        const map = decodeDataUrlSourceMap(info.sourceMapURL);
+        const orig = map ? originalLocation(map, info.url, loc.line, loc.column) : undefined;
+        if (!orig) return undefined;
+        source = orig.source;
+        line = orig.line;
+      } catch {
+        return undefined;
+      }
+    }
+    const r = resolveFile(source, this.#ctx);
+    return r.kind === 'workspace' ? { path: r.path, line } : undefined;
   }
 
   #onDelta(agentId: string, delta: Delta): void {

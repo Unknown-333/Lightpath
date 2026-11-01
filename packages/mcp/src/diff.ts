@@ -1,6 +1,6 @@
 import type { Trace } from '@lightpath-dev/protocol';
 import { fitText } from './budget.js';
-import { functionName, numberRanges } from './summary.js';
+import { errorsOf, failedRequestsOf, functionName, numberRanges, problemText } from './summary.js';
 
 interface Merged {
   path: string;
@@ -67,6 +67,22 @@ export function hasFunctions(t: Trace): boolean {
  */
 export function diffFunctions(a: Trace, b: Trace): string {
   const out = [`Trace ${a.id} (${a.label}) → ${b.id} (${b.label}):`];
+
+  // Problems first (design 6.4): counts, and the first error that appeared or went away.
+  const ea = errorsOf(a);
+  const eb = errorsOf(b);
+  const fa0 = failedRequestsOf(a);
+  const fb0 = failedRequestsOf(b);
+  if (ea.total !== eb.total || fa0.join() !== fb0.join()) {
+    out.push(`problems: errors ${ea.total} → ${eb.total}, failed requests ${fa0.length} → ${fb0.length}`);
+    const msgs = (l: typeof ea.list) => new Set(l.map((p) => problemText(p)));
+    const ma = msgs(ea.list);
+    const mb = msgs(eb.list);
+    const gone = [...ma].find((m) => !mb.has(m));
+    const came = [...mb].find((m) => !ma.has(m));
+    if (gone) out.push(`  went away: ${gone}`);
+    if (came) out.push(`  appeared: ${came}`);
+  }
 
   // Requests matched by method and path, in order.
   const statuses: string[] = [];
