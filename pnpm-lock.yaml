@@ -384,6 +384,10 @@ importers:
       zod:
         specifier: 4.6.7
         version: 4.6.7
+    devDependencies:
+      '@lightpath-dev/daemon':
+        specifier: workspace:*
+        version: link:../daemon
 
   packages/node-agent:
     devDependencies:

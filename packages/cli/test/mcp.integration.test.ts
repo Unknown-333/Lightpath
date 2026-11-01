@@ -60,6 +60,7 @@ describe('lightpath mcp over stdio', () => {
         'get_trace',
         'list_traces',
         'run_action', // build 1 (design section 6.5, D-116)
+        'run_request', // build 5 (D-125)
       ]);
 
       const result = await client.callTool({
