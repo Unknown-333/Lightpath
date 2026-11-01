@@ -300,6 +300,70 @@ try {
       typo.isError && typo.text.includes('not_found') && typo.text.includes('  button "Checkout"'),
       'run_action: a misspelled target is not_found and lists button "Checkout"',
     );
+
+    // Build 4 (D-121, D-123): a failed request and a thrown error show in the Checkout trace, and
+    // secrets seeded in a header, a body, a query and an error message never come back. The shop
+    // has no bug of its own here, so the test seeds them: 6 desk lamps when 5 are in stock (the
+    // server answers 409), and a listener added to the page that throws and sends a request.
+    for (let i = 0; i < 6; i++) await runAction({ target: 'button "Add to cart"', within: 'Desk lamp' });
+    const SEED = {
+      header: 'seed-header-7f3a',
+      body: 'seed-body-91c2',
+      query: 'seed-query-4be0',
+      thrown: 'seed-thrown-d5e8',
+    };
+    await page.evaluate((seed) => {
+      document.querySelector('button.primary').addEventListener(
+        'click',
+        () => {
+          fetch(`/api/orders?token=${seed.query}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', authorization: `Bearer ${seed.header}` },
+            body: JSON.stringify({ lines: [], note: seed.body }),
+          });
+          setTimeout(() => {
+            throw new Error(`e2e seeded error: password=${seed.thrown}`);
+          }, 0);
+        },
+        { once: true },
+      );
+    }, SEED);
+    const broken = await runAction({ target: 'button "Checkout"' });
+    console.log(
+      `SIZE Checkout with problems: ${broken.text.length} chars, ${broken.text.length / 4} chars/4`,
+    );
+    check(
+      /^errors: 1 \(first: Error: e2e seeded error: password=\[redacted\]/m.test(broken.text),
+      'build 4: the thrown error is in the Checkout trace, its secret redacted',
+    );
+    check(
+      /^failed requests: 2 \(first: POST \/api\/orders → \d{3}\)$/m.test(broken.text) &&
+        broken.trace?.problems?.some((p) => p.request?.status === 409),
+      'build 4: the failed requests (409 out of stock, 400 empty cart) are in the Checkout trace',
+    );
+    check(
+      broken.text.length <= MAX_CHARS,
+      `build 4: the Checkout answer is at most 16,000 chars (${broken.text.length})`,
+    );
+    const outputs = [broken.text];
+    for (const [name, args] of [
+      ['find_code_for_action', { action: 'Checkout' }],
+      ['get_trace', { traceId: broken.trace?.id }],
+      ['list_traces', {}],
+      ['diff_traces', { a: ct?.id, b: broken.trace?.id }],
+    ]) {
+      const res = await agent.callTool({ name, arguments: args });
+      outputs.push(res.content?.[0]?.text ?? '');
+    }
+    const leaked = Object.values(SEED).filter((s) => outputs.some((o) => o.includes(s)));
+    check(
+      leaked.length === 0,
+      `build 4: no seeded secret in any tool output (${leaked.join(', ') || 'none'})`,
+    );
+    check(
+      outputs[4].includes('problems: errors 0 → 1'),
+      'build 4: diff_traces shows the error that appeared',
+    );
   } finally {
     await agent.close();
   }
@@ -312,6 +376,73 @@ try {
   if (process.platform === 'win32') execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' });
   else child.kill('SIGTERM');
   await daemon.close();
+}
+
+// Build 4 (D-122): nothing is running now. An agent's first tool call starts Lightpath by itself
+// from the shop's config, and run_action works on the browser it opened.
+const shopConfig = join(shop, 'lightpath.config.json');
+const API_PORT_URL = 'http://127.0.0.1:3001';
+const free = async (url) => {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const up = await fetch(url).then(
+      () => true,
+      () => false,
+    );
+    if (!up) return true;
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  return false;
+};
+if (failures.length === 0) {
+  const fs = await import('node:fs');
+  let auto;
+  try {
+    check(await free(API_PORT_URL), 'auto-start: the first stage stopped and freed the API port');
+    fs.writeFileSync(shopConfig, JSON.stringify({ command: 'node dev.mjs', autoStart: true }));
+    const requireMcp = createRequire(join(repo, 'packages', 'mcp', 'package.json'));
+    const { Client } = requireMcp('@modelcontextprotocol/sdk/client/index.js');
+    const { StdioClientTransport } = requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
+    auto = new Client({ name: 'e2e-auto', version: '0.0.0' });
+    await auto.connect(
+      new StdioClientTransport({
+        command: process.execPath,
+        args: [join(repo, 'packages', 'cli', 'dist', 'bin.js'), 'mcp', '--root', shop],
+      }),
+    );
+    const call = async (args) => {
+      const res = await auto.callTool({ name: 'run_action', arguments: args });
+      const out = res.content?.[0]?.text ?? '';
+      console.log(`\nauto-start run_action(${JSON.stringify(args)}) →\n${out}\n`);
+      return out;
+    };
+    const first = await call({ target: 'button "Add to cart"', within: 'Coffee mug' });
+    check(
+      first.startsWith(
+        'started lightpath dev ("node dev.mjs") in the background; log: .lightpath/dev.log\nTrace t_',
+      ),
+      'auto-start: the first run_action started lightpath dev and returned its trace',
+    );
+    check(
+      fs.existsSync(join(shop, '.lightpath', 'dev.log')),
+      'auto-start: lightpath dev logs to .lightpath/dev.log',
+    );
+    const out = await call({ target: 'button "Checkout"' });
+    check(
+      out.startsWith('Trace t_') &&
+        /^ {2}src\/Cart\.tsx$/m.test(out) &&
+        /^ {2}server\/routes\/orders\.ts$/m.test(out),
+      'auto-start: run_action Checkout gets src/Cart.tsx and server/routes/orders.ts, with no start line',
+    );
+  } catch (err) {
+    failures.push(String(err?.stack ?? err));
+    console.error(err);
+  } finally {
+    await auto?.close().catch(() => {});
+    check(await free(API_PORT_URL), 'auto-start: closing the MCP client stopped lightpath dev and the shop');
+    fs.rmSync(shopConfig, { force: true });
+    fs.rmSync(join(shop, '.lightpath', 'dev.log'), { force: true });
+  }
 }
 
 if (failures.length === 0) console.log('\nE2E PASSED');
