@@ -1,4 +1,5 @@
-import type { LineHit, Trace, TraceSummary } from '@lightpath-dev/protocol';
+import type { ActionRequest, ActionResult, LineHit, Trace, TraceSummary } from '@lightpath-dev/protocol';
+import { redactFillValues } from './redact.js';
 
 /** Compresses sorted line numbers into ranges: [1,2,3,7,9,10] → "1-3, 7, 9-10". */
 export function lineRanges(lines: readonly LineHit[]): string {
@@ -61,4 +62,41 @@ export function diffTraces(a: Trace, b: Trace): string {
     if (onlyB.length) out.push(`  ${path}: only in B: ${fmt(onlyB)}`);
   }
   return out.length === 1 ? `${out[0]}\n  none, both traces ran the same lines` : out.join('\n');
+}
+
+type ActionInput = Pick<ActionRequest, 'target' | 'within' | 'action' | 'key' | 'fill'>;
+
+/** `click button "Checkout"`, `press Enter on textbox "Search" within "Header"`. */
+export function describeAction(input: ActionInput): string {
+  const where = `${input.target}${input.within ? ` within "${input.within}"` : ''}`;
+  const verb = input.action === 'press' ? `press ${input.key ?? 'Enter'} on ${where}` : `click ${where}`;
+  const n = input.fill?.length ?? 0;
+  return n > 0 ? `${verb}, after filling ${n} field${n === 1 ? '' : 's'}` : verb;
+}
+
+/**
+ * run_action's answer (design section 4.5): the trace's first line, the action and page lines,
+ * warnings, then the trace body as describeTrace prints it. On failure, the outcome and the
+ * candidates. Every fill value in the text is redacted (rule 6).
+ */
+export function describeActionResult(input: ActionInput, result: ActionResult): string {
+  const values = (input.fill ?? []).map((f) => f.value);
+  if (!result.ok) {
+    const { error } = result;
+    const out = [`run_action did not record a trace: ${error.code}. ${error.message}`];
+    if (error.candidates?.length) {
+      out.push(error.code === 'ambiguous' ? 'Matches:' : 'Closest targets on the page:');
+      for (const c of error.candidates) out.push(`  ${c}`);
+    }
+    return redactFillValues(out.join('\n'), values);
+  }
+  const [first = '', ...body] = describeTrace(result.trace).split('\n');
+  const out = [
+    first,
+    `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
+    `page: ${result.pageUrl}`,
+    ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
+    ...body,
+  ];
+  return redactFillValues(out.join('\n'), values);
 }

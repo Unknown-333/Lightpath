@@ -233,6 +233,7 @@ A per-request fix would need V8 to attribute counts to async contexts. It doesn'
 
 - Accept agent connections (WebSocket `/v1/agent`) and Python ingest (`POST /v1/ingest`).
 - Accept client connections (WebSocket `/v1/client`) from the VS Code extension, the CLI, and the MCP server.
+- Run one action at a time for the MCP server (`POST /v1/action`, D-115): hand it to the browser collector `lightpath dev` registered with `setActionRunner()`, wait up to 1.5 s after the trace ends for the backend lines of the requests it tagged, and reply with the trace. With no collector registered, the outcome is `no_browser`.
 - Request script sources from agents on demand, run the `core` pipeline, store traces, and publish them.
 - Write a discovery file so clients can find it: `<workspace>/.lightpath/daemon.json` with `{ port, token, pid, protocolVersion, startedAt }`. The file is git-ignored via a generated `.lightpath/.gitignore`.
 
@@ -243,6 +244,7 @@ The daemon receives source code and can see request paths, so it must not be rea
 | Threat                                                                                   | Defense                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Another machine connects                                                                 | Bind to `127.0.0.1` only, never `0.0.0.0`                                                                                                                                                                                                                   |
+| Another local process clicks in the app through `/v1/action`                             | Same token and `Origin` check as every route (D-115). The token already gave full read access to traces and sources; it now also allows actions on the page `lightpath dev` opened, and nothing beyond it                                                   |
 | A malicious web page sends requests to `http://127.0.0.1:<port>` from the user's browser | Require a 32-byte random token on every request and client connection (constant-time comparison); reject any request or WebSocket with an `Origin` header, since agents and the extension don't send one; no CORS headers, so browsers can't read responses |
 | Another local user reads the token                                                       | `daemon.json` is created with user-only permissions (mode 0600 on Unix; inherited user ACL in the workspace on Windows)                                                                                                                                     |
 | Oversized or malformed messages                                                          | Validate every batch with the zod schemas in `protocol`; cap request bodies at 8 MB; reply 400 on schema failure (ingest) or close with 4400 (client WebSocket)                                                                                             |
@@ -287,12 +289,15 @@ Benchmarks live in `bench/` and run in CI on every release. Numbers in the READM
 
 `lightpath mcp` runs an MCP server over stdio. It reads the discovery file and talks to the daemon as a client.
 
-| Tool                   | Input                        | Output                                       |
-| ---------------------- | ---------------------------- | -------------------------------------------- |
-| `list_traces`          | optional label filter, limit | id, label, time, file count                  |
-| `get_trace`            | trace id                     | files with line ranges and counts            |
-| `find_code_for_action` | text, e.g. "Checkout"        | best-matching trace by label, with its files |
-| `diff_traces`          | two trace ids                | lines only in each                           |
+| Tool                   | Input                                                           | Output                                                                                     |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `run_action`           | target, optional `within`, `action`, `key`, `timeoutMs`, `fill` | the action's trace, with action and page lines and warnings; or the outcome and candidates |
+| `list_traces`          | optional label filter, limit                                    | id, label, time, file count                                                                |
+| `get_trace`            | trace id                                                        | files with line ranges and counts                                                          |
+| `find_code_for_action` | text, e.g. "Checkout"                                           | best-matching trace by label, with its files                                               |
+| `diff_traces`          | two trace ids                                                   | lines only in each                                                                         |
+
+`run_action` sends one `POST /v1/action` to the daemon in the discovery file, with the token ([ADR 0007](adr/0007-run-action.md)). The collector runs it on its own page, one action at a time, after any open trace has ended: `fill` entries first with `locator.fill` (no key events, so no trace opens), then a synced press (mouse down, wait until the boundary is taken and the page resumed, mouse up; at once on the release boundary) or `locator.press` for Enter and Space. Before a click it checks the target is visible, enabled, not moving and not covered at its center without sending any input: Playwright's `click({ trial: true })` sends a real press that the hook sees (measured, Playwright 1.64). No CDP port is opened. Fill values are scrubbed from labels and the collector's log, and from the tool's text (redaction rule 6, D-123).
 
 ## 10. Failure modes
 

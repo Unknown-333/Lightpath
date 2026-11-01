@@ -4,11 +4,12 @@ Version **1**. Implemented by `packages/protocol/src/messages.ts`; that file is 
 
 ## Transport
 
-| Endpoint                                        | Transport                                                      | Who connects                                        |
-| ----------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------- |
-| `POST http://127.0.0.1:<port>/v1/ingest`        | HTTP, JSON `IngestBatch` body, `Authorization: Bearer <token>` | Node agent, browser collector, Python agent         |
-| `ws://127.0.0.1:<port>/v1/client?token=<token>` | WebSocket, JSON text frames                                    | VS Code extension, CLI, MCP server                  |
-| `GET http://127.0.0.1:<port>/v1/health`         | HTTP                                                           | Anyone (returns `{ ok, protocolVersion }`, no data) |
+| Endpoint                                        | Transport                                                        | Who connects                                        |
+| ----------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------- |
+| `POST http://127.0.0.1:<port>/v1/ingest`        | HTTP, JSON `IngestBatch` body, `Authorization: Bearer <token>`   | Node agent, browser collector, Python agent         |
+| `ws://127.0.0.1:<port>/v1/client?token=<token>` | WebSocket, JSON text frames                                      | VS Code extension, CLI, MCP server                  |
+| `GET http://127.0.0.1:<port>/v1/health`         | HTTP                                                             | Anyone (returns `{ ok, protocolVersion }`, no data) |
+| `POST http://127.0.0.1:<port>/v1/action`        | HTTP, JSON `ActionRequest` body, `Authorization: Bearer <token>` | MCP server (`run_action`, D-115)                    |
 
 Agents send batches over HTTP instead of holding a WebSocket open. An open socket would keep the user's event loop alive, so short-lived processes (scripts, test runs) would never exit. Agents learn the daemon URL, token, and workspace roots from environment variables the CLI sets: `LIGHTPATH_URL`, `LIGHTPATH_TOKEN`, `LIGHTPATH_ROOTS`, `LIGHTPATH_SKIP`, `LIGHTPATH_DEBUG`.
 
@@ -107,6 +108,45 @@ Python reports lines, not offsets, because `sys.monitoring` gives line numbers d
 | ------------ | ------------------------------- |
 | `listTraces` | `requestId`, `limit?`, `label?` |
 | `getTrace`   | `requestId`, `traceId`          |
+
+## MCP server → daemon: `POST /v1/action`
+
+One action in the app, and its trace in the reply (D-115, [ADR 0007](adr/0007-run-action.md)). Same rules as `/v1/ingest`: 127.0.0.1 only; any `Origin` header → 403; missing or wrong token → 401; body over 256 KB → 413; schema error → 400 (the reply names fields, never values); other `protocolVersion` → 426. Both action outcomes come with HTTP 200. The reply comes when the action is done: the trace has settled, then at most 1.5 s more until every request the browser tagged for it has its backend lines (matched by method and path). A call can take `timeoutMs` + 1.5 s + 2 s.
+
+```ts
+interface ActionRequest {
+  protocolVersion: 1;
+  target: string; // 1..500 chars: 'button "Checkout"', 'Checkout', 'css=button.primary'
+  within?: string; // 1..200 chars: text of the row or section that holds the target
+  action?: 'click' | 'press'; // default 'click'
+  key?: 'Enter' | 'Space'; // only with 'press'; default 'Enter'
+  timeoutMs?: number; // integer 500..30000; settle cap for this trace, default 5000
+  fill?: { target: string; within?: string; value: string }[]; // at most 20, filled in order first; value at most 10,000 chars, never echoed, logged or stored
+}
+
+type ActionResult =
+  | {
+      ok: true;
+      trace: Trace; // as stored, after the backend wait
+      boundary: 'press' | 'release' | 'key';
+      settled: 'quiet' | 'timeout';
+      backend: 'complete' | 'partial';
+      pageUrl: string; // after the action
+      warnings: { code: 'timeout' | 'click_lost' | 'backend_partial'; message: string }[];
+    }
+  | {
+      ok: false;
+      error: {
+        code: 'not_found' | 'ambiguous' | 'not_actionable' | 'no_trace' | 'no_browser';
+        message: string;
+        candidates?: string[]; // up to 10 role-and-name pairs
+        count?: number; // matches, for 'ambiguous' and 'not_found'
+        fillIndex?: number; // which fill entry failed; never its value
+      };
+    };
+```
+
+`no_browser` means no browser is registered: `lightpath dev` runs with `--no-browser`, or its browser isn't open yet, or was closed. Target forms and outcomes: [design section 4](design/agent-loop.md#4-run_action).
 
 ## The `Trace` model
 

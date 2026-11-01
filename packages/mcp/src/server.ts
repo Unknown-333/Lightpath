@@ -1,11 +1,37 @@
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { DaemonClient, DaemonDiscovery, DISCOVERY_FILE, type Trace } from '@lightpath-dev/protocol';
+import {
+  type ActionRequest,
+  DaemonClient,
+  DaemonDiscovery,
+  DISCOVERY_FILE,
+  PROTOCOL_VERSION,
+  postAction,
+  type Trace,
+} from '@lightpath-dev/protocol';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { describeSummaries, describeTrace, diffTraces } from './format.js';
+import { describeActionResult, describeSummaries, describeTrace, diffTraces } from './format.js';
+import { redactFillValues } from './redact.js';
+
+/** The design's run_action description (docs/design/agent-loop.md section 3, D-119): under 300 characters. */
+export const RUN_ACTION_DESCRIPTION =
+  "Click a button or link, or press Enter or Space, in the user's running app, and return the code that ran, " +
+  'frontend and backend, with errors and failed requests. Can fill fields first. Use it to see which code ' +
+  'handles a UI action, or to rerun a bug after a fix. Target: button "Checkout" or text.';
+
+const targetSchema = z
+  .string()
+  .min(1)
+  .max(500)
+  .describe('role and name like button "Checkout", visible text, or css=<selector>');
+const withinSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .describe('Text of the row or section that holds the target, e.g. "Coffee mug"');
 
 export interface McpOptions {
   workspaceRoot: string;
@@ -37,6 +63,43 @@ export function createMcpServer(options: McpOptions): McpServer {
       client.close();
     }
   };
+
+  server.registerTool(
+    'run_action',
+    {
+      description: RUN_ACTION_DESCRIPTION,
+      inputSchema: {
+        target: targetSchema,
+        within: withinSchema.optional(),
+        action: z.enum(['click', 'press']).optional().describe('Default click'),
+        key: z.enum(['Enter', 'Space']).optional().describe('With press; default Enter'),
+        timeoutMs: z.number().int().min(500).max(30_000).optional().describe('Settle cap, default 5000'),
+        fill: z
+          .array(
+            z.object({
+              target: targetSchema,
+              within: withinSchema.optional(),
+              value: z.string().max(10_000),
+            }),
+          )
+          .max(20)
+          .optional()
+          .describe('Fields to fill first, in order. Values are never shown back'),
+      },
+    },
+    async (input) => {
+      const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
+      const values = (input.fill ?? []).map((f) => f.value);
+      try {
+        const info = await findDaemon(options.workspaceRoot);
+        // The daemon answers after the settle cap, the backend wait (1.5 s) and the press wait (2 s).
+        const result = await postAction(info.port, info.token, request, (input.timeoutMs ?? 5000) + 30_000);
+        return { ...text(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
+      } catch (err) {
+        return { ...text(redactFillValues((err as Error).message, values)), isError: true };
+      }
+    },
+  );
 
   server.registerTool(
     'list_traces',
@@ -110,6 +173,11 @@ export async function runMcpServer(options: McpOptions): Promise<void> {
 }
 
 async function connect(workspaceRoot: string): Promise<DaemonClient> {
+  const info = await findDaemon(workspaceRoot);
+  return DaemonClient.connect(info.port, info.token);
+}
+
+async function findDaemon(workspaceRoot: string): Promise<DaemonDiscovery> {
   // The nearest folder at or above the root with a discovery file: editors don't always start
   // MCP servers in the project folder itself.
   let raw: string | undefined;
@@ -124,6 +192,5 @@ async function connect(workspaceRoot: string): Promise<DaemonClient> {
       `Lightpath isn't running in ${workspaceRoot}. Start it with: lightpath dev -- <your dev command>`,
     );
   }
-  const info = DaemonDiscovery.parse(JSON.parse(raw));
-  return DaemonClient.connect(info.port, info.token);
+  return DaemonDiscovery.parse(JSON.parse(raw));
 }

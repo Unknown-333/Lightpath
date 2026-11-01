@@ -144,3 +144,90 @@ export const DaemonToClientMessage = z.discriminatedUnion('type', [
   z.object({ type: z.literal('traceResult'), requestId, trace: Trace.nullable() }),
 ]);
 export type DaemonToClientMessage = z.infer<typeof DaemonToClientMessage>;
+
+// ── MCP server → daemon: one action (HTTP POST /v1/action, D-115) ──────────
+
+/** Largest `/v1/action` body, in bytes: room for 20 `fill` values of 10,000 characters. */
+export const MAX_ACTION_BYTES = 256 * 1024;
+
+const actionTarget = z.string().min(1).max(500);
+const actionWithin = z.string().min(1).max(200);
+
+export const ActionFill = z.object({
+  target: actionTarget,
+  within: actionWithin.optional(),
+  /** A secret: never echoed, logged or stored (D-123 rule 6). */
+  value: z.string().max(10_000),
+});
+export type ActionFill = z.infer<typeof ActionFill>;
+
+export const ActionRequest = z
+  .object({
+    protocolVersion: version,
+    /** `button "Checkout"`, `Checkout`, or `css=button.primary`. */
+    target: actionTarget,
+    within: actionWithin.optional(),
+    action: z.enum(['click', 'press']).optional(),
+    key: z.enum(['Enter', 'Space']).optional(),
+    timeoutMs: z.number().int().min(500).max(30_000).optional(),
+    fill: z.array(ActionFill).max(20).optional(),
+  })
+  .refine((r) => r.key === undefined || r.action === 'press', {
+    message: '`key` is only allowed with action "press"',
+    path: ['key'],
+  });
+export type ActionRequest = z.infer<typeof ActionRequest>;
+
+export const ActionErrorCode = z.enum(['not_found', 'ambiguous', 'not_actionable', 'no_trace', 'no_browser']);
+export type ActionErrorCode = z.infer<typeof ActionErrorCode>;
+export const ActionWarningCode = z.enum(['timeout', 'click_lost', 'backend_partial']);
+export type ActionWarningCode = z.infer<typeof ActionWarningCode>;
+
+const ActionWarning = z.object({ code: ActionWarningCode, message: z.string() });
+export type ActionWarning = z.infer<typeof ActionWarning>;
+
+export const ActionError = z.object({
+  code: ActionErrorCode,
+  message: z.string(),
+  candidates: z.array(z.string()).optional(),
+  count: z.number().int().nonnegative().optional(),
+  /** Which `fill` entry failed. Never its value. */
+  fillIndex: z.number().int().nonnegative().optional(),
+});
+export type ActionError = z.infer<typeof ActionError>;
+
+export const ActionResult = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    /** As stored, after the backend wait. */
+    trace: Trace,
+    boundary: z.enum(['press', 'release', 'key']),
+    settled: z.enum(['quiet', 'timeout']),
+    backend: z.enum(['complete', 'partial']),
+    /** The page URL after the action. */
+    pageUrl: z.string(),
+    warnings: z.array(ActionWarning),
+  }),
+  z.object({ ok: z.literal(false), error: ActionError }),
+]);
+export type ActionResult = z.infer<typeof ActionResult>;
+
+/**
+ * What the process that owns the browser reports back for one action, before the daemon's backend
+ * wait (in-process only, not on the wire). `tagged` lists the requests the collector gave this
+ * trace's header, so the daemon knows which backend deltas to wait for.
+ */
+export type ActionRunOutcome =
+  | {
+      ok: true;
+      traceId: TraceId;
+      boundary: 'press' | 'release' | 'key';
+      settled: 'quiet' | 'timeout';
+      pageUrl: string;
+      tagged: { method: string; path: string }[];
+      warnings: ActionWarning[];
+    }
+  | { ok: false; error: ActionError };
+
+/** Runs one action on the page `lightpath dev` opened (`daemon.setActionRunner`). */
+export type ActionRunner = (request: ActionRequest) => Promise<ActionRunOutcome>;

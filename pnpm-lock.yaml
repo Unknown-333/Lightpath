@@ -305,6 +305,13 @@ importers:
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
+    devDependencies:
+      '@lightpath-dev/daemon':
+        specifier: workspace:*
+        version: link:../daemon
+      '@lightpath-dev/mcp':
+        specifier: workspace:*
+        version: link:../mcp
 
   packages/cli:
     dependencies:

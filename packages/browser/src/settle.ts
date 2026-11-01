@@ -26,12 +26,15 @@ export class SettleTracker {
     return this.#inFlight;
   }
 
-  /** Starts a window. Requests already in flight count toward it. */
-  begin(): Promise<SettleReason> {
+  /**
+   * Starts a window. Requests already in flight count toward it. `maxSettleMs` overrides the cap
+   * for this window only (run_action's `timeoutMs`).
+   */
+  begin(maxSettleMs?: number): Promise<SettleReason> {
     this.#finish('quiet');
     return new Promise((resolve) => {
       this.#resolve = resolve;
-      this.#maxTimer = setTimeout(() => this.#finish('timeout'), this.#opts.maxSettleMs);
+      this.#maxTimer = setTimeout(() => this.#finish('timeout'), maxSettleMs ?? this.#opts.maxSettleMs);
       if (this.#inFlight === 0) this.#armQuiet();
     });
   }

@@ -1,9 +1,19 @@
 import { newTraceId, webpackModulePath } from '@lightpath-dev/core';
-import { type IngestMessage, type ScriptCoverage, TRACE_HEADER, type TraceId } from '@lightpath-dev/protocol';
-import type { Browser, BrowserContext, CDPSession, Page, Request, Route } from 'playwright-core';
+import {
+  type ActionError,
+  type ActionRequest,
+  type ActionRunOutcome,
+  type ActionWarning,
+  type IngestMessage,
+  type ScriptCoverage,
+  TRACE_HEADER,
+  type TraceId,
+} from '@lightpath-dev/protocol';
+import type { Browser, BrowserContext, CDPSession, Locator, Page, Request, Route } from 'playwright-core';
 import { launchBrowser } from './launch.js';
 import { countsTowardSettle, isNoiseScript, labelFor, shouldTag, type TargetInfo } from './rules.js';
-import { SettleTracker } from './settle.js';
+import { type SettleReason, SettleTracker } from './settle.js';
+import { actionabilityProblem, describeTarget, resolveTarget } from './target.js';
 
 export interface CollectorOptions {
   /** App URL to open, e.g. http://localhost:5173 */
@@ -26,6 +36,14 @@ export interface CollectorOptions {
   notice?: (msg: string) => void;
 }
 
+/** What run_action learns when the collector has taken its boundary and resumed the page. */
+interface BoundaryTaken {
+  traceId: TraceId;
+  boundary: 'press' | 'release' | 'key';
+  /** Resolves with the settle reason once the trace's traceEnd has been sent. */
+  done: Promise<SettleReason>;
+}
+
 interface ScriptMeta {
   url: string;
   hash: string;
@@ -42,6 +60,12 @@ const HOOK_LEAVE = 'lightpathLeave';
 /** Set on window when the boundary moves to pointer release; read by the hook at event time. */
 const RELEASE = '__lightpathRelease';
 const PRESSED = '__lightpathPressed';
+/** Holds the element run_action presses; the hook's `click` listener looks for it (click_lost). */
+const EXPECT = '__lightpathExpect';
+/** True once a `click` event reached the element marked with EXPECT. */
+const CLICK_HIT = '__lightpathClickHit';
+/** How long run_action waits for the boundary after its input, before answering `no_trace`. */
+const BOUNDARY_WAIT_MS = 2000;
 /**
  * Longest coverage read the press boundary may cost. Chrome drops a mouse release that arrives
  * while the page is paused at the press, so above this the boundary moves to the release, where a
@@ -111,6 +135,12 @@ const HOOK_SOURCE = `(() => {
     window.${LAST} = { ...describe(event.target), key: event.key === ' ' ? 'Space' : event.key };
     debugger;
   }, { capture: true });
+  // run_action's check that its press became a click on the element it aimed at (click_lost).
+  // Never pauses, and does nothing unless run_action marked an element.
+  window.addEventListener('click', function lightpathClick(event) {
+    const want = window.${EXPECT};
+    if (want && event.composedPath().includes(want)) window.${CLICK_HIT} = true;
+  }, { capture: true });
   // A full page load is about to replace this document: pause once more so its coverage can be
   // read while it still exists. Never sets returnValue, so no "leave site?" prompt appears.
   window.addEventListener('beforeunload', function ${HOOK_LEAVE}() {
@@ -146,15 +176,40 @@ export class BrowserCollector {
   /** Logs a message and shows it to the user once (the CLI prints notices in yellow). */
   #notify(message: string): void {
     this.#log(message);
-    this.#opts.notice?.(message);
+    this.#opts.notice?.(this.#scrub(message));
+  }
+
+  /** Replaces the current run_action's fill values with `[redacted]`. */
+  #scrub(text: string): string {
+    let out = text;
+    for (const s of this.#secrets) out = out.split(s).join('[redacted]');
+    return out;
+  }
+
+  /** Each fill value, and its percent-encoded form for URLs, longest first. */
+  static #secretForms(values: readonly string[]): string[] {
+    const forms = values.filter((v) => v.length >= 4).flatMap((v) => [v, encodeURIComponent(v)]);
+    return [...new Set(forms)].sort((a, b) => b.length - a.length);
   }
   #clickChain: Promise<void> = Promise.resolve();
   /** True once the boundary has moved to pointer release (see PRESS_BUDGET_MS). */
   #release = false;
 
+  /** run_action calls, one at a time (design section 4.2). */
+  #actionChain: Promise<unknown> = Promise.resolve();
+  /** Set while run_action waits for the boundary of its own input. */
+  #armed: { maxSettleMs: number; resolve: (b: BoundaryTaken) => void } | undefined;
+  /** Resolves when the open trace (#active) has sent its traceEnd. */
+  #activeDone: Promise<void> = Promise.resolve();
+  /** Requests tagged with each open trace's header, for the daemon's backend wait. */
+  readonly #tagged = new Map<TraceId, { method: string; path: string }[]>();
+  /** The current run_action's `fill` values (4+ characters): scrubbed from labels and logs (D-123 rule 6). */
+  #secrets: string[] = [];
+
   constructor(opts: CollectorOptions) {
     this.#opts = opts;
-    this.#log = opts.log ?? (() => {});
+    const log = opts.log ?? (() => {});
+    this.#log = (msg) => log(this.#scrub(msg));
     this.#settle = new SettleTracker({
       settleMs: opts.settleMs ?? 300,
       maxSettleMs: opts.maxSettleMs ?? 5000,
@@ -244,6 +299,202 @@ export class BrowserCollector {
     await this.#browser?.close();
   }
 
+  /**
+   * Runs one run_action call on this page (design section 4, D-114): fills fields, then a synced
+   * press or a key press on the target, and resolves once the action's trace has ended. Calls
+   * queue, and each waits for a person's open trace to end first, so one trace never holds another
+   * action's requests. The daemon does the backend wait.
+   */
+  runAction(request: ActionRequest): Promise<ActionRunOutcome> {
+    const run = this.#actionChain.then(() => this.#runAction(request));
+    this.#actionChain = run.catch(() => {});
+    return run;
+  }
+
+  async #runAction(request: ActionRequest): Promise<ActionRunOutcome> {
+    const page = this.#page;
+    const closed: ActionRunOutcome = {
+      ok: false,
+      error: {
+        code: 'no_browser',
+        message: 'The browser Lightpath opened is closed. Restart lightpath dev.',
+      },
+    };
+    if (!page || page.isClosed()) return closed;
+    await this.#activeDone;
+    this.#secrets = BrowserCollector.#secretForms((request.fill ?? []).map((f) => f.value));
+    try {
+      const outcome = await this.#act(page, request);
+      if (outcome.ok) return { ...outcome, pageUrl: this.#scrub(outcome.pageUrl) };
+      const { error } = outcome;
+      return {
+        ok: false,
+        error: {
+          ...error,
+          message: this.#scrub(error.message),
+          ...(error.candidates ? { candidates: error.candidates.map((c) => this.#scrub(c)) } : {}),
+        },
+      };
+    } catch (err) {
+      if (page.isClosed()) return closed;
+      throw new Error(this.#scrub(String((err as Error)?.message ?? err)));
+    } finally {
+      this.#armed = undefined;
+      this.#secrets = [];
+    }
+  }
+
+  async #act(page: Page, request: ActionRequest): Promise<ActionRunOutcome> {
+    const fail = (error: ActionError): ActionRunOutcome => ({ ok: false, error });
+    // Fill first, outside any trace: locator.fill fires input events but no key events (D-079).
+    for (const [i, entry] of (request.fill ?? []).entries()) {
+      const field = await resolveTarget(page, entry.target, entry.within);
+      if (!field.ok)
+        return fail({ ...field.error, fillIndex: i, message: `fill[${i}]: ${field.error.message}` });
+      const where = `fill[${i}]: ${describeTarget(entry.target, entry.within)}`;
+      if (!(await isEditable(field.locator))) {
+        return fail({ code: 'not_actionable', fillIndex: i, message: `${where} is not an editable field.` });
+      }
+      try {
+        await field.locator.fill(entry.value, { timeout: 2000 });
+      } catch (err) {
+        const why = actionabilityProblem(String((err as Error)?.message)) ?? 'not editable';
+        return fail({
+          code: 'not_actionable',
+          fillIndex: i,
+          message: `${where} could not be filled: ${why}.`,
+        });
+      }
+    }
+
+    const found = await resolveTarget(page, request.target, request.within);
+    if (!found.ok) return fail(found.error);
+    const action = request.action ?? 'click';
+    const what = describeTarget(request.target, request.within);
+    const problem = await checkActionable(found.locator, action);
+    if (problem)
+      return fail({ code: 'not_actionable', message: `${what} is ${problem}; nothing was pressed.` });
+
+    const maxSettleMs = request.timeoutMs ?? this.#opts.maxSettleMs ?? 5000;
+    const warnings: ActionWarning[] = [];
+    let taken: BoundaryTaken | undefined;
+    if (action === 'press') {
+      const boundary = this.#armBoundary(maxSettleMs);
+      try {
+        await found.locator.press(request.key ?? 'Enter', { timeout: 2000 });
+      } catch (err) {
+        const why = actionabilityProblem(String((err as Error)?.message)) ?? 'not focusable';
+        return fail({ code: 'not_actionable', message: `${what} could not take a key press: ${why}.` });
+      }
+      taken = await boundary;
+    } else {
+      const pressed = await this.#syncedPress(page, found.locator, maxSettleMs);
+      if ('error' in pressed)
+        return fail({ code: 'not_actionable', message: `${what} is ${pressed.error}.` });
+      taken = pressed.taken;
+      if (pressed.lost) {
+        warnings.push({
+          code: 'click_lost',
+          message: `The press opened a trace, but ${what} got no click event (the page moved or re-rendered under the mouse).`,
+        });
+      }
+    }
+    if (!taken) {
+      return fail({
+        code: 'no_trace',
+        message: `No trace opened within ${BOUNDARY_WAIT_MS} ms of the ${action === 'press' ? `${request.key ?? 'Enter'} key` : 'press'} on ${what}. This usually means the element doesn't handle pointer or key input.`,
+      });
+    }
+    const settled = await taken.done;
+    if (settled === 'timeout') {
+      warnings.push({
+        code: 'timeout',
+        message: `timed out after ${maxSettleMs} ms: requests were still running, so the trace may be partial.`,
+      });
+    }
+    const tagged = this.#tagged.get(taken.traceId) ?? [];
+    this.#tagged.delete(taken.traceId);
+    return {
+      ok: true,
+      traceId: taken.traceId,
+      boundary: taken.boundary,
+      settled,
+      pageUrl: page.url(),
+      tagged,
+      warnings,
+    };
+  }
+
+  /**
+   * Waits for the next boundary this collector takes, for at most BOUNDARY_WAIT_MS after the call
+   * starts waiting. Resolves undefined when none came.
+   */
+  #armBoundary(maxSettleMs: number): Promise<BoundaryTaken | undefined> {
+    let resolve: (b: BoundaryTaken | undefined) => void = () => {};
+    const promise = new Promise<BoundaryTaken | undefined>((r) => {
+      resolve = r;
+    });
+    const armed = { maxSettleMs, resolve: (b: BoundaryTaken) => resolve(b) };
+    this.#armed = armed;
+    const timer = setTimeout(() => {
+      if (this.#armed === armed) this.#armed = undefined;
+      resolve(undefined);
+    }, BOUNDARY_WAIT_MS);
+    return promise.finally(() => clearTimeout(timer));
+  }
+
+  /**
+   * The synced press (D-114): mouse to the target's center, down, wait until the collector has
+   * taken the boundary and resumed the page, up. Chrome drops a release that lands inside the
+   * pause (ADR 0003); this one can't. On the release boundary (D-082) the press doesn't pause, so
+   * the mouse goes up at once and the boundary comes at pointerup.
+   */
+  async #syncedPress(
+    page: Page,
+    locator: Locator,
+    maxSettleMs: number,
+  ): Promise<{ taken: BoundaryTaken | undefined; lost: boolean } | { error: string }> {
+    await locator.scrollIntoViewIfNeeded({ timeout: 2000 });
+    const box = await locator.boundingBox({ timeout: 2000 });
+    if (!box) return { error: 'hidden' };
+    // Mark the element so the hook can tell whether the click event reached it (click_lost).
+    const origin = await locator.evaluate(
+      (el, [expect, hit]) => {
+        const w = window as unknown as Record<string, unknown>;
+        w[expect] = el;
+        w[hit] = false;
+        return performance.timeOrigin;
+      },
+      [EXPECT, CLICK_HIT] as const,
+    );
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    const boundary = this.#armBoundary(maxSettleMs);
+    let taken: BoundaryTaken | undefined;
+    if (this.#release) {
+      await page.mouse.down();
+      await page.mouse.up();
+      taken = await boundary;
+    } else {
+      await page.mouse.down();
+      taken = await boundary;
+      await page.mouse.up();
+    }
+    const after = await page
+      .evaluate(
+        ([expect, hit]) => {
+          const w = window as unknown as Record<string, unknown>;
+          const clicked = w[hit] === true;
+          w[expect] = undefined;
+          return { origin: performance.timeOrigin, clicked };
+        },
+        [EXPECT, CLICK_HIT] as const,
+      )
+      .catch(() => undefined);
+    // A new document (the click navigated) can't say; only a click missing on the same page counts.
+    const lost = Boolean(taken && after && after.origin === origin && !after.clicked);
+    return { taken, lost };
+  }
+
   #onPaused(url: string | undefined, functionName: string | undefined): void {
     if (url !== HOOK_URL) {
       // A `debugger;` statement in app code. Lightpath isn't a debugger; keep the app running.
@@ -269,49 +520,69 @@ export class BrowserCollector {
   async #click(): Promise<void> {
     const pausedAt = performance.now();
     let readMs = 0;
-    const [before, target] = await Promise.all([
+    const [before, raw] = await Promise.all([
       this.#take().then((r) => {
         readMs = performance.now() - pausedAt;
         return r;
       }),
       this.#lastTarget(),
     ]);
+    // A label or name can echo a value run_action just filled; it never leaves the collector.
+    const target: TargetInfo = Object.fromEntries(
+      Object.entries(raw).map(([k, v]) => [k, typeof v === 'string' ? this.#scrub(v) : v]),
+    );
     const traceId = newTraceId();
     const at = Date.now();
-    this.#active = traceId; // before resuming, so the click's own requests are tagged
-    const settled = this.#settle.begin();
-    await this.#resume();
-    const boundary = this.#release ? 'release' : 'press';
-    this.#log(
-      `click on ${labelFor(target)}: paused ${(performance.now() - pausedAt).toFixed(1)}ms, boundary ${boundary}, trace ${traceId}`,
-    );
-    // Key presses never lose events to a pause, so only pointer presses count toward the budget.
-    if (!target.key && boundary === 'press') await this.#checkBudget(readMs);
-
-    void this.#emit('background', before, at);
-    this.#opts.send({
-      type: 'traceStart',
-      traceId,
-      label: labelFor(target),
-      target: {
-        ...(target.role ? { role: target.role } : {}),
-        ...(target.name ? { name: target.name } : {}),
-        ...(target.testId ? { testId: target.testId } : {}),
-        ...(target.text ? { text: target.text } : {}),
-      },
-      at,
+    let endTrace: (reason: SettleReason) => void = () => {};
+    const done = new Promise<SettleReason>((resolve) => {
+      endTrace = resolve;
     });
+    this.#active = traceId; // before resuming, so the click's own requests are tagged
+    this.#activeDone = done.then(() => {});
+    this.#tagged.set(traceId, []);
+    const armed = this.#armed;
+    this.#armed = undefined;
+    let reason: SettleReason = 'quiet';
+    try {
+      const settled = this.#settle.begin(armed?.maxSettleMs);
+      await this.#resume();
+      const boundary = this.#release ? 'release' : 'press';
+      armed?.resolve({ traceId, boundary: target.key ? 'key' : boundary, done });
+      this.#log(
+        `click on ${labelFor(target)}: paused ${(performance.now() - pausedAt).toFixed(1)}ms, boundary ${boundary}, trace ${traceId}`,
+      );
+      // Key presses never lose events to a pause, so only pointer presses count toward the budget.
+      if (!target.key && boundary === 'press') await this.#checkBudget(readMs);
 
-    const reason = await settled;
-    // A navigation that never loaded (a download, a cancelled leave) mustn't hold later windows open.
-    if (this.#navigating) {
-      this.#navigating = false;
-      this.#settle.requestEnded();
+      void this.#emit('background', before, at);
+      this.#opts.send({
+        type: 'traceStart',
+        traceId,
+        label: labelFor(target),
+        target: {
+          ...(target.role ? { role: target.role } : {}),
+          ...(target.name ? { name: target.name } : {}),
+          ...(target.testId ? { testId: target.testId } : {}),
+          ...(target.text ? { text: target.text } : {}),
+        },
+        at,
+      });
+
+      reason = await settled;
+      // A navigation that never loaded (a download, a cancelled leave) mustn't hold later windows open.
+      if (this.#navigating) {
+        this.#navigating = false;
+        this.#settle.requestEnded();
+      }
+      const coverage = await this.#take();
+      await this.#emit('action', coverage, at, traceId);
+      this.#opts.send({ type: 'traceEnd', traceId, at: Date.now(), settled: reason });
+    } finally {
+      if (this.#active === traceId) this.#active = undefined;
+      // Only run_action reads the tagged list (and then drops it); a person's click doesn't need it.
+      if (!armed) this.#tagged.delete(traceId);
+      endTrace(reason);
     }
-    const coverage = await this.#take();
-    await this.#emit('action', coverage, at, traceId);
-    this.#opts.send({ type: 'traceEnd', traceId, at: Date.now(), settled: reason });
-    if (this.#active === traceId) this.#active = undefined;
   }
 
   async #lastTarget(): Promise<TargetInfo> {
@@ -340,6 +611,7 @@ export class BrowserCollector {
         ? 'navigation'
         : request.resourceType();
     if (traceId && shouldTag(request.url(), type, this.#backendOrigins)) {
+      this.#tagged.get(traceId)?.push({ method: request.method(), path: new URL(request.url()).pathname });
       await route.continue({ headers: { ...request.headers(), [TRACE_HEADER]: traceId } });
       return;
     }
@@ -476,5 +748,63 @@ export class BrowserCollector {
         this.#log(`could not read source of ${meta.url}: ${(err as Error).message}`);
       }
     }
+  }
+}
+
+/**
+ * Why a target can't take the action, or undefined: hidden, disabled, and for a click also still
+ * moving or covered by another element at its center.
+ *
+ * Not `locator.click({ trial: true })`: Playwright 1.64's trial run still sends a real mouse click
+ * and only stops it with its own window listener, which runs after the hook's, so it opens a trace
+ * (measured, build1-raw/debug-double.mjs). These checks send no input at all.
+ */
+async function checkActionable(locator: Locator, action: 'click' | 'press'): Promise<string | undefined> {
+  try {
+    if (!(await locator.isVisible())) return 'hidden';
+    if (!(await locator.isEnabled({ timeout: 1000 }))) return 'disabled';
+    if (action !== 'click') return undefined;
+    await locator.scrollIntoViewIfNeeded({ timeout: 2000 });
+    const problem = await locator.evaluate(
+      async (el) => {
+        // Two animation frames apart, the box must not move (a frame may not come in a hidden tab).
+        const frame = () =>
+          Promise.race([
+            new Promise<void>((r) => requestAnimationFrame(() => r())),
+            new Promise<void>((r) => setTimeout(r, 100)),
+          ]);
+        const a = el.getBoundingClientRect();
+        await frame();
+        await frame();
+        const b = el.getBoundingClientRect();
+        if (a.x !== b.x || a.y !== b.y || a.width !== b.width || a.height !== b.height) return 'still moving';
+        const x = b.x + b.width / 2;
+        const y = b.y + b.height / 2;
+        let top = document.elementFromPoint(x, y);
+        while (top?.shadowRoot) {
+          const inner = top.shadowRoot.elementFromPoint(x, y);
+          if (!inner || inner === top) break;
+          top = inner;
+        }
+        if (!top) return 'outside the page';
+        const host = (top.getRootNode() as ShadowRoot).host;
+        if (el === top || el.contains(top) || (host && el.contains(host))) return '';
+        return 'covered by another element';
+      },
+      undefined,
+      { timeout: 2000 },
+    );
+    return problem || undefined;
+  } catch (err) {
+    const message = String((err as Error)?.message ?? err);
+    return actionabilityProblem(message) ?? `not actionable (${message.split('\n')[0]})`;
+  }
+}
+
+async function isEditable(locator: Locator): Promise<boolean> {
+  try {
+    return (await locator.isVisible()) && (await locator.isEditable({ timeout: 1000 }));
+  } catch {
+    return false; // not an input, textarea, select or contenteditable element
   }
 }
