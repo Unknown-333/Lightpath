@@ -9,7 +9,16 @@ import {
   TRACE_HEADER,
   type TraceId,
 } from '@lightpath-dev/protocol';
-import type { Browser, BrowserContext, CDPSession, Locator, Page, Request, Route } from 'playwright-core';
+import type {
+  Browser,
+  BrowserContext,
+  CDPSession,
+  Locator,
+  Page,
+  Request,
+  Response,
+  Route,
+} from 'playwright-core';
 import { launchBrowser } from './launch.js';
 import { countsTowardSettle, isNoiseScript, labelFor, shouldTag, type TargetInfo } from './rules.js';
 import { type SettleReason, SettleTracker } from './settle.js';
@@ -72,6 +81,9 @@ const BOUNDARY_WAIT_MS = 2000;
  * pause loses nothing (measured up to 200 ms). See bench/README.md.
  */
 const PRESS_BUDGET_MS = 20;
+/** Reloads of the first page when its own scripts failed, and the wait before each (D-135). */
+const FIRST_LOAD_RELOADS = 3;
+const FIRST_LOAD_RETRY_MS = 1000;
 
 /**
  * Runs in every page before any app script (an init script):
@@ -331,8 +343,51 @@ export class BrowserCollector {
       this.#afterLoad();
     });
 
-    await page.goto(this.#opts.url);
+    await this.#openFirstPage(page);
     this.#log(`browser open at ${this.#opts.url}`);
+  }
+
+  /**
+   * Opens the app's page. When a script from the page's own origin failed during that load, waits
+   * and reloads, at most FIRST_LOAD_RELOADS times (D-135): a dev server that rebuilds right after it
+   * starts answering can serve a page whose bundle is gone a moment later, and nothing else would
+   * ever reload it. Only this first load is checked.
+   */
+  async #openFirstPage(page: Page): Promise<void> {
+    const origin = new URL(this.#opts.url).origin;
+    const failed: string[] = [];
+    const own = (req: Request) => req.resourceType() === 'script' && new URL(req.url()).origin === origin;
+    const onResponse = (res: Response) => {
+      if (res.status() >= 400 && own(res.request()))
+        failed.push(`${requestKey(res.request()).path} → ${res.status()}`);
+    };
+    const onFailed = (req: Request) => {
+      const why = req.failure()?.errorText ?? 'failed';
+      // A reload cancels the old page's pending loads; that isn't the script failing.
+      if (own(req) && !why.includes('ERR_ABORTED')) failed.push(`${requestKey(req).path} failed: ${why}`);
+    };
+    page.on('response', onResponse);
+    page.on('requestfailed', onFailed);
+    try {
+      await page.goto(this.#opts.url);
+      for (let reloads = 0; failed.length > 0; reloads++) {
+        const what = failed.join(', ');
+        if (reloads === FIRST_LOAD_RELOADS) {
+          this.#notify(
+            `The app's page loaded, but its own scripts failed (${what}), also after ${reloads} reloads. ` +
+              'Check the dev server, then reload the page or restart lightpath dev.',
+          );
+          break;
+        }
+        this.#log(`first page load: ${what}; reloading (${reloads + 1} of ${FIRST_LOAD_RELOADS})`);
+        failed.length = 0;
+        await new Promise((r) => setTimeout(r, FIRST_LOAD_RETRY_MS));
+        await page.reload();
+      }
+    } finally {
+      page.off('response', onResponse);
+      page.off('requestfailed', onFailed);
+    }
   }
 
   async stop(): Promise<void> {

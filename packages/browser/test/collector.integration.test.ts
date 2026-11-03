@@ -59,6 +59,16 @@ const htmlLabels =
   '<a href="#home" data-testid="nav-home">Home</a>' +
   '<div role="button">Open <span data-testid="open-count">3</span></div>';
 
+// The working bundle of the /rebuild fixture: renders a sign-in form, as an app does after it loads.
+const signInJs = `
+document.getElementById('root').innerHTML =
+  '<form><input type="email" id="email"><button type="button" id="signin">Sign in</button></form><p id="who"></p>';
+document.getElementById('signin').addEventListener('click', () => {
+  document.getElementById('who').textContent = 'signed in';
+});
+`;
+let rebuildLoads = 0;
+
 let server: http.Server;
 let origin = '';
 const traceHeaders: (string | undefined)[] = [];
@@ -98,6 +108,18 @@ beforeAll(async () => {
             '<script type="module" src="/app.js"></script>',
         );
     if (req.url === '/labels') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlLabels);
+    // A dev server that compiles twice at start (D-135): the first page names a bundle that is
+    // gone by the time the browser asks for it (404 with the index fallback's HTML).
+    if (req.url === '/rebuild') {
+      rebuildLoads++;
+      const bundle = rebuildLoads === 1 ? '/bundle-a.js' : '/bundle-b.js';
+      return res
+        .writeHead(200, { 'content-type': 'text/html' })
+        .end(`<!doctype html><div id="root"></div><script src="${bundle}"></script>`);
+    }
+    if (req.url === '/bundle-a.js') return res.writeHead(404, { 'content-type': 'text/html' }).end(html(''));
+    if (req.url === '/bundle-b.js')
+      return res.writeHead(200, { 'content-type': 'text/javascript' }).end(signInJs);
     if (req.url === '/two') {
       traceHeaders.push(req.headers['x-lightpath-trace'] as string | undefined);
       return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
@@ -281,6 +303,37 @@ describe.skipIf(!enabled)('BrowserCollector with a real browser', () => {
     expect(traceHeaders).toContain(buy.traceId);
     expect(ran(coupon.traceId)).toContain('/app.js#applyCoupon');
     expect(ran(coupon.traceId)).not.toContain('/app.js#checkout');
+  }, 30_000);
+
+  it('reloads the first page when its own script failed to load (D-135)', async () => {
+    rebuildLoads = 0;
+    const logs: string[] = [];
+    const collector = new BrowserCollector({
+      url: `${origin}/rebuild`,
+      headless: true,
+      settleMs: 200,
+      send: () => {},
+      log: (m) => logs.push(m),
+    });
+    await collector.start();
+    try {
+      const page = collector.page;
+      if (!page) throw new Error('no page');
+      // The page start() leaves open runs the working bundle, so run_action finds the form.
+      expect(await page.locator('#email').count()).toBe(1);
+      const out = await collector.runAction({
+        protocolVersion: 1,
+        target: 'button "Sign in"',
+        fill: [{ target: 'css=input[type=email]', value: 'dev@example.test' }],
+      });
+      expect(out.ok).toBe(true);
+      expect(await page.locator('#who').textContent()).toBe('signed in');
+      expect(rebuildLoads).toBe(2);
+    } catch (err) {
+      throw new Error(`${(err as Error).message}\ncollector log:\n${logs.join('\n')}`);
+    } finally {
+      await collector.stop();
+    }
   }, 30_000);
 
   it('announces every script again after a reload, so its lines still resolve (D-101)', async () => {
