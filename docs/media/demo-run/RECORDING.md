@@ -107,4 +107,4 @@ After that, the scripted part goes on outside Recordly: the WebM from the MP4 (f
 | Proof run 1 (real, 0.912 credits) | The agent ran `run_action`, read `ranking.js`, swapped the comparison back and clicked again. The API restart signed it out, so it couldn't check. Fixed with a fixed session secret per take. |
 | Dry runs 5, 6 | The whole loop by script: the restart keeps the session, the list shows "Send Q4 report to finance" first after the fix, and the first and last frames match (0 pixels differ). |
 
-Machine: Windows 11, display 2560 x 1440 at 100%, Windows Terminal 1.24, Recordly 1.4.0, Node 22, kiro-cli 2.37.0.
+Machine: Windows 11, display 2560 x 1440 at 100%, Windows Terminal 1.24, Recordly 1.4.0, Node 24.13.0, kiro-cli 2.37.0.
