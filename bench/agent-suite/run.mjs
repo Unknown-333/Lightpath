@@ -15,6 +15,7 @@ import {
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
+import * as v2apps from '../agent-suite-v2/lib/apps.mjs';
 import {
   AGENT_TIMEOUT_MS,
   agentConfig,
@@ -60,10 +61,10 @@ if (
   !CONDITIONS.includes(condition) ||
   !Number.isInteger(runNo) ||
   runNo < 1 ||
-  !['shop', 'realapp'].includes(suite)
+  !['shop', 'realapp', 'v2'].includes(suite)
 ) {
   console.error(
-    'usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--suite shop|realapp] [--dry-run]',
+    'usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--suite shop|realapp|v2] [--dry-run]',
   );
   process.exit(2);
 }
@@ -98,6 +99,25 @@ const SUITES = {
     afterInit: (dir) => realapp.refreshPristine(dir),
   },
 };
+if (suite === 'v2') {
+  // Suite v2 (bench/agent-suite-v2): each bug's bug.json names its app, tududi or invoices.
+  const v2BugsDir = resolve(args['bugs-dir'] ?? v2apps.BUGS_DIR);
+  const app = v2apps.appFor(JSON.parse(readFileSync(join(v2BugsDir, bug, 'bug.json'), 'utf8')).app);
+  SUITES.v2 = {
+    bugsDir: v2apps.BUGS_DIR,
+    ports: app.PORTS,
+    app: app.APP,
+    assertPortsFree: app.assertPortsFree,
+    cleanupTrial: app.cleanupTrial,
+    createTrial: app.createTrial,
+    prepareTemplate: app.prepareTemplate,
+    typecheck: app.typecheck,
+    runCheck: app.runCheck,
+    agentDiff: app.agentDiff,
+    lightpathConfig: { command: 'node dev.mjs', url: app.WEB_URL, headless: true },
+    afterInit: (dir) => app.refreshPristine(dir),
+  };
+}
 const S = SUITES[suite];
 const { assertPortsFree, cleanupTrial, createTrial, prepareTemplate, typecheck, runCheck } = S;
 const bugsDir = resolve(args['bugs-dir'] ?? S.bugsDir);
@@ -155,6 +175,7 @@ async function main() {
     run: runNo,
     suite,
     ...(suite === 'realapp' ? { app: realapp.APP } : {}),
+    ...(suite === 'v2' ? { app: S.app } : {}),
     heldout: bugsDir !== S.bugsDir,
     suiteCommit: run('git', ['rev-parse', 'HEAD'], { cwd: REPO_DIR }).stdout.trim(),
     model: MODEL,
