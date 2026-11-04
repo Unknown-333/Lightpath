@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Unknown-333/Lightpath/main/brand/logo/svg/lightpath-lockup-horizontal-reversed.svg">
+  <img alt="Lightpath" src="https://raw.githubusercontent.com/Unknown-333/Lightpath/main/brand/logo/svg/lightpath-lockup-horizontal-colour.svg" height="56">
+</picture>
+
 # @lightpath-dev/cli
 
 [![npm](https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837)](https://www.npmjs.com/package/@lightpath-dev/cli)

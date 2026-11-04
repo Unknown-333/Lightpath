@@ -4,7 +4,7 @@
 import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { defs, heroSvg, pixelWord, spotSvgs, wordmarkSvg } from './lib/art.mjs';
+import { defs, heroSvg, logoSvg, pixelWord, spotSvgs } from './lib/art.mjs';
 import { readTrace, traceHtml } from './lib/trace.mjs';
 
 // The one place the site's address lives. Change it here when the site gets its own domain.
@@ -162,7 +162,7 @@ export function build() {
     JSONLD_APP: ld(jsonApp),
     JSONLD_FAQ: ld(jsonFaq),
     DEFS: defs(),
-    WORDMARK: wordmarkSvg(),
+    LOGO: logoSvg(),
     H1: h1,
     HERO: heroSvg(),
     TRACE: trace.html,
@@ -189,8 +189,18 @@ export function build() {
   fill('index.html');
   fill('404.html');
 
-  for (const f of ['styles.css', 'main.js', 'favicon.svg', 'paper.svg'])
-    copyFileSync(join(src, f), join(out, f));
+  for (const f of ['styles.css', 'main.js', 'paper.svg']) copyFileSync(join(src, f), join(out, f));
+  // Icons come straight from the official logo build (pnpm brand:logo), so they can't drift.
+  const logo = join(repo, 'brand/logo');
+  const icons = {
+    'favicon.svg': 'svg/favicon.svg',
+    'favicon.ico': 'png/favicon.ico',
+    'favicon-16.png': 'png/favicon-16.png',
+    'favicon-32.png': 'png/favicon-32.png',
+    'favicon-48.png': 'png/favicon-48.png',
+    'apple-touch-icon.png': 'png/apple-touch-icon.png',
+  };
+  for (const [to, from] of Object.entries(icons)) copyFileSync(join(logo, from), join(out, to));
   cpSync(join(src, 'fonts'), join(out, 'fonts'), { recursive: true });
   copyFileSync(join(repo, 'docs/media/tududi-demo.gif'), join(out, 'media/tududi-demo.gif'));
   copyFileSync(join(repo, 'brand/out/og.png'), join(out, 'og.png'));

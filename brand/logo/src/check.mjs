@@ -1,5 +1,5 @@
 // Checks run at the end of every build. The build fails if one fails.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { PALETTE } from '../../src/palette.mjs';
 import { TOKENS } from './tokens.mjs';
@@ -61,6 +61,16 @@ export function runChecks(root, { fav16 }) {
           ? 20_000
           : 200_000;
     if (size > limit) fails.push(`${rel}: ${size} bytes is over ${limit}`);
+  }
+
+  // Committed copies outside brand/logo must match the build, so the logo cannot drift.
+  // (The site copies its icons from here at build time, so it needs no entry.)
+  const copies = [['png/app-icon-256.png', '../../extensions/vscode/media/icon.png']];
+  for (const [from, to] of copies) {
+    const copy = join(root, to);
+    if (!existsSync(copy)) fails.push(`${to}: missing (copy of ${from})`);
+    else if (!readFileSync(copy).equals(readFileSync(join(root, from))))
+      fails.push(`${to}: differs from ${from}; copy it again`);
   }
 
   // Pixel fit at 16 px: how many pixels are partly covered (anti-aliased) in the favicon.

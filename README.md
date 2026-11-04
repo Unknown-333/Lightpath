@@ -1,4 +1,9 @@
-# Lightpath
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo/svg/lightpath-lockup-horizontal-reversed.svg">
+    <img alt="Lightpath" src="brand/logo/svg/lightpath-lockup-horizontal-colour.svg" height="56">
+  </picture>
+</h1>
 
 [![npm](https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837)](https://www.npmjs.com/package/@lightpath-dev/cli)
 [![CI](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml/badge.svg)](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml)

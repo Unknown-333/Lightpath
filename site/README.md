@@ -16,7 +16,9 @@ node site/tools/serve.mjs   # serves site/dist at http://127.0.0.1:4321/Lightpat
 | Part                                            | Comes from                                                                            |
 | ----------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Hero art and its loop                           | concept A in `brand/src/concepts.mjs`, drawn as SVG by `lib/art.mjs`                  |
-| Headline and wordmark (pixel type)              | the brand font in `brand/src/font.mjs`; the real text is in the `h1` for every reader |
+| Headline (pixel type)                           | the brand font in `brand/src/font.mjs`; the real text is in the `h1` for every reader |
+| Logo in the top bar and footer                  | the official lockup in `brand/logo` (same outlines as its SVG files), always clean    |
+| Favicons and apple-touch-icon                   | copied from `brand/logo/svg` and `brand/logo/png` (run `pnpm brand:logo` to change)   |
 | "How it works" drawings                         | `lib/art.mjs`, with the brand's `Print` raster and sprites                            |
 | The trace in "What your agent gets back"        | the real `run_action` answer in `docs/media/tududi-run/transcript.jsonl`              |
 | Demo GIF, social image                          | `docs/media/tududi-demo.gif`, `brand/out/og.png`                                      |
