@@ -1,0 +1,106 @@
+diff --git b/packages/loot-core/src/server/schedules/app.test.ts a/packages/loot-core/src/server/schedules/app.test.ts
+index 45c2fd60..ff85d25b 100644
+--- b/packages/loot-core/src/server/schedules/app.test.ts
++++ a/packages/loot-core/src/server/schedules/app.test.ts
+@@ -352,56 +352,6 @@ describe('schedule app', () => {
+       expect(row.next_date).toBe('2020-12-30');
+     });
+ 
+-    it('preserves skipped dates on rename but resets them when the account changes', async () => {
+-      MockDate.set(new Date(2021, 4, 17));
+-
+-      const accountId = await db.insertAccount({ name: 'Checking' });
+-      const otherAccountId = await db.insertAccount({ name: 'Savings' });
+-      const id = await createSchedule({
+-        conditions: [
+-          { op: 'is', field: 'account', value: accountId },
+-          {
+-            op: 'is',
+-            field: 'date',
+-            value: {
+-              start: '2021-05-17',
+-              frequency: 'monthly',
+-              patterns: [{ type: 'day', value: 17 }],
+-            },
+-          },
+-        ],
+-      });
+-
+-      await skipNextDate({ id });
+-      const {
+-        data: [schedule],
+-      } = await aqlQuery(q('schedules').filter({ id }).select(['_conditions']));
+-      // Advance the clock so a reset stamps a newer `base_next_date_ts` than the skip
+-      MockDate.set(new Date(2021, 4, 17, 0, 1));
+-
+-      await updateSchedule({
+-        schedule: { id, name: 'Broadband' },
+-        conditions: schedule._conditions,
+-      });
+-      let result = await aqlQuery(
+-        q('schedules').filter({ id }).calculate('next_date'),
+-      );
+-      expect(result.data).toBe('2021-06-17');
+-
+-      await updateSchedule({
+-        schedule: { id },
+-        conditions: schedule._conditions.map(condition =>
+-          condition.value === accountId
+-            ? { ...condition, value: otherAccountId }
+-            : condition,
+-        ),
+-      });
+-      result = await aqlQuery(
+-        q('schedules').filter({ id }).calculate('next_date'),
+-      );
+-      expect(result.data).toBe('2021-05-17');
+-    });
+-
+     it('updateSchedule ignores the condition `type` field when date value is unchanged', async () => {
+       const id = await createSchedule({
+         conditions: [
+diff --git b/packages/loot-core/src/server/schedules/app.ts a/packages/loot-core/src/server/schedules/app.ts
+index d8376086..52d07d05 100644
+--- b/packages/loot-core/src/server/schedules/app.ts
++++ a/packages/loot-core/src/server/schedules/app.ts
+@@ -98,10 +98,8 @@ function areScheduleConditionsEqual(
+     return left === right;
+   }
+ 
+-  // `type` is not always present, and `field` may use the public or internal
+-  // name (`account` vs `acct`), so compare the remaining properties
+-  const { type: _leftType, field: _leftField, ...leftCondition } = left;
+-  const { type: _rightType, field: _rightField, ...rightCondition } = right;
++  const { type: _leftType, ...leftCondition } = left;
++  const { type: _rightType, ...rightCondition } = right;
+ 
+   return areConditionValuesEqual(leftCondition, rightCondition);
+ }
+@@ -460,11 +458,12 @@ export async function updateSchedule({
+       // or date changed. We check account because we don't update
+       // schedules automatically for closed account, and the user
+       // might switch accounts from a closed one
+-      const { account: oldAccountCond } = extractScheduleConds(oldConditions);
+-      const { account: newAccountCond } = extractScheduleConds(newConditions);
+       if (
+         resetNextDate ||
+-        !areScheduleConditionsEqual(oldAccountCond, newAccountCond) ||
++        !areScheduleConditionsEqual(
++          oldConditions.find(c => c.field === 'account'),
++          newConditions.find(c => c.field === 'account'),
++        ) ||
+         !areConditionValuesEqual(
+           stripType(oldConditions.find(c => c.field === 'date') || {}),
+           stripType(newConditions.find(c => c.field === 'date') || {}),
+diff --git b/upcoming-release-notes/preserve-skipped-schedule-date.md a/upcoming-release-notes/preserve-skipped-schedule-date.md
+deleted file mode 100644
+index c68f328b..00000000
+--- b/upcoming-release-notes/preserve-skipped-schedule-date.md
++++ /dev/null
+@@ -1,6 +0,0 @@
+----
+-category: Bugfix
+-authors: [SomSamantray]
+----
+-
+-Keep skipped schedule dates when editing a schedule

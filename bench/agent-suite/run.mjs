@@ -14,7 +14,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
+import * as v2apps from '../agent-suite-v2/lib/apps.mjs';
 import {
   AGENT_TIMEOUT_MS,
   agentConfig,
@@ -45,6 +46,7 @@ import {
   TRIALS_ROOT,
 } from './lib/common.mjs';
 import { initTrial, prepareLightpath, probeTools, startLightpathDev } from './lib/lightpath.mjs';
+import { outsidePaths } from './lib/outside.mjs';
 import * as shopApp from './lib/shop.mjs';
 import * as shopTrial from './lib/trial.mjs';
 import * as realapp from './realapp/lib/app.mjs';
@@ -59,10 +61,10 @@ if (
   !CONDITIONS.includes(condition) ||
   !Number.isInteger(runNo) ||
   runNo < 1 ||
-  !['shop', 'realapp'].includes(suite)
+  !['shop', 'realapp', 'v2'].includes(suite)
 ) {
   console.error(
-    'usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--suite shop|realapp] [--dry-run]',
+    'usage: run.mjs --bug <id> --condition without|with|browser --run <n> [--suite shop|realapp|v2] [--dry-run]',
   );
   process.exit(2);
 }
@@ -97,6 +99,25 @@ const SUITES = {
     afterInit: (dir) => realapp.refreshPristine(dir),
   },
 };
+if (suite === 'v2') {
+  // Suite v2 (bench/agent-suite-v2): each bug's bug.json names its app, tududi or invoices.
+  const v2BugsDir = resolve(args['bugs-dir'] ?? v2apps.BUGS_DIR);
+  const app = v2apps.appFor(JSON.parse(readFileSync(join(v2BugsDir, bug, 'bug.json'), 'utf8')).app);
+  SUITES.v2 = {
+    bugsDir: v2apps.BUGS_DIR,
+    ports: app.PORTS,
+    app: app.APP,
+    assertPortsFree: app.assertPortsFree,
+    cleanupTrial: app.cleanupTrial,
+    createTrial: app.createTrial,
+    prepareTemplate: app.prepareTemplate,
+    typecheck: app.typecheck,
+    runCheck: app.runCheck,
+    agentDiff: app.agentDiff,
+    lightpathConfig: { command: 'node dev.mjs', url: app.WEB_URL, headless: true },
+    afterInit: (dir) => app.refreshPristine(dir),
+  };
+}
 const S = SUITES[suite];
 const { assertPortsFree, cleanupTrial, createTrial, prepareTemplate, typecheck, runCheck } = S;
 const bugsDir = resolve(args['bugs-dir'] ?? S.bugsDir);
@@ -144,46 +165,6 @@ function hashBugDir() {
   );
 }
 
-const PATH_KEYS = /path|file|dir|cwd|target|source|pattern|glob/i;
-/**
- * Paths a tool call names that resolve outside the trial folder. Looks at ACP `locations`,
- * path-like input fields, and absolute paths or `..` escapes inside shell commands.
- * Conservative: a human can review every hit in `outsidePaths`.
- */
-function outsidePaths(toolCalls, trialDir) {
-  const root = trialDir.toLowerCase();
-  const isOutside = (p, base) => {
-    const full = resolve(base, p).toLowerCase();
-    return full !== root && !full.startsWith(`${root}\\`) && !full.startsWith(`${root}/`);
-  };
-  const hits = [];
-  for (const call of toolCalls) {
-    const base = typeof call.input?.cwd === 'string' ? call.input.cwd : trialDir;
-    const candidates = [];
-    for (const loc of call.locations ?? []) if (loc?.path) candidates.push(loc.path);
-    for (const [key, value] of Object.entries(call.input ?? {})) {
-      if (key === 'command' || typeof value !== 'string' || !PATH_KEYS.test(key)) continue;
-      if (/^[a-z]:[\\/]|^[\\/]|\.\.[\\/]|^\.\.$/i.test(value)) candidates.push(value);
-    }
-    if (typeof call.input?.command === 'string') {
-      const cmd = call.input.command;
-      // A drive path, not the "p://" inside "http://".
-      candidates.push(...(cmd.match(/(?<![a-z])[a-z]:[\\/][^\s"'`;|,)]*/gi) ?? []));
-      candidates.push(
-        ...(cmd.match(/(?:^|[\s"'])(\.\.(?:[\\/][^\s"'`;|,)]*)?)/g) ?? []).map((m) =>
-          m.trim().replace(/^["']/, ''),
-        ),
-      );
-    }
-    for (const p of candidates) {
-      if (isAbsolute(p) || p.startsWith('..')) {
-        if (isOutside(p, base)) hits.push({ tool: call.title ?? call.kind, path: p });
-      }
-    }
-  }
-  return hits;
-}
-
 async function main() {
   mkdirSync(outDir, { recursive: true });
   const started = new Date();
@@ -194,6 +175,7 @@ async function main() {
     run: runNo,
     suite,
     ...(suite === 'realapp' ? { app: realapp.APP } : {}),
+    ...(suite === 'v2' ? { app: S.app } : {}),
     heldout: bugsDir !== S.bugsDir,
     suiteCommit: run('git', ['rev-parse', 'HEAD'], { cwd: REPO_DIR }).stdout.trim(),
     model: MODEL,
@@ -258,7 +240,9 @@ async function main() {
   record.cpuLoadStart = load;
   const agentStartIso = new Date().toISOString();
   log(`agent start (${MODEL}, effort ${EFFORT}, limit ${AGENT_TIMEOUT_MS / 60000} min)`);
-  const agent = await runAgent({ trialDir, prompt, outDir });
+  const maxSteps = args['max-steps'] === undefined ? null : Number(args['max-steps']);
+  record.maxSteps = maxSteps;
+  const agent = await runAgent({ trialDir, prompt, outDir, maxSteps });
   log(
     `agent stopped: exit ${agent.exitCode}${agent.timedOut ? ' (timed out)' : ''} after ${agent.wallMs} ms`,
   );
@@ -272,6 +256,8 @@ async function main() {
   record.wallMs = agent.wallMs;
   record.exitCode = agent.exitCode;
   record.timedOut = agent.timedOut;
+  // Suite v2 difficulty check: a run stopped at the step cap is scored as it stands (not void).
+  record.stepCapped = agent.stepCapped;
   record.transcript = agent.transcript;
 
   const events = readJsonl(agent.transcript);
@@ -308,7 +294,10 @@ async function main() {
     ];
   }
   record.shellFlags = auditShellCommands(parsed.toolCalls, trialDir);
-  record.outsidePaths = outsidePaths(parsed.toolCalls, trialDir);
+  // D-147: hits void the run; what the D-108 rule also flagged but D-147 drops is kept for review.
+  const outside = outsidePaths(parsed.toolCalls, trialDir);
+  record.outsidePaths = outside.hits;
+  record.ignoredOutsidePaths = outside.ignored;
   writeFileSync(join(outDir, 'tool-calls.json'), `${JSON.stringify(parsed.toolCalls, null, 2)}\n`);
   writeFileSync(join(outDir, 'final-text.md'), `${parsed.finalText ?? ''}\n`);
 
@@ -320,7 +309,8 @@ async function main() {
   record.check = { pass: check.pass, detail: check.detail, ms: check.ms };
   record.typecheck = { ok: types.ok, output: types.ok ? '' : types.output.slice(0, 2000) };
   record.checkUntouched = JSON.stringify(hashesBefore) === JSON.stringify(hashesAfter);
-  record.correct = check.pass && types.ok && record.checkUntouched;
+  // Suite v2 difficulty check: a run stopped at the step cap is not correct (SCORING.md v2).
+  record.correct = check.pass && types.ok && record.checkUntouched && !record.stepCapped;
   if (S.agentDiff) {
     // The real-app trial has no .git (owner's rule): diff against its clean copy instead.
     const changes = S.agentDiff(trialDir);
@@ -338,7 +328,8 @@ async function main() {
 
   const voidReasons = [];
   const harnessFailed =
-    agent.error || (!agent.timedOut && (agent.exitCode !== 0 || record.agentStatus === null));
+    agent.error ||
+    (!agent.timedOut && !agent.stepCapped && (agent.exitCode !== 0 || record.agentStatus === null));
   if (harnessFailed)
     voidReasons.push(`harness: kiro-cli exit ${agent.exitCode}${agent.error ? ` ${agent.error}` : ''}`);
   if (record.cleanup.leftAlone.length > 0)

@@ -164,6 +164,7 @@ export function runAgent({
   model = MODEL,
   effort = EFFORT,
   timeoutMs = AGENT_TIMEOUT_MS,
+  maxSteps = null,
 }) {
   const transcript = join(outDir, 'transcript.jsonl');
   const stderrLog = join(outDir, 'kiro-cli.stderr.log');
@@ -197,18 +198,42 @@ export function runAgent({
   closeSync(errFd);
   return new Promise((resolveRun) => {
     let timedOut = false;
+    let stepCapped = false;
     const timer = setTimeout(() => {
       timedOut = true;
       killTree(child.pid);
     }, timeoutMs);
+    // Suite v2 difficulty check (owner, 2026-11-04): stop the run when it starts tool call maxSteps + 1.
+    const capTimer =
+      maxSteps === null
+        ? null
+        : setInterval(() => {
+            const ids = new Set();
+            for (const line of readFileSync(transcript, 'utf8').split('\n')) {
+              if (!line.includes('tool_call')) continue;
+              try {
+                const u = JSON.parse(line).data?.update;
+                if (u?.sessionUpdate === 'tool_call' || u?.sessionUpdate === 'tool_call_update')
+                  ids.add(u.toolCallId);
+              } catch {
+                // a line still being written
+              }
+            }
+            if (ids.size > maxSteps && !stepCapped) {
+              stepCapped = true;
+              killTree(child.pid);
+            }
+          }, 250);
     const finish = (exitCode, error) => {
       clearTimeout(timer);
+      if (capTimer) clearInterval(capTimer);
       // Whatever the agent left running under kiro-cli goes too.
       killTree(child.pid);
       resolveRun({
         exitCode,
         error,
         timedOut,
+        stepCapped,
         wallMs: Date.now() - started,
         transcript,
         stderrLog,

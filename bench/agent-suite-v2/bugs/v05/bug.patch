@@ -1,0 +1,16 @@
+diff --git a/frontend/utils/captureSettings.ts b/frontend/utils/captureSettings.ts
+index 418fd25d..7a08f4d4 100644
+--- a/frontend/utils/captureSettings.ts
++++ b/frontend/utils/captureSettings.ts
+@@ -56,9 +56,9 @@ export const getCaptureSettings = (): CaptureSettings => {
+ export const updateCaptureSettings = (
+     patch: Partial<CaptureSettings>
+ ): void => {
+-    current = { ...getCaptureSettings(), ...patch };
++    const next = { ...getCaptureSettings(), ...patch };
+     try {
+-        localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
++        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+     } catch {
+         // Storage can be unavailable (private mode); the setting still
+         // applies for this page load.

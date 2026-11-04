@@ -1,0 +1,21 @@
+diff --git b/backend/modules/inbox/service.js a/backend/modules/inbox/service.js
+index 535990f8..2b757afe 100644
+--- b/backend/modules/inbox/service.js
++++ a/backend/modules/inbox/service.js
+@@ -95,13 +95,9 @@ class InboxService {
+         const updateData = {};
+ 
+         if (content !== undefined && content !== null) {
+-            try {
+-                const validatedContent = validateContent(content);
+-                updateData.content = validatedContent;
+-                updateData.title = buildTitleFromContent(validatedContent);
+-            } catch (error) {
+-                console.warn('Inbox item text not updated:', error.message);
+-            }
++            const validatedContent = validateContent(content);
++            updateData.content = validatedContent;
++            updateData.title = buildTitleFromContent(validatedContent);
+         }
+ 
+         if (status !== undefined && status !== null) {

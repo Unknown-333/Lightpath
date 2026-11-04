@@ -1,0 +1,16 @@
+diff --git a/frontend/utils/captureSettings.ts b/frontend/utils/captureSettings.ts
+index 7a08f4d4..93474aed 100644
+--- a/frontend/utils/captureSettings.ts
++++ b/frontend/utils/captureSettings.ts
+@@ -47,8 +47,9 @@ let current: CaptureSettings | null = null;
+ const listeners = new Set<() => void>();
+ 
+ export const getCaptureSettings = (): CaptureSettings => {
+-    if (!current) {
+-        current = readSettings();
++    const fresh = readSettings();
++    if (!current || JSON.stringify(current) !== JSON.stringify(fresh)) {
++        current = fresh;
+     }
+     return current;
+ };

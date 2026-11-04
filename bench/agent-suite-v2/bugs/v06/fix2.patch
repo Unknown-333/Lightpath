@@ -1,0 +1,14 @@
+diff --git a/src/App.tsx b/src/App.tsx
+index 85597ee..7fcade8 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -32,7 +32,8 @@ export function App() {
+     setBusyId(id);
+     try {
+       const { invoice, summary } = await payInvoice(id);
+-      setInvoices(shown.map((inv) => (inv.id === invoice.id ? invoice : inv)));
++      const fresh = await fetchInvoices();
++      setInvoices(fresh.invoices);
+       setSummary(summary);
+       setToast({ text: `${invoice.id} marked as paid` });
+     } catch (err) {

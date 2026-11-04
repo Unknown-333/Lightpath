@@ -1,0 +1,13 @@
+diff --git a/frontend/utils/inboxService.ts b/frontend/utils/inboxService.ts
+index b94aad01..cc39cb67 100644
+--- a/frontend/utils/inboxService.ts
++++ b/frontend/utils/inboxService.ts
+@@ -46,7 +46,7 @@ export const analyzeInboxText = async (
+         headers: await getPostHeadersWithCsrf(),
+         body: JSON.stringify({
+             content,
+-            reference_date: options.referenceDate,
++            referenceDate: options.referenceDate,
+             parse_dates: options.parseDates,
+         }),
+     });

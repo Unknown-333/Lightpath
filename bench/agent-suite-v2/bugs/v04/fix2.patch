@@ -1,0 +1,15 @@
+diff --git a/backend/modules/inbox/controller.js b/backend/modules/inbox/controller.js
+index a0ecad6d..6ae2cbb3 100644
+--- a/backend/modules/inbox/controller.js
++++ b/backend/modules/inbox/controller.js
+@@ -99,7 +99,9 @@ const inboxController = {
+     async analyzeText(req, res, next) {
+         try {
+             const userId = requireUserId(req);
+-            const { content, reference_date, parse_dates } = req.body;
++            const { content, parse_dates } = req.body;
++            const reference_date =
++                req.body.reference_date ?? req.body.referenceDate;
+             const result = await inboxService.analyzeText(userId, content, {
+                 referenceDate: validateReferenceDate(reference_date),
+                 timezone: req.currentUser?.timezone || 'UTC',
