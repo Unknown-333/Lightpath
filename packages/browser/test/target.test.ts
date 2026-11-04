@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { actionabilityProblem, describeTarget, parseTarget, similarity } from '../src/target.js';
+import { actionabilityProblem, describeTarget, parseTarget, signInHint, similarity } from '../src/target.js';
 
 describe('parseTarget (design section 4.1)', () => {
   it.each([
@@ -46,5 +46,37 @@ describe('similarity (not_found candidates)', () => {
     expect(similarity('Chekout', 'Checkout')).toBeGreaterThan(similarity('Chekout', 'Add to cart'));
     expect(similarity('cart', 'Add to cart')).toBe(1);
     expect(similarity('', 'x')).toBe(0);
+  });
+});
+
+describe('signInHint (not_found on a sign-in page, D-139)', () => {
+  it('says what the page is and gives a run_action call built from its fields', () => {
+    const hint = signInHint({
+      fields: [
+        { target: 'textbox "Email"', label: 'email' },
+        { target: 'textbox "Password"', label: 'password' },
+      ],
+      submit: 'button "Login"',
+    });
+    expect(hint).toBe(
+      [
+        'This page is a sign-in form (it has a password field), so the app is not signed in here. Sign in first with its own fields, putting the real values in place of the <...> ones, then do your step again:',
+        '  run_action {"target":"button \\"Login\\"","fill":[{"target":"textbox \\"Email\\"","value":"<email>"},{"target":"textbox \\"Password\\"","value":"<password>"}]}',
+      ].join('\n'),
+    );
+    // The call is valid run_action input.
+    const call = JSON.parse(hint.split('run_action ')[1] ?? '');
+    expect(call.target).toBe('button "Login"');
+    expect(call.fill).toHaveLength(2);
+  });
+
+  it('presses Enter in the last field when the form has no submit button', () => {
+    const hint = signInHint({ fields: [{ target: 'css=input[type="password"]', label: 'password' }] });
+    const call = JSON.parse(hint.split('run_action ')[1] ?? '');
+    expect(call).toEqual({
+      target: 'css=input[type="password"]',
+      action: 'press',
+      fill: [{ target: 'css=input[type="password"]', value: '<password>' }],
+    });
   });
 });

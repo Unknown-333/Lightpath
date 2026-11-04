@@ -210,7 +210,8 @@ describe('agentsBlock', () => {
         // D-134: the bug-report trigger and one step per call.
         '- When the user reports a bug they see in the app, or asks which code handles a button, page or request, reproduce it with the Lightpath MCP tool `run_action` before searching files. Each call is one step, like `button "Save"`, and the page, sign-in and data stay between calls: sign in with `fill`, do the setup steps, then the step that shows the bug. To read the last recorded action instead, call `find_code_for_action`.',
         '- Output is capped. To see more, follow its "not shown" line.',
-        '- After a fix, call `run_action` again with the same target and compare the two traces with `diff_traces`.',
+        // D-144: the fix check is one run_action call with compareTo.
+        '- After a fix, call `run_action` again with the same target and `compareTo: "last"`: it returns the new trace and what changed, function by function.',
         "- If Lightpath says it isn't running, start `lightpath dev` in the project folder, or ask the user to.",
         '<!-- lightpath:end -->',
       ].join('\n'),

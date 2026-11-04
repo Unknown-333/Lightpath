@@ -76,7 +76,7 @@ Then, in agent mode, ask in plain words. For example:
 
 > When I press Enter in the search box, nothing is found. Use Lightpath to do that and show me which code ran.
 
-The agent calls `run_action` with the search box as the target, `action: "press"` and the text in `fill`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again and compares the two traces with `diff_traces`.
+The agent calls `run_action` with the search box as the target, `press: "Enter"` and the text in `fill`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again with `compareTo: "last"`, which adds what changed, function by function (`diff_traces` compares any two traces).
 
 ## The tools
 

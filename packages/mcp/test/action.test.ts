@@ -40,7 +40,10 @@ const ok = (extra: Partial<Extract<ActionResult, { ok: true }>> = {}): ActionRes
 
 describe('run_action description (design section 3)', () => {
   it('is the design text, under 300 characters', () => {
-    expect(RUN_ACTION_DESCRIPTION.length).toBe(280); // D-134: one step per call, reproduce a reported bug
+    // D-134: one step per call, reproduce a reported bug (280); D-140: shorter, same points (260).
+    expect(RUN_ACTION_DESCRIPTION.length).toBe(260);
+    for (const point of ['one step', 'Page, sign-in and data stay between calls', 'reproduce a reported bug'])
+      expect(RUN_ACTION_DESCRIPTION).toContain(point);
     expect(RUN_ACTION_DESCRIPTION.length).toBeLessThan(300);
     expect(RUN_ACTION_DESCRIPTION.startsWith("Do one step in the user's running app")).toBe(true);
   });

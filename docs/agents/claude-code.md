@@ -72,7 +72,7 @@ Then ask in plain words. For example:
 
 > Which code handles Checkout? Use Lightpath to click it and show me the frontend and backend code that ran.
 
-The agent calls `run_action` with a target like `button "Checkout"`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again and compares the two traces with `diff_traces`.
+The agent calls `run_action` with a target like `button "Checkout"`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again with `compareTo: "last"`, which adds what changed, function by function (`diff_traces` compares any two traces).
 
 ## The tools
 

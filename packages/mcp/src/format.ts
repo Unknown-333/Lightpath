@@ -41,6 +41,18 @@ export function describeTrace(trace: Trace): string {
   return out.join('\n');
 }
 
+/**
+ * find_code_for_action's answer when no recorded action matches (D-143): the run_action call that
+ * records one, with the words as its target, instead of only "do it with run_action".
+ */
+export function noRecordedAction(action: string): string {
+  return [
+    `No recorded action matches "${action}" yet, so there is no trace to read. Record it now with:`,
+    `  run_action ${JSON.stringify({ target: action.trim() })}`,
+    'If it needs sign-in or setup steps first, do each with its own run_action call. Or ask the user to click it in the app opened by `lightpath dev`.',
+  ].join('\n');
+}
+
 export function describeSummaries(traces: readonly TraceSummary[]): string {
   if (traces.length === 0) return 'No traces yet. Click something in the app opened by `lightpath dev`.';
   return traces
@@ -85,7 +97,14 @@ export function describeAction(input: ActionInput): string {
  * Every fill value in the text is redacted (rule 6). itText runs again after redaction, which can lengthen
  * the text.
  */
-export function describeActionResult(input: ActionInput, result: ActionResult): string {
+export function describeActionResult(
+  input: ActionInput,
+  result: ActionResult,
+  /** Lines after the page line, before warnings: `times` and `compareTo` notes (D-142, D-144). */
+  notes: readonly string[] = [],
+  /** Less than 16,000 when a `compareTo` diff follows the text (D-144). */
+  max = MAX_CHARS,
+): string {
   const values = (input.fill ?? []).map((f) => f.value);
   if (!result.ok) {
     const { error } = result;
@@ -96,12 +115,17 @@ export function describeActionResult(input: ActionInput, result: ActionResult): 
     }
     return redactFillValues(out.join('\n'), values);
   }
-  const text = summarizeTrace(result.trace, [
-    `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
-    `page: ${result.pageUrl}`,
-    ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
-  ]);
-  return fitText(redactFillValues(text, values), MAX_CHARS, result.trace.id);
+  const text = summarizeTrace(
+    result.trace,
+    [
+      `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
+      `page: ${result.pageUrl}`,
+      ...notes,
+      ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
+    ],
+    max,
+  );
+  return fitText(redactFillValues(text, values), max, result.trace.id);
 }
 
 /**

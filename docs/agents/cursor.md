@@ -72,7 +72,7 @@ Then ask in plain words. For example:
 
 > Saving my profile shows "Saved" but the name doesn't change. Use Lightpath to click Save and tell me which backend code ran.
 
-The agent calls `run_action` with a target like `button "Save"`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again and compares the two traces with `diff_traces`. By default Cursor asks you before it runs an MCP tool **(from docs: [Cursor MCP](https://cursor.com/help/customization/mcp))**.
+The agent calls `run_action` with a target like `button "Save"`, reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again with `compareTo: "last"`, which adds what changed, function by function (`diff_traces` compares any two traces). By default Cursor asks you before it runs an MCP tool **(from docs: [Cursor MCP](https://cursor.com/help/customization/mcp))**.
 
 ## The tools
 

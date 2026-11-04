@@ -81,12 +81,13 @@ export function agentsBlock(tools: readonly string[]): string {
     );
   }
   lines.push('- Output is capped. To see more, follow its "not shown" line.');
-  if (has('diff_traces')) {
+  if (has('run_action')) {
+    // D-144: the fix check is one call; diff_traces stays for any two traces.
     lines.push(
-      has('run_action')
-        ? '- After a fix, call `run_action` again with the same target and compare the two traces with `diff_traces`.'
-        : '- After a fix, do the action again and compare the two traces with `diff_traces`.',
+      '- After a fix, call `run_action` again with the same target and `compareTo: "last"`: it returns the new trace and what changed, function by function.',
     );
+  } else if (has('diff_traces')) {
+    lines.push('- After a fix, do the action again and compare the two traces with `diff_traces`.');
   }
   lines.push(
     "- If Lightpath says it isn't running, start `lightpath dev` in the project folder, or ask the user to.",

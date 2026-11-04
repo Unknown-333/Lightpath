@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   type ActionRequest,
+  type ActionResult,
   DaemonClient,
   DaemonDiscovery,
   DISCOVERY_FILE,
@@ -14,15 +15,17 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { AUTO_START_WAIT_MS, AutoStarter, type AutoStartOptions, DEV_LOG } from './autostart.js';
-import { fitText } from './budget.js';
+import { fitText, MAX_CHARS } from './budget.js';
 import { diffFunctions, hasFunctions } from './diff.js';
 import {
   describeActionResult,
   describeRequestResult,
   describeSummaries,
   diffTraces,
+  noRecordedAction,
   redirectNote,
 } from './format.js';
+import { mergeTraces } from './merge.js';
 import { redact, redactFillValues } from './redact.js';
 import {
   hasBackend,
@@ -42,15 +45,17 @@ import { DESCRIPTIONS, INSTRUCTIONS } from './texts.js';
 
 /**
  * The run_action description (docs/design/agent-loop.md section 3, D-119; bug-report trigger and
- * one step per call, D-134): under 300 characters.
+ * one step per call, D-134; shorter, D-140): under 300 characters.
  */
 export const RUN_ACTION_DESCRIPTION =
-  "Do one step in the user's running app (click a button or link, or press Enter or Space, after filling " +
-  'fields) and return the code it ran, browser and server. Page, sign-in and data stay between calls. ' +
+  "Do one step in the user's running app: click, or press Enter or Space, after filling fields. " +
+  'Returns the code it ran, browser and server. Page, sign-in and data stay between calls. ' +
   'Use it first to reproduce a reported bug step by step, and again after the fix.';
 
-const targetSchema = z.string().min(1).max(500).describe('button "Save", text, or css=<selector>');
-const withinSchema = z.string().min(1).max(200).describe('Text of its row or section');
+// No length bounds in the schema the agent loads (D-140): the daemon checks them and answers 400
+// (`ActionRequest` in @lightpath-dev/protocol), the same as D-129 did for `fill` items.
+const targetSchema = z.string().describe('button "Save", text, or css=<selector>');
+const withinSchema = z.string().describe('Text of its row or section');
 
 export interface McpOptions {
   workspaceRoot: string;
@@ -207,23 +212,40 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: {
         target: targetSchema,
         within: withinSchema.optional(),
-        action: z.enum(['click', 'press']).optional().describe('Default click'),
-        key: z.enum(['Enter', 'Space']).optional().describe('With press; default Enter'),
-        timeoutMs: z.number().int().min(500).max(30_000).optional().describe('Settle cap, default 5000'),
+        // One key instead of `action` plus `key` (D-140); the daemon still takes both.
+        press: z.enum(['Enter', 'Space']).optional().describe('Press this key instead of clicking'),
+        // An integer from 500 to 30,000, checked by the daemon (D-140). Not `.int()` here: zod writes
+        // the whole safe-integer range into the schema for it, 60 characters for nothing.
+        timeoutMs: z.number().optional().describe('Settle cap, default 5000'),
         fill: z
           .array(
             // Same forms as target and within. Bounds and descriptions aren't repeated here, to keep
-            // tools/list under 4,000 characters (D-129); the daemon checks them (400).
+            // tools/list under 4,000 characters (D-129); the daemon checks them and the 20-item cap (400).
             z.object({ target: z.string(), within: z.string().optional(), value: z.string() }),
           )
-          .max(20)
           .optional()
           .describe('Filled first, in order; values never shown'),
+        times: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_TIMES)
+          .optional()
+          .describe('Repeat it; one trace, counts added'),
+        // A trace id or "last", checked below (a union would double the schema text, D-144).
+        compareTo: z.string().optional().describe('Trace id, or "last": adds the diff'),
       },
     },
-    async (input) => {
+    async ({ press, times, compareTo, ...rest }) => {
+      const input = { ...rest, ...(press ? { action: 'press' as const, key: press } : {}) };
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
+      if (compareTo !== undefined && compareTo !== 'last' && !traceIdSchema.safeParse(compareTo).success) {
+        return {
+          ...reply('run_action did nothing: compareTo must be a trace id like "t_abc123def456", or "last".'),
+          isError: true,
+        };
+      }
       try {
         const { info, started } = await ensure();
         // The daemon answers after the settle cap, the backend wait (1.5 s) and the press wait (2 s).
@@ -244,7 +266,51 @@ export function createMcpServer(options: McpOptions): McpServer {
           await sleep(500);
           result = await send();
         }
-        return { ...reply(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
+        if (!result.ok) return { ...reply(describeActionResult(input, result)), isError: true };
+        const runs = times ?? 1;
+        // `times` (D-142): the same action again, one call at a time, stopping at the first miss.
+        const done: OkAction[] = [result];
+        const notes: string[] = [];
+        for (let k = 2; k <= runs; k++) {
+          const next = await send();
+          if (!next.ok) {
+            notes.push(
+              `warning (repeat_stopped): run ${k} of ${runs} did not record a trace: ${next.error.code}. ${next.error.message.split('\n')[0]}`,
+            );
+            break;
+          }
+          done.push(next);
+        }
+        if (runs > 1) notes.unshift(repeatedLine(done, runs));
+        const shown = runs > 1 ? repeated(done) : result;
+        if (compareTo === undefined) return reply(describeActionResult(input, shown, notes));
+        // `compareTo` (D-144): the last run against an earlier trace, as diff_traces would compare them.
+        const last = (done.at(-1) as OkAction).trace;
+        const ids = new Set(done.map((r) => r.trace.id));
+        const before = await withClient(async (c) => {
+          if (compareTo !== 'last') return { trace: await c.getTrace(compareTo), id: compareTo };
+          const earlier = (await c.listTraces({ label: last.label, limit: 50 })).find(
+            (t) => t.label === last.label && !ids.has(t.id) && t.startedAt <= result.trace.startedAt,
+          );
+          return { trace: earlier ? await c.getTrace(earlier.id) : null, id: undefined };
+        });
+        if (!before.trace) {
+          notes.push(
+            before.id
+              ? `compareTo: no trace ${before.id}; it may have been evicted. Nothing to compare.`
+              : `compareTo: no earlier trace of "${last.label}" to compare with; this is the first.`,
+          );
+          return reply(describeActionResult(input, shown, notes));
+        }
+        const diff = fitText(
+          hasFunctions(before.trace) && hasFunctions(last)
+            ? diffFunctions(before.trace, last)
+            : diffTraces(before.trace, last),
+          MAX_DIFF_CHARS,
+        );
+        notes.push(`compareTo: ${before.trace.id}; what changed against it is at the end.`);
+        const text = describeActionResult(input, shown, notes, MAX_CHARS - diff.length - 2);
+        return reply(`${text}\n\n${diff}`);
       } catch (err) {
         return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
@@ -285,11 +351,7 @@ export function createMcpServer(options: McpOptions): McpServer {
         const [match] = await c.listTraces({ label: action, limit: 1 });
         return match ? c.getTrace(match.id) : null;
       });
-      return reply(
-        trace
-          ? summarizeTrace(trace)
-          : `No recorded action matches "${action}". Do it with run_action, or ask the user to click it in the app opened by \`lightpath dev\`, then try again.`,
-      );
+      return reply(trace ? summarizeTrace(trace) : noRecordedAction(action));
     },
   );
 
@@ -369,6 +431,34 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** After an auto-start, how long run_action retries a target that isn't on the page yet. */
 const STARTED_RENDER_WAIT_MS = 10_000;
+
+/** Most runs one run_action call may do with `times` (D-142). */
+export const MAX_TIMES = 5;
+
+/** The most a `compareTo` diff takes of run_action's 16,000 characters; the trace gets the rest (D-144). */
+const MAX_DIFF_CHARS = 6000;
+
+type OkAction = Extract<ActionResult, { ok: true }>;
+
+/** The runs of one `times` call as one result: the last run's details, one merged trace (D-142). */
+function repeated(runs: readonly OkAction[]): OkAction {
+  const last = runs.at(-1) as OkAction;
+  const warnings = new Map<string, OkAction['warnings'][number]>();
+  for (const r of runs) for (const w of r.warnings) warnings.set(`${w.code}|${w.message}`, w);
+  return {
+    ...last,
+    trace: mergeTraces(runs.map((r) => r.trace)),
+    settled: runs.some((r) => r.settled === 'timeout') ? 'timeout' : last.settled,
+    backend: runs.some((r) => r.backend === 'partial') ? 'partial' : 'complete',
+    warnings: [...warnings.values()],
+  };
+}
+
+/** `repeated: 3 of 3 runs (t_a, t_b, t_c); …`, the line that says the counts are added up. */
+function repeatedLine(runs: readonly OkAction[], asked: number): string {
+  const ids = runs.map((r) => r.trace.id);
+  return `repeated: ${runs.length} of ${asked} runs (${ids.join(', ')}); line and call counts below are added up over them. get_trace on ${ids.at(-1)} shows the last run alone.`;
+}
 
 /** The discovery file's daemon, if it is up: a stale file (a hard-killed daemon) counts as none. */
 async function liveDaemon(workspaceRoot: string): Promise<Live | undefined> {
