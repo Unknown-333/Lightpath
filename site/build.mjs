@@ -5,6 +5,7 @@ import { copyFileSync, cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defs, heroSvg, logoSvg, pixelWord, spotSvgs } from './lib/art.mjs';
+import { CURSOR_LINK, SERVER, VSCODE_LINK } from './lib/install-links.mjs';
 import { readTrace, traceHtml } from './lib/trace.mjs';
 
 // The one place the site's address lives. Change it here when the site gets its own domain.
@@ -42,7 +43,37 @@ const AGENTS = [
     writes: '.kiro/settings/mcp.json',
     status: 'Run end to end with kiro-cli 2.37.0, in the benchmark and the demo.',
   },
+  {
+    id: 'other',
+    name: 'Other',
+    status:
+      'Not tested with any client. Clients that start a stdio MCP server, such as Windsurf, Cline, Zed, Continue, Codex CLI, Gemini CLI and Claude Desktop, should be able to run it.',
+    guide: 'https://github.com/Unknown-333/Lightpath/blob/main/README.md#any-mcp-client',
+  },
 ];
+
+// One-click buttons (D-155). They add only the MCP server; init also writes auto-start and AGENTS.md.
+const INSTALL = {
+  cursor: { href: CURSOR_LINK, label: 'Add to Cursor' },
+  vscode: { href: VSCODE_LINK, label: 'Install in VS Code' },
+};
+
+const GENERIC = JSON.stringify({ mcpServers: { lightpath: SERVER } }, null, 2);
+
+function panelBody(a) {
+  if (a.id === 'other') {
+    return `<p><code>init --agent other</code> writes <code>lightpath.config.json</code> and a short block in <code>AGENTS.md</code>, writes no client config, and prints this entry for your client's MCP config:</p>
+        <div class="cmd"><pre><code>${esc(GENERIC)}</code></pre></div>
+        <p>On Windows the command is <code>cmd</code> with <code>/c npx</code> first in <code>args</code>, as <code>init</code> prints it. VS Code-style configs use <code>servers</code> instead of <code>mcpServers</code>. Auto-start needs the <code>lightpath.config.json</code> that <code>init</code> writes.</p>`;
+  }
+  const install = INSTALL[a.id];
+  return `<p><code>init</code> writes <code>${a.writes}</code>, <code>lightpath.config.json</code> and a short block in <code>AGENTS.md</code>. <code>doctor</code> checks what it wrote. Then restart ${a.name}.</p>${
+    install
+      ? `
+        <p><a class="btn btn-quiet" href="${esc(install.href)}">${install.label}</a> adds only the MCP server, in the macOS and Linux form. Run <code>init</code> too for auto-start and the <code>AGENTS.md</code> block.</p>`
+      : ''
+  }`;
+}
 
 function tabs() {
   const tablist = AGENTS.map(
@@ -51,10 +82,11 @@ function tabs() {
   ).join('\n        ');
   const panels = AGENTS.map((a, i) => {
     const cmd = `npx @lightpath-dev/cli init --agent ${a.id}\nnpx @lightpath-dev/cli doctor`;
+    const guide = a.guide ?? `https://github.com/Unknown-333/Lightpath/blob/main/docs/agents/${a.id}.md`;
     return `<div class="panel" role="tabpanel" id="panel-${a.id}" aria-labelledby="tab-${a.id}" tabindex="0"${i === 0 ? '' : ' hidden'}>
         <div class="cmd"><pre><code>${esc(cmd)}</code></pre><button type="button" class="copy" data-copy="${esc(cmd)}">Copy<span class="visually-hidden"> the ${a.name} commands</span></button><span class="visually-hidden" role="status"></span></div>
-        <p><code>init</code> writes <code>${a.writes}</code>, <code>lightpath.config.json</code> and a short block in <code>AGENTS.md</code>. <code>doctor</code> checks what it wrote. Then restart ${a.name}.</p>
-        <p class="src">${a.status} <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/agents/${a.id}.md">${a.name} guide</a>.</p>
+        ${panelBody(a)}
+        <p class="src">${a.status} <a href="${guide}">${a.id === 'other' ? 'Any MCP client, in the README' : `${a.name} guide`}</a>.</p>
       </div>`;
   }).join('\n      ');
   return { tablist, panels };

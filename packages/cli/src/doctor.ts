@@ -9,7 +9,16 @@ import { DISCOVERY_FILE } from '@lightpath-dev/protocol';
 import pc from 'picocolors';
 import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
 import { nodeVersionProblem } from './env.js';
-import { AGENT_SETUP, AGENTS, agentsBlock, findBlock, mcpCommand, PACKAGE, SERVER_NAME } from './init.js';
+import {
+  AGENT_SETUP,
+  AGENTS,
+  agentsBlock,
+  findBlock,
+  INIT_AGENTS,
+  mcpCommand,
+  PACKAGE,
+  SERVER_NAME,
+} from './init.js';
 import { parseJsonc } from './jsonc.js';
 import { VERSION } from './main.js';
 import { type ProbeResult, probeMcpCommand, serverToolNames } from './mcp-probe.js';
@@ -257,7 +266,7 @@ export async function setupChecks(
       name: 'Agent setup',
       run: async () => ({
         ok: true,
-        detail: `none found (optional; lightpath init --agent <${AGENTS.join('|')}>)`,
+        detail: `none found (optional; lightpath init --agent <${INIT_AGENTS.join('|')}>)`,
       }),
     });
     return checks;

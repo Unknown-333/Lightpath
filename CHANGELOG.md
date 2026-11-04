@@ -2,6 +2,11 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## Unreleased
+
+- `lightpath init --agent other`: for any MCP client. Writes `lightpath.config.json` and the `AGENTS.md` block, writes no client config, and prints the server entry for this OS (D-155).
+- README: "Any MCP client", "One-click install" (VS Code), "Troubleshooting" and "Uninstall" sections. Site: an "Other" tab, and "Add to Cursor" and "Install in VS Code" buttons (D-155).
+
 ## [0.1.2] - 2026-11-04
 
 - Fix: resolve false-positive line attribution in un-taken else-if/switch branches and post-throw statements.

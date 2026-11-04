@@ -4,7 +4,16 @@
 //
 // Run after `pnpm build`: node scripts/setup-check.mjs
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -112,6 +121,36 @@ try {
     log(doc.stdout.trimEnd());
     if (doc.stderr.trim()) log(doc.stderr.trimEnd());
     check(doc.status === 0, `${agent}: doctor exits 0`);
+  }
+
+  // `init --agent other` (D-155): no client config, the entry printed, and that entry starts.
+  {
+    log(`\n== other (${process.platform})`);
+    const app = join(work, 'other app');
+    cpSync(base, app, { recursive: true, verbatimSymlinks: true });
+    const bin = join(app, 'node_modules', '@lightpath-dev', 'cli', 'dist', 'bin.js');
+    const lp = (...args) => spawnSync(process.execPath, [bin, ...args], { cwd: app, encoding: 'utf8' });
+    const first = lp('init', '--agent', 'other');
+    log(first.stdout.trimEnd());
+    check(first.status === 0, 'other: init exits 0');
+    const snippet = cli.genericSnippet(version, process.platform);
+    check(first.stdout.includes(snippet), 'other: init prints the mcpServers entry for this OS');
+    const clientFiles = Object.values(cli.AGENT_SETUP).filter((s) => existsSync(join(app, s.file)));
+    check(clientFiles.length === 0, 'other: init writes no client config');
+    const agentsMd = readFileSync(join(app, 'AGENTS.md'), 'utf8');
+    check(agentsMd.includes(cli.agentsBlock(tools)), 'other: AGENTS.md holds the block for these tools');
+    const entry = JSON.parse(snippet).mcpServers.lightpath;
+    const probe = await cli.probeMcpCommand(entry.command, entry.args, {
+      cwd: app,
+      env: { ...process.env, npm_config_offline: 'true' },
+      timeoutMs: 60_000,
+      version,
+    });
+    check(
+      probe.ok && JSON.stringify(probe.tools) === JSON.stringify(tools),
+      `other: the printed command answers initialize and tools/list with the ${tools.length} tools`,
+    );
+    if (!skipDoctor) check(lp('doctor').status === 0, 'other: doctor exits 0');
   }
 
   // 6. Windows only: does a bare npx start without a shell? Recorded, not judged (D-120).
