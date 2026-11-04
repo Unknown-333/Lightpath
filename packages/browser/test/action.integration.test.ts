@@ -92,6 +92,11 @@ const html =
   // CLOSED_ORIGIN is a port that was just closed, filled in when the page is served.
   '<script>window.CLOSED = "CLOSED_ORIGIN";</script><script type="module" src="/app.js"></script>';
 const htmlTwo = '<!doctype html><p id="here"></p><script type="module" src="/two.js"></script>';
+// A sign-in page (D-139): the button says "Login", and a typed value must never come back.
+const htmlLogin =
+  "<!doctype html><h1>Login</h1><form onsubmit=\"document.getElementById('out').textContent = 'signed in'; return false\">" +
+  '<input type="email" aria-label="Email"><input type="password" aria-label="Password">' +
+  '<button type="submit">Login</button></form><p id="out"></p><button id="buy">Checkout</button>';
 
 let server: http.Server;
 let origin = '';
@@ -108,6 +113,7 @@ beforeAll(async () => {
     if (path === '/app.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(appJs);
     if (path === '/two.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(pageTwoJs);
     if (path === '/two') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
+    if (path === '/login') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlLogin);
     if (path === '/api/orders') return res.writeHead(201).end('created');
     if (path === '/api/missing') return res.writeHead(404).end('nope');
     if (path === '/api/slow') {
@@ -298,6 +304,54 @@ describe.skipIf(!enabled)('run_action on a real browser', () => {
     expect(result.css).toMatchObject({ ok: false, error: { code: 'not_found' } });
     expect(result.text).toMatchObject({ ok: false, error: { code: 'ambiguous', count: 2 } });
     expect(starts).toEqual([]);
+  }, 30_000);
+
+  it('says a miss on a sign-in page is a sign-in form, with a call built from its fields (D-139)', async () => {
+    const { result, starts } = await withCollector(
+      async (c, page) => {
+        const missed = await c.runAction(
+          action('button "Sign in"', {
+            fill: [
+              { target: 'textbox "Email"', value: SECRET },
+              { target: 'textbox "Password"', value: SECRET },
+            ],
+          }),
+        );
+        const typo = await c.runAction(action('text=Upcoming'));
+        // The call from the hint, with real values in place of the placeholders, signs in.
+        const message = missed.ok ? '' : missed.error.message;
+        const call = JSON.parse(message.split('run_action ')[1] ?? '{}') as ActionRequest;
+        const followed = await c.runAction(
+          action(call.target, {
+            // An email field blocks the submit unless the value looks like an email.
+            fill: (call.fill ?? []).map((f) => ({
+              ...f,
+              value: f.value === '<email>' ? 'me@example.test' : 'pw',
+            })),
+          }),
+        );
+        return { missed, typo, call, followed, out: await page.textContent('#out') };
+      },
+      { path: '/login' },
+    );
+    expect(result.missed).toMatchObject({ ok: false, error: { code: 'not_found' } });
+    if (!result.missed.ok) {
+      expect(result.missed.error.message).toContain('This page is a sign-in form (it has a password field)');
+      expect(result.missed.error.message).not.toContain(SECRET);
+      expect(result.missed.error.candidates?.[0]).toBe('button "Login"');
+    }
+    expect(result.call).toEqual({
+      target: 'button "Login"',
+      fill: [
+        { target: 'textbox "Email"', value: '<email>' },
+        { target: 'textbox "Password"', value: '<password>' },
+      ],
+    });
+    // Any miss on the page gets it, not only a sign-in target.
+    if (!result.typo.ok) expect(result.typo.error.message).toContain('sign-in form');
+    expect(result.followed).toMatchObject({ ok: true });
+    expect(result.out).toBe('signed in');
+    expect(starts).toHaveLength(1);
   }, 30_000);
 
   it('answers not_actionable for a disabled button, without pressing', async () => {

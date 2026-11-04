@@ -25,11 +25,16 @@
     "lightpath": "node packages/cli/dist/bin.js",
     "shop": "pnpm --filter shop dev",
     "brand:build": "node brand/build.mjs",
-    "brand:logo": "node brand/logo/build.mjs"
+    "brand:logo": "node brand/logo/build.mjs",
+    "site:build": "node site/build.mjs",
+    "site:check": "node site/build.mjs && node site/check.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
     "@types/node": "22.20.5",
+    "axe-core": "^4.14.0",
+    "html-validate": "^11.18.0",
+    "playwright-core": "1.64.1",
     "typescript": "7.0.2",
     "vitest": "5.0.5"
   }
