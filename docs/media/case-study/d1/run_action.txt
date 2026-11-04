@@ -1,0 +1,54 @@
+started lightpath dev ("npm run dev") in the background; log: .lightpath/dev.log
+Trace t_ra0uz9kfihbo: button: Mark as paid
+action: click button "Mark as paid" within "Kestrel Labs" (boundary press, settled quiet)
+page: http://localhost:5174/
+request: POST /api/invoices/INV-2041/pay → 200 (node, 5 ms)
+
+before POST /api/invoices/INV-2041/pay [browser]
+  src/api.ts
+    payInvoice 31-33 ×1
+  src/App.tsx
+    App 14-103 ×2 not run: 22-28, 35-42, 96-98
+    pay 31-43 ×1 not run: 35-42
+    (anonymous) 80-90 ×10
+  src/format.ts
+    money 4-6 ×20
+    shortDate 8-10 ×18
+    initials 12-19 ×14
+    (anonymous) 15 ×28
+  src/InvoiceTable.tsx
+    avatarColor 7-11 ×14
+    InvoiceTable 19-66 ×2
+    (anonymous) 33-61 ×14
+    onClick 54 ×1
+  src/SummaryCards.tsx
+    SummaryCards 4-28 ×2
+POST /api/invoices/INV-2041/pay → 200 [node, 5 ms]
+  server/data.ts
+    findInvoice 85-87 ×1
+    (anonymous) 86 ×1
+  server/routes/invoices.ts
+    payInvoice 9-20 ×1 not run: 13-19
+  server/services/ledger.ts
+    getSummary 14-28 ×1 not run: 16-27
+    markPaid 38-46 ×1
+after the response [browser]
+  src/api.ts
+    readJson 21-25 ×1
+    payInvoice 31-33 resumed not run: 31-33
+  src/App.tsx
+    App 14-103 ×2 not run: 22-28, 31-34, 38-39, 43
+    pay 31-43 resumed not run: 31-34, 38-39, 43
+    (anonymous) 35 ×16
+    (anonymous) 80-90 ×10
+  src/format.ts
+    money 4-6 ×20
+    shortDate 8-10 ×20
+    initials 12-19 ×14
+    (anonymous) 15 ×28
+  src/InvoiceTable.tsx
+    avatarColor 7-11 ×14
+    InvoiceTable 19-66 ×2
+    (anonymous) 33-61 ×14
+  src/SummaryCards.tsx
+    SummaryCards 4-28 ×2

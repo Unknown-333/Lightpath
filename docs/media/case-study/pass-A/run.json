@@ -1,0 +1,104 @@
+{
+  "pass": "A",
+  "condition": "without",
+  "lpCommit": "645429001b7d7fe2f998b56267c53e856834bdf0",
+  "kiroCli": "kiro-cli 2.37.0",
+  "model": "claude-sonnet-5.5",
+  "effort": "medium",
+  "prompt": "I click \"Mark as paid\" on the Kestrel Labs invoice. The row turns Paid, but Outstanding at the top stays at $42,485.50. Please fix it.\n\nWork only inside this folder, and don't stop processes you didn't start.\n",
+  "maxSteps": 5,
+  "cpuStart": 35.1,
+  "startedAt": 1793809295961,
+  "stoppedAtStepCap": true,
+  "capCall": {
+    "title": "Read File",
+    "input": {
+      "path": "c:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\A\\src\\App.tsx",
+      "offset": null,
+      "limit": 45
+    }
+  },
+  "exitCode": 1,
+  "endedAt": 1793809318544,
+  "wallMs": 22583,
+  "cpuEnd": 52.6,
+  "apiPortFreeAfter": true,
+  "stepsDone": 5,
+  "toolCalls": [
+    {
+      "title": "Grep Search",
+      "kind": "search",
+      "status": "completed",
+      "input": {
+        "query": "Outstanding|Mark as paid",
+        "excludePattern": "node_modules/**"
+      }
+    },
+    {
+      "title": "Read File",
+      "kind": "read",
+      "status": "completed",
+      "input": {
+        "path": "c:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\A\\server\\services\\ledger.ts",
+        "offset": null,
+        "limit": null
+      },
+      "locations": [
+        "c:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\A\\server\\services\\ledger.ts"
+      ]
+    },
+    {
+      "title": "Grep Search",
+      "kind": "search",
+      "status": "completed",
+      "input": {
+        "query": "summaryCache|markPaid|getSummary",
+        "excludePattern": "node_modules/**"
+      }
+    },
+    {
+      "title": "Replace in File",
+      "kind": "edit",
+      "status": "completed",
+      "input": {
+        "path": "c:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\A\\server\\services\\ledger.ts",
+        "oldStr": "  invoice.paidAt = today.toISOString().slice(0, 10);\n",
+        "newStr": "  invoice.paidAt = today.toISOString().slice(0, 10);\n  summaryCache = null;\n",
+        "replace_all": false
+      },
+      "locations": [
+        "c:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\A\\server\\services\\ledger.ts"
+      ]
+    },
+    {
+      "title": "Grep Search",
+      "kind": "search",
+      "status": "completed",
+      "input": {
+        "query": "invoices\\.(push|splice)|\\.status\\s*=|\\.amountCents\\s*=",
+        "excludePattern": "node_modules/**"
+      }
+    }
+  ],
+  "credits": null,
+  "contextPctMax": 1.3835,
+  "status": null,
+  "stopReason": null,
+  "finalText": null,
+  "tokens": {
+    "tokensEst": 2289,
+    "tokensEstIn": 2056,
+    "tokensEstOut": 233,
+    "tokensMethod": "transcript-chars/4"
+  },
+  "lightpathCalls": 0,
+  "audit": [],
+  "sessionFilesSaved": 10,
+  "diff": " ...-trials\\\\goal\\\\launchkit-raw\\\\trials\\\\A\\\\server\\\\services\\\\ledger.ts\" | 1 +\n 1 file changed, 1 insertion(+)\n",
+  "hiddenCheck": {
+    "before": 4248550,
+    "payResponse": 3008550,
+    "after": 3008550,
+    "pass": true
+  }
+}

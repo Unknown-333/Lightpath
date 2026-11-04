@@ -1,0 +1,262 @@
+﻿started lightpath dev ("npm run dev") in the background; log: .lightpath/dev.log
+Trace t_wkmy3zvk0i94: button: Mark as paid
+action: click button "Mark as paid" within "Kestrel Labs" (boundary press, settled quiet)
+page: http://localhost:5174/
+request: POST /api/invoices/INV-2041/pay â†’ 200 (node, 8 ms)
+
+before POST /api/invoices/INV-2041/pay [browser]
+  src/api.ts
+    payInvoice 31-33 Ã—1
+  src/App.tsx
+    App 14-103 Ã—2 not run: 22-28, 35-42, 96-98
+    pay 31-43 Ã—1 not run: 35-42
+    (anonymous) 80-90 Ã—10
+  src/format.ts
+    money 4-6 Ã—20
+    shortDate 8-10 Ã—18
+    initials 12-19 Ã—14
+    (anonymous) 15 Ã—28
+  src/InvoiceTable.tsx
+    avatarColor 7-11 Ã—14
+    InvoiceTable 19-66 Ã—2
+    (anonymous) 33-61 Ã—14
+    onClick 54 Ã—1
+  src/SummaryCards.tsx
+    SummaryCards 4-28 Ã—2
+POST /api/invoices/INV-2041/pay â†’ 200 [node, 8 ms]
+  server/data.ts
+    findInvoice 85-87 Ã—1
+    (anonymous) 86 Ã—1
+  server/routes/invoices.ts
+    payInvoice 9-20 Ã—1 not run: 13-19
+  server/services/ledger.ts
+    getSummary 14-28 Ã—1 not run: 16-27
+    markPaid 38-46 Ã—1
+after the response [browser]
+  src/api.ts
+    readJson 21-25 Ã—1
+    payInvoice 31-33 resumed not run: 31-33
+  src/App.tsx
+    App 14-103 Ã—2 not run: 22-28, 31-34, 38-39, 43
+    pay 31-43 resumed not run: 31-34, 38-39, 43
+    (anonymous) 35 Ã—16
+    (anonymous) 80-90 Ã—10
+  src/format.ts
+    money 4-6 Ã—20
+    shortDate 8-10 Ã—20
+    initials 12-19 Ã—14
+    (anonymous) 15 Ã—28
+  src/InvoiceTable.tsx
+    avatarColor 7-11 Ã—14
+    InvoiceTable 19-66 Ã—2
+    (anonymous) 33-61 Ã—14
+  src/SummaryCards.tsx
+    SummaryCards 4-28 Ã—2
+
+code that ran, most-used files first ("// not run: lines A-B" marks lines in it that did not run):
+src/InvoiceTable.tsx
+   7  function avatarColor(name: string): string {
+   8    let hash = 0;
+   9    for (const ch of name) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+  10    return AVATAR_COLORS[hash % AVATAR_COLORS.length] ?? '#6366f1';  // not run: ?? '#6366f1'
+  11  }
+  ...
+  19  export function InvoiceTable({ invoices, busyId, onPay }: Props) {
+  20    return (
+  21      <table className="invoices">
+  22        <thead>
+  23          <tr>
+  24            <th>Client</th>
+  25            <th>Invoice</th>
+  26            <th>Due</th>
+  27            <th className="num">Amount</th>
+  28            <th>Status</th>
+  29            <th aria-label="Actions" />
+  30          </tr>
+  31        </thead>
+  32        <tbody>
+  33          {invoices.map((inv) => (
+  34            <tr key={inv.id}>
+  35              <td>
+  36                <div className="client">
+  37                  <span className="avatar" style={{ background: avatarColor(inv.client) }} aria-hidden>
+  38                    {initials(inv.client)}
+  39                  </span>
+  40                  <span>
+  41                    <span className="client-name">{inv.client}</span>
+  42                    <span className="client-contact">{inv.contact}</span>
+  43                  </span>
+  44                </div>
+  45              </td>
+  46              <td className="mono">{inv.id}</td>
+  47              <td className={inv.status === 'overdue' ? 'late' : undefined}>{shortDate(inv.due)}</td>
+  48              <td className="num">{money(inv.amountCents)}</td>
+  49              <td>
+  50                <span className={`pill ${inv.status}`}>{STATUS_LABEL[inv.status]}</span>
+  51              </td>
+  52              <td className="actions">
+  53                {inv.status === 'open' || inv.status === 'overdue' ? (
+  54                  <button type="button" disabled={busyId === inv.id} onClick={() => onPay(inv.id)}>
+  56                  </button>
+  57                ) : inv.paidAt ? (
+  58                  <span className="muted">Paid {shortDate(inv.paidAt)}</span>
+  59                ) : null}
+  60              </td>
+  61            </tr>
+  62          ))}
+  63        </tbody>
+  64      </table>
+  66  }
+src/format.ts
+   4  export function money(cents: number): string {
+   5    return usd.format(cents / 100);
+   6  }
+  ...
+   8  export function shortDate(iso: string): string {
+   9    return day.format(new Date(`${iso}T00:00:00Z`));
+  10  }
+  ...
+  12  export function initials(name: string): string {
+  13    return name
+  14      .split(/\s+/)
+  15      .map((word) => word[0])
+  16      .join('')
+  17      .slice(0, 2)
+  18      .toUpperCase();
+  19  }
+src/App.tsx
+  14  export function App() {
+  15    const [invoices, setInvoices] = useState<Invoice[]>([]);
+  16    const [summary, setSummary] = useState<Summary | null>(null);
+  17    const [filter, setFilter] = useState<Status | null>(null);
+  18    const [busyId, setBusyId] = useState<string | null>(null);
+  19    const [toast, setToast] = useState<{ text: string; error?: boolean } | null>(null);
+  21    useEffect(() => {
+      // not run: lines 22-28
+  29    }, []);
+  31    async function pay(id: string) {
+  32      setBusyId(id);
+  33      try {
+  34        const { invoice, summary } = await payInvoice(id);
+  35        setInvoices((list) => list.map((inv) => (inv.id === invoice.id ? invoice : inv)));
+  36        setSummary(summary);
+  37        setToast({ text: `${invoice.id} marked as paid` });
+      // not run: lines 38-39
+  40      } finally {
+  41        setBusyId(null);
+  42      }
+  43    }
+  45    const shown = filter ? invoices.filter((inv) => inv.status === filter) : invoices;  // not run: ? invoices.filter((inv) => inv.status ==
+  47    return (
+  48      <div className="layout">
+  49        <aside className="sidebar">
+  50          <div className="brand">
+  51            <span className="logo" aria-hidden>
+  53            </span>
+  55          </div>
+  56          <nav>
+  57            <span className="nav-item">Overview</span>
+  58            <span className="nav-item active">Invoices</span>
+  59            <span className="nav-item">Clients</span>
+  60            <span className="nav-item">Reports</span>
+  61          </nav>
+  62          <div className="workspace">
+  63            <span className="avatar small">JL</span>
+  64            <span>
+  65              <span className="client-name">Jo Lindqvist</span>
+  66              <span className="client-contact">Studio North</span>
+  67            </span>
+  68          </div>
+  69        </aside>
+  70        <main>
+  71          <header className="page-head">
+  72            <div>
+  73              <h1>Invoices</h1>
+  74              <p className="sub">November 2026</p>
+  75            </div>
+  76          </header>
+  77          {summary && <SummaryCards summary={summary} />}
+  78          <section className="panel">
+  79            <div className="tabs" role="tablist" aria-label="Filter invoices">
+  80              {FILTERS.map((f) => (
+  81                <button
+  82                  key={f.label}
+  83                  type="button"
+  84                  role="tab"
+  85                  aria-selected={filter === f.status}
+  86                  className={filter === f.status ? 'tab active' : 'tab'}
+  87                  onClick={() => setFilter(f.status)}
+  89                  {f.label}
+  90                </button>
+  91              ))}
+  92            </div>
+  93            <InvoiceTable invoices={shown} busyId={busyId} onPay={pay} />
+  94          </section>
+  95          {toast && (
+  96            <div className={toast.error ? 'toast error' : 'toast'} role="status">
+  97              {toast.text}
+  98            </div>
+ 100        </main>
+ 101      </div>
+ 103  }
+src/SummaryCards.tsx
+   4  export function SummaryCards({ summary }: { summary: Summary }) {
+   5    return (
+   6      <section className="cards" aria-label="Totals">
+   7        <article className="card">
+   8          <h2>Outstanding</h2>
+   9          <p className="figure" data-testid="outstanding">
+  10            {money(summary.outstandingCents)}
+  11          </p>
+  12          <p className="hint">
+  13            {summary.openCount} open {summary.openCount === 1 ? 'invoice' : 'invoices'}  // not run: ? 'invoice'
+  14          </p>
+  15        </article>
+  16        <article className="card">
+  17          <h2>Overdue</h2>
+  18          <p className="figure overdue">{money(summary.overdueCents)}</p>
+  19          <p className="hint">Past the due date</p>
+  20        </article>
+  21        <article className="card">
+  22          <h2>Paid</h2>
+  23          <p className="figure paid">{money(summary.paidCents)}</p>
+  24          <p className="hint">Last 30 days</p>
+  25        </article>
+  26      </section>
+  28  }
+server/services/ledger.ts
+  14  export function getSummary(): Summary {
+  15    if (summaryCache) return summaryCache;
+      // not run: lines 16-27
+  28  }
+  ...
+  38  export function markPaid(id: string, today = new Date()): Invoice {
+  39    const invoice = findInvoice(id);
+  40    if (!invoice) throw new LedgerError(404, `No invoice ${id}.`);  // not run: throw new LedgerError(404, `No invoice $
+  41    if (invoice.status === 'paid') throw new LedgerError(409, `${id} is already paid.`);  // not run: throw new LedgerError(409, `${id} is alr
+  42    if (invoice.status === 'draft') throw new LedgerError(409, `${id} is a draft. Send it first.`);  // not run: throw new LedgerError(409, `${id} is a d
+  43    invoice.status = 'paid';
+  44    invoice.paidAt = today.toISOString().slice(0, 10);
+  45    return invoice;
+  46  }
+src/api.ts
+  21  async function readJson<T>(res: Response): Promise<T> {
+  22    const body = await res.json();
+  23    if (!res.ok) throw new Error(body.error ?? `Request failed (${res.status})`);  // not run: throw new Error(body.error ?? `Request f
+  24    return body as T;
+  25  }
+  ...
+  31  export async function payInvoice(id: string): Promise<{ invoice: Invoice; summary: Summary }> {
+  32    return readJson(await fetch(`/api/invoices/${encodeURIComponent(id)}/pay`, { method: 'POST' }));
+  33  }
+server/routes/invoices.ts
+   9  export function payInvoice(req: Request<{ id: string }>, res: Response) {
+  10    try {
+  11      const invoice = markPaid(req.params.id);
+  12      res.json({ invoice, summary: getSummary() });
+      // not run: lines 13-19
+  20  }
+server/data.ts
+  85  export function findInvoice(id: string): Invoice | undefined {
+  86    return invoices.find((inv) => inv.id === id);
+  87  }
