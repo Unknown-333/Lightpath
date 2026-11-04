@@ -15,25 +15,25 @@ ffmpeg is only needed for MP4 and WebM. The one used here is the gyan.dev "relea
 
 ## Outputs
 
-| File                  | What                                                  | Size     | Colours                             |
-| --------------------- | ----------------------------------------------------- | -------- | ----------------------------------- |
-| `out/og.png`          | social preview, 1200x630                              | 14.1 KB  | 9, all in the palette               |
-| `out/loop.gif`        | loop for a README, 960x504, 100 frames, 10 fps, 10 s  | 59.8 KB  | 9-entry table, no local tables      |
-| `out/loop.mp4`        | loop for a site, H.264, 1440x756, 10 fps, 10 s        | 172.0 KB | see "Video" below                   |
-| `out/loop.webm`       | loop for a site, VP9 lossless, 1440x756, 10 fps, 10 s | 121.9 KB | see "Video" below                   |
-| `out/poster.png`      | poster frame for the videos (frame 72), 1440x756      | 10.4 KB  | 9, all in the palette               |
-| `review/concept-*.png`| the three concept stills, 1200x630                    | 12-14 KB | A 9, B 7, C 7, all in the palette   |
-| `review/review-*.png` | review sheets (see "Review")                          | 109-131 KB | not palette-exact: they show downscaling |
+| File                   | What                                                  | Size       | Colours                                  |
+| ---------------------- | ----------------------------------------------------- | ---------- | ---------------------------------------- |
+| `out/og.png`           | social preview, 1200x630                              | 14.1 KB    | 9, all in the palette                    |
+| `out/loop.gif`         | loop for a README, 960x504, 100 frames, 10 fps, 10 s  | 59.8 KB    | 9-entry table, no local tables           |
+| `out/loop.mp4`         | loop for a site, H.264, 1440x756, 10 fps, 10 s        | 172.0 KB   | see "Video" below                        |
+| `out/loop.webm`        | loop for a site, VP9 lossless, 1440x756, 10 fps, 10 s | 121.9 KB   | see "Video" below                        |
+| `out/poster.png`       | poster frame for the videos (frame 72), 1440x756      | 10.4 KB    | 9, all in the palette                    |
+| `review/concept-*.png` | the three concept stills, 1200x630                    | 12-14 KB   | A 9, B 7, C 7, all in the palette        |
+| `review/review-*.png`  | review sheets (see "Review")                          | 109-131 KB | not palette-exact: they show downscaling |
 
 ## Palette
 
 Paper plus two inks, each at full strength or as a tint. Where the inks overlap they overprint, and the overprint colour is the per-channel multiply of the two printed colours. The check recomputes every overprint and fails if one does not match. That gives 3 x 3 = 9 fixed colours, written once in `src/palette.mjs`.
 
-| Indigo \ Pink | none                  | pink tint  | pink       |
-| ------------- | --------------------- | ---------- | ---------- |
-| none          | `#fcf5ec` paper       | `#ffb3d2`  | `#ff4f9f`  |
-| indigo tint   | `#a19dd9`             | `#a16eb3`  | `#a13187`  |
-| indigo        | `#2b2684`             | `#2b1b6d`  | `#2b0c52`  |
+| Indigo \ Pink | none            | pink tint | pink      |
+| ------------- | --------------- | --------- | --------- |
+| none          | `#fcf5ec` paper | `#ffb3d2` | `#ff4f9f` |
+| indigo tint   | `#a19dd9`       | `#a16eb3` | `#a13187` |
+| indigo        | `#2b2684`       | `#2b1b6d` | `#2b0c52` |
 
 Pink marks lit things only: tiles that ran, the clicked button, the lantern, the server lights, and the dot of the "i" in the wordmark.
 
@@ -49,11 +49,11 @@ Pink marks lit things only: tiles that ran, the clicked button, the lantern, the
 
 ## The three concepts
 
-| Concept            | Idea                                                                                                        |
-| ------------------ | ----------------------------------------------------------------------------------------------------------- |
-| A, pixel path      | A click on a button lights a row of tiles across a "browser" window and a "server" window to a server rack. Side branches that did not run stay dark indigo. A small walker carries the light. |
-| B, typographic     | "See the exact" in big type, then one full-width pink "lit line" carrying "lines one click ran.", with quiet tint lines around it and the wordmark on an indigo footer. |
-| C, flat cartoon    | An arcade button, a string of lit pink bulbs to a smiling server, and two unlit bulbs on drops that did not run. |
+| Concept         | Idea                                                                                                                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A, pixel path   | A click on a button lights a row of tiles across a "browser" window and a "server" window to a server rack. Side branches that did not run stay dark indigo. A small walker carries the light. |
+| B, typographic  | "See the exact" in big type, then one full-width pink "lit line" carrying "lines one click ran.", with quiet tint lines around it and the wordmark on an indigo footer.                        |
+| C, flat cartoon | An arcade button, a string of lit pink bulbs to a smiling server, and two unlit bulbs on drops that did not run.                                                                               |
 
 ## Review
 
@@ -94,7 +94,7 @@ The theme changed to risograph during this work, before any dark pixel-art versi
 | Frames | What happens                                                    |
 | ------ | --------------------------------------------------------------- |
 | 0-9    | the pointer moves to the button                                 |
-| 10-11  | click: the button presses and lights, with a pink click burst  |
+| 10-11  | click: the button presses and lights, with a pink click burst   |
 | 12-62  | the walker walks the path and lights it one tile every 2 frames |
 | 63-66  | the four server lights come on                                  |
 | 67-79  | hold, all lit (frame 72 is the poster)                          |
