@@ -265,6 +265,7 @@ export class Correlator {
         { coverage, source, ...(sourceMap ? { sourceMap } : {}) },
         result.files,
         this.#ctx,
+        result.unknown,
       );
       for (const fn of fns) this.#addFunction(pending, phase, agent.kind, fn);
     }
@@ -308,6 +309,7 @@ export class Correlator {
           count: fn.count,
           ...(fn.notRun.length ? { notRun: fn.notRun } : {}),
           ...(fn.notRunSpans.length ? { notRunSpans: fn.notRunSpans } : {}),
+          ...(fn.unknown.length ? { unknown: fn.unknown } : {}),
         },
       });
       return;
@@ -323,6 +325,19 @@ export class Correlator {
     else delete hit.notRun;
     if (spans.length) hit.notRunSpans = spans;
     else delete hit.notRunSpans;
+    // Unknown lines (D-153) add up; a line another delta ran is shown as run by its file.
+    if (fn.unknown.length) {
+      const merged = new Map((hit.unknown ?? []).map((u) => [u.threwAfter, new Set(u.lines)]));
+      for (const u of fn.unknown) {
+        const lines = merged.get(u.threwAfter) ?? new Set<number>();
+        for (const l of u.lines) lines.add(l);
+        merged.set(u.threwAfter, lines);
+      }
+      hit.unknown = [...merged].map(([threwAfter, lines]) => ({
+        lines: [...lines].sort((a, b) => a - b),
+        threwAfter,
+      }));
+    }
   }
 
   /** The one browser phase for reads not taken before a request (D-116), made on first use. */

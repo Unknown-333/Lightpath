@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/protocol",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Wire protocol types and schemas shared by Lightpath agents, daemon, and clients",
   "keywords": [
     "coverage",

@@ -1,0 +1,23 @@
+{
+  "name": "accuracy",
+  "private": true,
+  "type": "module",
+  "description": "Lightpath's trace accuracy audit: fixtures with hand-written expected results (README.md)",
+  "scripts": {
+    "accuracy": "node run.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@babel/core": "8.1.0",
+    "@babel/preset-react": "8.0.1",
+    "@vitejs/plugin-react": "6.1.2",
+    "babel-loader": "10.1.1",
+    "tsx": "4.23.15",
+    "vite": "8.3.5",
+    "webpack": "5.112.2"
+  }
+}

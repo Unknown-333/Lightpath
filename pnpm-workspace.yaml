@@ -2,6 +2,8 @@ packages:
   - packages/*
   - extensions/*
   - examples/*
+  # The trace accuracy audit (pnpm accuracy): its fixtures need React, Vite, webpack and tsx.
+  - scripts/accuracy
 
 # pnpm blocks dependency install scripts by default. These two need theirs:
 # esbuild verifies its platform binary; vsce-sign installs its signing tool.

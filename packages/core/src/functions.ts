@@ -26,6 +26,8 @@ export interface FunctionResult {
   /** Lines inside the function with count 0 in this delta, sorted. */
   notRun: number[];
   notRunSpans: NotRunSpan[];
+  /** Lines with no count because a call threw on or after `threwAfter` (D-153). */
+  unknown: { lines: number[]; threwAfter: number }[];
 }
 
 interface Position {
@@ -54,6 +56,8 @@ export function mapFunctions(
   input: ScriptInput,
   files: ReadonlyMap<string, LineCounts>,
   ctx: ResolveContext,
+  /** `mapScript`'s `unknown` for the same input (D-153). */
+  unknownLines?: ReadonlyMap<string, ReadonlyMap<number, number>>,
 ): FunctionResult[] {
   const source = input.source;
   const index = new LineIndex(source);
@@ -137,6 +141,13 @@ export function mapFunctions(
         text,
       });
     }
+    const byThrow = new Map<number, number[]>();
+    const lost = unknownLines?.get(range.path);
+    if (lost)
+      for (let l = range.startLine; l <= range.endLine; l++) {
+        const at = lost.get(l);
+        if (at !== undefined) byThrow.set(at, [...(byThrow.get(at) ?? []), l]);
+      }
     out.push({
       path: range.path,
       name: fn.functionName,
@@ -145,6 +156,7 @@ export function mapFunctions(
       count: top.count,
       notRun,
       notRunSpans,
+      unknown: [...byThrow].map(([threwAfter, lines]) => ({ lines, threwAfter })),
     });
   }
   return out;
