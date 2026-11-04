@@ -64,3 +64,16 @@ Apps:
 
 - No with-Lightpath runs. No arm 2 or arm 3 runs. No Lightpath feature code.
 - No changes to the old suite's bugs or results, except the re-scoring report.
+
+## Amendment 1 (owner, 2026-11-04): Phase D of the Master Directive goes into this suite
+
+The owner merged the Master Directive's Phase D benchmark into suite v2, so there is one benchmark, under this spec's rules.
+
+- The suite must include these 4 bugs. If a bug you already have covers one exactly, it counts; don't add a duplicate.
+  1. Stale cache early return.
+  2. Inverted sorting or ranking comparator.
+  3. A swallowed error in an async backend handler.
+  4. A control bug: a purely static layout or syntax issue, where tracing what ran gives no help. Its purpose is to check that having Lightpath doesn't make the agent worse on such bugs. Mark it as the control.
+- Bugs 1-3 should be in tududi or `examples/invoices` where possible, as the owner named them. Don't reuse the planted bugs from this repo's demos (`scripts/demo-gif/bug.patch`, `examples/invoices/demo/`), because they are public in this repo.
+- Total size may grow to at most 12 bugs, still with 2-3 held out. The control may be visible or held out.
+- Metrics to record per run, in addition to SCORING.md's: turns (steps), tokens (D-111), pass/fail, and hallucinated edits. Propose an exact, mechanical definition of a hallucinated edit (for example: an edit to a file the reference fix doesn't touch and the hidden check doesn't need, or an edit that references a function, file or field that doesn't exist), write it into the v2 scoring before freeze, and say it is a proposal for the owner's Step 3 approval.
