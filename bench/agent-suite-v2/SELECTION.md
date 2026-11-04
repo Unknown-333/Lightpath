@@ -75,4 +75,13 @@ These change the rule above after the walk had started. Each is a forced change,
 
 7. **2 real bugs accepted (owner's credit-freeze directive, 2026-11-04).** The walk was not extended. The suite has 2 real bugs, below the spec's 3. R1 (`#92`) is visible v01, R2 (`#99`) is held out. Slots R3 and R4 are left empty, and the seeded list S1-S5 stays as picked before (S5 stays interaction order). X1 is covered by v05 (a cached copy returned early and not refreshed after a write). Final list: 10 bugs, 3 held out (R2, S1, S4).
 
+8. **Owner's answer (2026-11-04) reopens the real slots: Actual Budget first.** Written before any Actual commit, pull request or issue was read. Replaces amendment 7's "slots R3 and R4 are left empty".
+   - App: [actualbudget/actual](https://github.com/actualbudget/actual), the newest `master` commit when fetched for this suite (SHA in `README.md`), run in browser mode (`yarn start:browser`, no sync server) on free ports. A fresh budget per check, made in the check's own browser profile ("Create test file" or a new empty file).
+   - Source: first-parent history of `master`, newest first, back at most 300 commits.
+   - Candidate: a commit whose subject starts with `fix`/`Fix`/`Fixed`, or which adds an `upcoming-release-notes/*.md` file with `category: Bugfix`.
+   - Kept by steps a-e above, read for Actual: a. code under `packages/desktop-client` or `packages/loot-core` that runs in the browser app (dropped: tests, docs, CI, Electron-only, sync-server-only, translations); b. dropped also: bank sync and other outside services, mobile-only layout; c, d (the reverted app must build) and e as written.
+   - Take the newest 2 that pass. They fill R3 and R4 in walk order. Fix date, pull request and issue are recorded.
+   - If fewer than 2 pass, or the setup needs more than one try (brief: report blocked), the rest come from tududi: the same walk continued past the first 300 commits from the pin, same rules, until R3 and R4 are filled or 300 more commits are read.
+   - The held-out positions (R2, S1, S4) and every bug already picked stay as they are. Total: 12.
+
 Picked bugs that this suite does not use are kept, with their patches, in `lightpath-trials/goal/suite2-raw/dropped/`, outside the repo.
