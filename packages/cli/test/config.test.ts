@@ -71,6 +71,28 @@ describe('loadConfig', () => {
     await expect(loadConfig(dir)).rejects.toThrow(/isn't valid JSON/);
   });
 
+  // D-152: a config written on Windows works on a teammate's Mac or Linux machine.
+  it('reads backslash separators in webRoot and roots on every OS', async () => {
+    write({ webRoot: 'packages\\web', roots: ['.', '..\\shared\\lib'] });
+    const loaded = await loadConfig(dir);
+    expect(loaded?.config.webRoot).toBe(resolve(dir, 'packages', 'web'));
+    expect(loaded?.config.roots).toEqual([resolve(dir), resolve(dir, '..', 'shared', 'lib')]);
+  });
+
+  it('keeps spaces in paths', async () => {
+    write({ webRoot: 'my web/app root' });
+    expect((await loadConfig(dir))?.config.webRoot).toBe(resolve(dir, 'my web', 'app root'));
+  });
+
+  // D-152: `"webRoot": "C:\Users\me"` isn't JSON (\U is no escape); the error says how to write it.
+  it('says how to write a Windows path when a single backslash breaks the JSON', async () => {
+    write('{ "webRoot": "C:\\Users\\me\\web" }');
+    const err = (await loadConfig(dir).catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(ConfigError);
+    expect(err.message).toContain("isn't valid JSON");
+    expect(err.message).toContain('"C:/Users/me/web"');
+  });
+
   it('reads an explicit file and fails when it is missing', async () => {
     write({ headless: true }, 'other.json');
     expect((await loadConfig(dir, 'other.json'))?.config).toEqual({ headless: true });
