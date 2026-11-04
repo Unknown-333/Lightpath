@@ -15,7 +15,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { AUTO_START_WAIT_MS, AutoStarter, type AutoStartOptions, DEV_LOG } from './autostart.js';
-import { fitText } from './budget.js';
+import { fitText, MAX_CHARS } from './budget.js';
 import { diffFunctions, hasFunctions } from './diff.js';
 import {
   describeActionResult,
@@ -232,12 +232,20 @@ export function createMcpServer(options: McpOptions): McpServer {
           .max(MAX_TIMES)
           .optional()
           .describe('Repeat it; one trace, counts added'),
+        // A trace id or "last", checked below (a union would double the schema text, D-144).
+        compareTo: z.string().optional().describe('Trace id, or "last": adds the diff'),
       },
     },
-    async ({ press, times, ...rest }) => {
+    async ({ press, times, compareTo, ...rest }) => {
       const input = { ...rest, ...(press ? { action: 'press' as const, key: press } : {}) };
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
+      if (compareTo !== undefined && compareTo !== 'last' && !traceIdSchema.safeParse(compareTo).success) {
+        return {
+          ...reply('run_action did nothing: compareTo must be a trace id like "t_abc123def456", or "last".'),
+          isError: true,
+        };
+      }
       try {
         const { info, started } = await ensure();
         // The daemon answers after the settle cap, the backend wait (1.5 s) and the press wait (2 s).
@@ -258,27 +266,51 @@ export function createMcpServer(options: McpOptions): McpServer {
           await sleep(500);
           result = await send();
         }
+        if (!result.ok) return { ...reply(describeActionResult(input, result)), isError: true };
         const runs = times ?? 1;
-        if (!result.ok || runs === 1) {
-          return { ...reply(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
-        }
         // `times` (D-142): the same action again, one call at a time, stopping at the first miss.
         const done: OkAction[] = [result];
-        let stopped: string | undefined;
+        const notes: string[] = [];
         for (let k = 2; k <= runs; k++) {
           const next = await send();
           if (!next.ok) {
-            stopped = `warning (repeat_stopped): run ${k} of ${runs} did not record a trace: ${next.error.code}. ${next.error.message.split('\n')[0]}`;
+            notes.push(
+              `warning (repeat_stopped): run ${k} of ${runs} did not record a trace: ${next.error.code}. ${next.error.message.split('\n')[0]}`,
+            );
             break;
           }
           done.push(next);
         }
-        return reply(
-          describeActionResult(input, repeated(done), [
-            repeatedLine(done, runs),
-            ...(stopped ? [stopped] : []),
-          ]),
+        if (runs > 1) notes.unshift(repeatedLine(done, runs));
+        const shown = runs > 1 ? repeated(done) : result;
+        if (compareTo === undefined) return reply(describeActionResult(input, shown, notes));
+        // `compareTo` (D-144): the last run against an earlier trace, as diff_traces would compare them.
+        const last = (done.at(-1) as OkAction).trace;
+        const ids = new Set(done.map((r) => r.trace.id));
+        const before = await withClient(async (c) => {
+          if (compareTo !== 'last') return { trace: await c.getTrace(compareTo), id: compareTo };
+          const earlier = (await c.listTraces({ label: last.label, limit: 50 })).find(
+            (t) => t.label === last.label && !ids.has(t.id) && t.startedAt <= result.trace.startedAt,
+          );
+          return { trace: earlier ? await c.getTrace(earlier.id) : null, id: undefined };
+        });
+        if (!before.trace) {
+          notes.push(
+            before.id
+              ? `compareTo: no trace ${before.id}; it may have been evicted. Nothing to compare.`
+              : `compareTo: no earlier trace of "${last.label}" to compare with; this is the first.`,
+          );
+          return reply(describeActionResult(input, shown, notes));
+        }
+        const diff = fitText(
+          hasFunctions(before.trace) && hasFunctions(last)
+            ? diffFunctions(before.trace, last)
+            : diffTraces(before.trace, last),
+          MAX_DIFF_CHARS,
         );
+        notes.push(`compareTo: ${before.trace.id}; what changed against it is at the end.`);
+        const text = describeActionResult(input, shown, notes, MAX_CHARS - diff.length - 2);
+        return reply(`${text}\n\n${diff}`);
       } catch (err) {
         return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
@@ -402,6 +434,9 @@ const STARTED_RENDER_WAIT_MS = 10_000;
 
 /** Most runs one run_action call may do with `times` (D-142). */
 export const MAX_TIMES = 5;
+
+/** The most a `compareTo` diff takes of run_action's 16,000 characters; the trace gets the rest (D-144). */
+const MAX_DIFF_CHARS = 6000;
 
 type OkAction = Extract<ActionResult, { ok: true }>;
 

@@ -175,7 +175,12 @@ function foldShared(
  * its files and their functions in line order, cut to 16,000 characters by `fit()`.
  * `extraHeader` goes after the first line (run_action's action, page and warning lines).
  */
-export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []): string {
+export function summarizeTrace(
+  trace: Trace,
+  extraHeader: readonly string[] = [],
+  /** The cap: 16,000, or less when run_action adds a `compareTo` diff after it (D-144). */
+  max = MAX_CHARS,
+): string {
   const header = [`Trace ${trace.id}: ${trace.label}`, ...extraHeader];
   for (const r of trace.requests.slice(0, MAX_REQUEST_LINES)) header.push(`request: ${requestLine(r)}`);
   if (trace.requests.length > MAX_REQUEST_LINES)
@@ -277,23 +282,18 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
     return { background: Boolean(f?.background), hits: f ? f.lines.reduce((n, l) => n + l.count, 0) : 0 };
   };
   const { sections, folded } = build(shared);
-  if (!folded) return fit({ traceId: trace.id, header, sections, footer, rank });
+  if (!folded) return fit({ traceId: trace.id, header, sections, footer, rank }, max);
   // The files shown are the ones the unfolded text would show (D-141): folding never adds files,
   // and the fold line counts only the shared files that stay in view.
   const unfolded = { traceId: trace.id, header, sections: build(new Map()).sections, footer, rank };
-  const dropped = droppedFiles(unfolded, MAX_CHARS);
+  const dropped = droppedFiles(unfolded, max);
   const kept = folded.section.files.filter((f) => !dropped.has(f.path)).map((f) => f.path);
-  if (kept.length === 0)
-    return fit({ traceId: trace.id, header, sections, footer, rank }, MAX_CHARS, unfolded);
+  if (kept.length === 0) return fit({ traceId: trace.id, header, sections, footer, rank }, max, unfolded);
   const n = kept.length;
   const saved = kept.reduce((sum, p) => sum + (folded.saved.get(p) ?? 0), 0) - (SHARED_TITLE.length + 1);
   const foldLine =
     `folded: ${n} backend file${n === 1 ? '' : 's'} that ran in ${FOLD_MIN_REQUESTS} or more of the ${backend.length} requests ` +
     `${n === 1 ? 'is' : 'are'} shown once under "${SHARED_NAME}", not under each request ` +
     `(${Math.max(0, saved).toLocaleString('en-US')} chars saved). Call get_trace with traceId "${trace.id}" and file "${kept[0]}" to see one file's lines.`;
-  return fit(
-    { traceId: trace.id, header, sections, footer: [...footer, foldLine], rank },
-    MAX_CHARS,
-    unfolded,
-  );
+  return fit({ traceId: trace.id, header, sections, footer: [...footer, foldLine], rank }, max, unfolded);
 }

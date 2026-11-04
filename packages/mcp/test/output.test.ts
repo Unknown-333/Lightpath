@@ -481,7 +481,10 @@ describe('run_action load size (D-140)', () => {
 
 describe('server texts (design section 3, D-119)', () => {
   it('keeps instructions under 1,000, each description under 300, and tools/list at most 4,000', async () => {
-    expect(INSTRUCTIONS.length).toBe(896); // 730 plus the bug-report trigger (D-134); the cap stays 1,000
+    // 730 plus the bug-report trigger (D-134) is 896; the fix check through compareTo (D-144) is 888.
+    // The cap stays 1,000.
+    expect(INSTRUCTIONS.length).toBe(888);
+    expect(INSTRUCTIONS).toContain('compareTo "last"');
     for (const d of Object.values(DESCRIPTIONS)) expect(d.length).toBeLessThan(300);
     const [a, b] = InMemoryTransport.createLinkedPair();
     const server = createMcpServer({ workspaceRoot: process.cwd() });

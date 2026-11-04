@@ -102,6 +102,8 @@ export function describeActionResult(
   result: ActionResult,
   /** Lines after the page line, before warnings: `times` and `compareTo` notes (D-142, D-144). */
   notes: readonly string[] = [],
+  /** Less than 16,000 when a `compareTo` diff follows the text (D-144). */
+  max = MAX_CHARS,
 ): string {
   const values = (input.fill ?? []).map((f) => f.value);
   if (!result.ok) {
@@ -113,13 +115,17 @@ export function describeActionResult(
     }
     return redactFillValues(out.join('\n'), values);
   }
-  const text = summarizeTrace(result.trace, [
-    `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
-    `page: ${result.pageUrl}`,
-    ...notes,
-    ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
-  ]);
-  return fitText(redactFillValues(text, values), MAX_CHARS, result.trace.id);
+  const text = summarizeTrace(
+    result.trace,
+    [
+      `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
+      `page: ${result.pageUrl}`,
+      ...notes,
+      ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
+    ],
+    max,
+  );
+  return fitText(redactFillValues(text, values), max, result.trace.id);
 }
 
 /**

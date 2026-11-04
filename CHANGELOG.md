@@ -16,6 +16,7 @@ Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps w
 ### Added
 
 - `run_action` takes `times` (1 to 5): it does the same action that many times and returns one trace with the counts added up. Pressing "Add to cart" twice on the shop goes from 2 calls and 888 characters to 1 call and 633 (D-142).
+- `run_action` takes `compareTo` (a trace id, or `"last"` for the newest earlier trace of the same action): the answer adds the function-level diff, so checking a fix is one call. The server instructions and the `lightpath init` block now point to it instead of `diff_traces` (D-144).
 
 ## [0.1.0] - 2026-11-04
 

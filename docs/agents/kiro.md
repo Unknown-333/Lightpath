@@ -71,7 +71,7 @@ Then ask in plain words. For example:
 
 > Which code runs, frontend and backend, when I click "Add to cart" on the coffee mug? Use Lightpath to click it.
 
-The agent calls `run_action` with `button "Add to cart"` and `within: "Coffee mug"` (the shop has two such buttons), reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again and compares the two traces with `diff_traces`.
+The agent calls `run_action` with `button "Add to cart"` and `within: "Coffee mug"` (the shop has two such buttons), reads the trace, and can drill down with `get_trace`. After a fix, it calls `run_action` again with `compareTo: "last"`, which adds what changed, function by function (`diff_traces` compares any two traces).
 
 In Kiro CLI without a chat window (`kiro-cli chat --no-interactive`), the workspace's MCP servers load without a prompt only with `--trust-workspace`. Without it, a run had no Lightpath tools at all **(measured: run 2 in [bench/first-wow/results/2026-11-01.md](../../bench/first-wow/results/2026-11-01.md))**.
 

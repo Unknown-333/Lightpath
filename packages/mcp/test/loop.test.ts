@@ -185,3 +185,87 @@ describe('find_code_for_action with nothing recorded (D-143)', () => {
     expect(received.at(-1)?.target).toBe('Set in progress');
   });
 });
+
+/** b04 after the fix: the second press now re-renders the cart. */
+const fixedSecondAdd = (id: string) =>
+  traceOf(id, 'button: Add to cart', [
+    fn({ path: 'src/App.tsx', name: 'addToCart', startLine: 15, endLine: 23, notRun: [17] }),
+    fn({ path: 'src/Cart.tsx', name: 'Cart', startLine: 11, endLine: 50 }),
+  ]);
+
+describe('run_action compareTo (D-144)', () => {
+  it('"last" adds the function diff against the newest earlier trace of the same action', async () => {
+    queue = [firstAdd, secondAdd];
+    const before = await call('run_action', { target: 'button "Add to cart"', times: 2 });
+    const beforeId = /, (t_\d{12})\)/.exec(before.text)?.[1];
+    queue = [firstAdd, fixedSecondAdd];
+    const { text, isError } = await call('run_action', {
+      target: 'button "Add to cart"',
+      times: 2,
+      compareTo: 'last',
+    });
+    expect(isError).toBe(false);
+    // The new trace, then a blank line and the diff.
+    const at = text.lastIndexOf('\n\nTrace ');
+    const traceText = text.slice(0, at);
+    const diff = text.slice(at + 2);
+    expect(traceText).toContain(`compareTo: ${beforeId}; what changed against it is at the end.`);
+    expect(traceText).toContain('repeated: 2 of 2 runs');
+    const lastId = /^Trace (t_\d{12})/.exec(text)?.[1];
+    expect(diff?.trim()).toBe(
+      [
+        `Trace ${beforeId} (button: Add to cart) → ${lastId} (button: Add to cart):`,
+        `ran only in ${lastId}:`,
+        '  src/Cart.tsx Cart (line 11) ×1',
+        'branches changed (each side in its own line numbers):',
+        '  src/App.tsx addToCart: now runs 18-19; no longer runs 17',
+      ].join('\n'),
+    );
+  });
+
+  it('keeps the trace and the diff together under 16,000 characters', async () => {
+    const big = (shift: number) => (id: string) =>
+      traceOf(
+        id,
+        'button: Big',
+        Array.from({ length: 1500 }, (_, i) =>
+          fn({
+            path: `src/f${i}.tsx`,
+            name: `F${i}`,
+            startLine: 1 + shift,
+            endLine: 40,
+            notRun: [5 + shift],
+          }),
+        ),
+      );
+    queue = [big(0)];
+    await call('run_action', { target: 'button "Big"' });
+    queue = [big(1)];
+    const { text } = await call('run_action', { target: 'button "Big"', compareTo: 'last' });
+    expect(text.length).toBeLessThanOrEqual(16_000);
+    expect(text).toMatch(/^compareTo: t_\d{12}; what changed against it is at the end\.$/m);
+    expect(text).toMatch(/\n\nTrace t_\d{12} \(button: Big\) → t_\d{12} \(button: Big\):\n/);
+  });
+
+  it('takes a trace id, says when there is nothing to compare, and refuses anything else', async () => {
+    queue = [(i) => traceOf(i, 'button: Only once', []), (i) => traceOf(i, 'button: Only once', [])];
+    const first = await call('run_action', { target: 'button "Only once"' });
+    const id = /^Trace (t_\d{12})/.exec(first.text)?.[1];
+    const none = await call('run_action', { target: 'button "Only once"', compareTo: 'last' });
+    expect(none.text).toContain('none: both traces ran the same functions and branches');
+    queue = [(i) => traceOf(i, 'button: Brand new', [])];
+    const fresh = await call('run_action', { target: 'button "Brand new"', compareTo: 'last' });
+    expect(fresh.text).toContain(
+      'compareTo: no earlier trace of "button: Brand new" to compare with; this is the first.',
+    );
+    const byId = await call('run_action', { target: 'button "Add to cart"', compareTo: id });
+    expect(byId.text).toContain(`compareTo: ${id}; what changed against it is at the end.`);
+    const before = received.length;
+    const bad = await call('run_action', { target: 'button "Add to cart"', compareTo: 'yesterday' });
+    expect(bad).toEqual({
+      text: 'run_action did nothing: compareTo must be a trace id like "t_abc123def456", or "last".',
+      isError: true,
+    });
+    expect(received).toHaveLength(before);
+  });
+});
