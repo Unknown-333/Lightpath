@@ -1,0 +1,104 @@
+{
+  "action": "action: click link \"Plan your day\" (boundary press, settled timeout)",
+  "editLine": 108,
+  "fnName": "orderCandidates",
+  "traceLines": [
+    {
+      "cls": "req",
+      "text": "GET /api/daily-plan/candidates → 200 · node · 61 ms"
+    },
+    {
+      "cls": "side",
+      "text": "server"
+    },
+    {
+      "cls": "file",
+      "text": "backend/modules/daily-plan/ranking.js"
+    },
+    {
+      "cls": "fn",
+      "text": "priorityRank  33-42  ×40",
+      "notRun": "not run: 39-40"
+    },
+    {
+      "cls": "fn",
+      "text": "timeOf  44-48  ×24"
+    },
+    {
+      "cls": "fn hit",
+      "text": "orderCandidates  98-113  ×1"
+    },
+    {
+      "cls": "file",
+      "text": "backend/modules/daily-plan/service.js"
+    },
+    {
+      "cls": "fn",
+      "text": "getCandidates  364-482  ×1",
+      "notRun": "not run: 431, 474-477"
+    },
+    {
+      "cls": "dim",
+      "text": "+ 7 more server files"
+    },
+    {
+      "cls": "side",
+      "text": "browser"
+    },
+    {
+      "cls": "file",
+      "text": "frontend/components/DailyPlan/DurationChips.tsx"
+    },
+    {
+      "cls": "file",
+      "text": "frontend/components/DailyPlan/CandidateList.tsx"
+    },
+    {
+      "cls": "dim",
+      "text": "+ 13 more browser files"
+    }
+  ],
+  "answer": {
+    "status": "I found the cause and fixed it, but I haven't confirmed the fix in the running app.",
+    "cause": "In orderCandidates in backend/modules/daily-plan/ranking.js, the sort compared priority in ascending order (a - b), so low-priority tasks came first."
+  },
+  "readNote": "Ordering happens in ranking.js.",
+  "caption": "Real kiro-cli 2.37.0 run · claude-sonnet-5.5 · 6 steps · 0.68 credits · 31 s",
+  "stamp": "bug planted · time shortened",
+  "litButton": [
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4827
+    },
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4827
+    },
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4823
+    }
+  ],
+  "after": {
+    "at": "2026-11-04T04:11:42.433Z",
+    "by": "record-tududi.mjs --after (scripted click, no agent)",
+    "actionOk": true,
+    "fixLineInFile": true,
+    "links": [
+      "Send Q4 report to finance",
+      "Book flights for the offsite",
+      "Review pull requests",
+      "Water the office plants",
+      "Call the dentist"
+    ]
+  }
+}
