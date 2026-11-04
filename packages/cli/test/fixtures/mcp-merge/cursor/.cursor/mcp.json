@@ -1,0 +1,11 @@
+{
+	"mcpServers": {
+		"sentry": {
+			"url": "https://mcp.sentry.dev/mcp"
+		},
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\Jane Doe\\projects"]
+		}
+	}
+}
