@@ -1,0 +1,38 @@
+{
+  "a": {
+    "grain": {
+      "seed": 11,
+      "density": 0.04
+    },
+    "at200px": {
+      "meanShift": 0.56,
+      "maxShift": 17,
+      "pixelsShiftedOver8": 90,
+      "pixels": 21000
+    }
+  },
+  "b": {
+    "grain": {
+      "seed": 11,
+      "density": 0.04
+    },
+    "at200px": {
+      "meanShift": 0.97,
+      "maxShift": 23,
+      "pixelsShiftedOver8": 705,
+      "pixels": 21000
+    }
+  },
+  "c": {
+    "grain": {
+      "seed": 11,
+      "density": 0.04
+    },
+    "at200px": {
+      "meanShift": 0.65,
+      "maxShift": 20,
+      "pixelsShiftedOver8": 358,
+      "pixels": 21000
+    }
+  }
+}
