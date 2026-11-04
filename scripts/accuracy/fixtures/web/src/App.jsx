@@ -75,6 +75,7 @@ export function Effects() { //! 1
   }; //! ?
   return <button type="button" onClick={bump}>Bump {v}</button>; //! 1
 } //! ?
+// @end
 
 export function App() {
   return (

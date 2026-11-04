@@ -39,6 +39,11 @@ const scenarios: Record<string, () => unknown> = {
 
 const server = http.createServer(async (req, res) => {
   const name = (req.url ?? '/').split('?')[0]?.replace(/^\/s\//, '') ?? '';
+  // The ground-truth run (NODE_V8_COVERAGE) ends here: Node writes coverage on a normal exit.
+  if (name === '/__exit') {
+    res.end('bye', () => process.exit(0));
+    return;
+  }
   const run = scenarios[name];
   if (!run) {
     res.writeHead(404).end('no such scenario');

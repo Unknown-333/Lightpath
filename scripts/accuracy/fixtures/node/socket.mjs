@@ -11,6 +11,7 @@ function onSocketMessage(socket, data) { //! 1
   const text = String(data); //! 1
   socket.send(text === 'ping' ? 'pong' : 'unknown'); //! 1 span:'unknown'
 } //! ?
+// @end
 
 server.on('connection', (socket) => {
   socket.on('message', (data) => onSocketMessage(socket, data));
