@@ -1,3 +1,5 @@
+import { codeMask } from './code-mask.js';
+
 /**
  * Line lookup for one script source. Offsets are UTF-16 code unit indexes,
  * which is what V8 coverage reports and what JavaScript string indexes use.
@@ -10,6 +12,7 @@ export class LineIndex {
   readonly #contentStart: Int32Array;
   /** Offset just past the last non-whitespace character per line, or -1 for blank lines. */
   readonly #contentEnd: Int32Array;
+  #mask: Uint8Array | undefined;
 
   constructor(source: string) {
     this.#source = source;
@@ -33,6 +36,16 @@ export class LineIndex {
         this.#contentEnd[line] = b;
       }
     }
+  }
+
+  get source(): string {
+    return this.#source;
+  }
+
+  /** Each character's class (code-mask.ts, D-150), computed on first use. */
+  get mask(): Uint8Array {
+    this.#mask ??= codeMask(this.#source);
+    return this.#mask;
   }
 
   get lineCount(): number {

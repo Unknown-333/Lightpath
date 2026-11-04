@@ -101,6 +101,9 @@ function copyFn(f: FunctionHit): FunctionHit {
     ...f,
     ...(f.notRun ? { notRun: [...f.notRun] } : {}),
     ...(f.notRunSpans ? { notRunSpans: f.notRunSpans.map((s) => ({ ...s })) } : {}),
+    ...(f.unknown
+      ? { unknown: f.unknown.map((u) => ({ lines: [...u.lines], threwAfter: u.threwAfter })) }
+      : {}),
   };
 }
 

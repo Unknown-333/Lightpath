@@ -74,10 +74,11 @@ const cases: Case[] = [
       '16-18:3',
       '19:2',
       '20-21:3',
-      '23-24:1',
-      '25-27:2',
+      '23-25:1',
+      '26-27:2',
       '28-29:1',
-      '36-47:1',
+      '36-42:1',
+      '44-47:1',
     ],
   },
   {
@@ -85,7 +86,7 @@ const cases: Case[] = [
     name: 'ts-strip',
     sample: 'samples/ts-strip.ts',
     path: 'samples/ts-strip.ts',
-    expected: ['9-10:1', '11-13:3', '14-15:1', '16-17:2', '18-19:1', '21-25:1', '27-35:1'],
+    expected: ['9-11:1', '12-13:3', '14-15:1', '16-17:2', '18-19:1', '21-25:1', '27-35:1'],
   },
   {
     // greet ran 3 times: the fallback once ('xx'), the normal return twice. Emoji and Nepali text
@@ -107,7 +108,7 @@ const cases: Case[] = [
     // The shop's Cart.tsx as Vite served it, during one Checkout click. Cart rendered 4 times: two
     // state updates (busy, then the result) under StrictMode, which renders twice. The subtotal callback
     // (17-18) ran only in the 2 renders before onCheckedOut emptied the cart. checkout() ran once; its
-    // catch body (29) didn't. Lines 28 and 30 are lit because the `}` of the block before them ran.
+    // catch body (29) didn't, and neither did its `catch (err)` (28, D-150); `finally` (30) ran.
     // Line 42 is lit by `onChange={...}` itself; the arrow's body never ran but shares the line.
     // Line 45 is JSX text with no code. Type-only lines (5-9) and imports have no data.
     name: 'vite-jsx',
@@ -118,8 +119,8 @@ const cases: Case[] = [
       '16:4',
       '17-18:2',
       '19:4',
-      '21-28:1',
-      '29:0',
+      '21-27:1',
+      '28-29:0',
       '30-33:1',
       '35-44:4',
       '46-48:4',

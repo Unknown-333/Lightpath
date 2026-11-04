@@ -353,3 +353,70 @@ git push origin v0.1.1
 Change the `0.1.1` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR.
 
 What the 0.1.1 checks found: see "Install test" in the release prep PR. The 7 tarballs packed from the release branch (3 at 0.1.1, 4 at 0.1.0), installed together into a fresh folder outside the repo, print `lightpath/0.1.1`. `lightpath init --agent kiro` writes `@lightpath-dev/cli@0.1.1` into `.kiro/settings/mcp.json`, `lightpath doctor` passes, and `tools/list` over stdio shows `includeCode` in `run_action`.
+
+## Releasing 0.1.2
+
+0.1.2 publishes 5 npm packages: `@lightpath-dev/protocol`, `core`, `daemon`, `mcp` and `cli`. `browser` stays at 0.1.1 and `node-agent` at 0.1.0: packed before the bump, their tarballs were identical to what npm serves (D-107, D-152).
+
+| Moves to 0.1.2            | Why                                                             |
+| ------------------------- | --------------------------------------------------------------- |
+| `@lightpath-dev/protocol` | `FunctionHit.unknown` (D-151)                                   |
+| `@lightpath-dev/core`     | The line rule (D-150) and lines after a call that threw (D-151) |
+| `@lightpath-dev/daemon`   | Passes `unknown` into traces (D-151)                            |
+| `@lightpath-dev/mcp`      | Prints `unknown: … (a call threw on or after line N)` (D-151)   |
+| `@lightpath-dev/cli`      | Its `package.json` names daemon, mcp and protocol 0.1.2         |
+
+Publish from a real interactive terminal, as for 0.1.1: npm asks for the security key on every publish.
+
+### 1. Sync the clean clone
+
+The release PR is merged into `main` and every CI check on `main` is green. Then:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\corepack-shims;$env:PATH"
+cd $HOME\Desktop\lightpath-publish
+git switch main
+git pull
+git status                     # must say "nothing to commit, working tree clean"
+pnpm install --frozen-lockfile
+pnpm check
+pnpm accuracy                  # the trace accuracy audit: must end with ACCURACY PASSED
+npm whoami                     # must print unknown-333; if not, run npm login first
+pnpm -r --filter @lightpath-dev/protocol --filter @lightpath-dev/core --filter @lightpath-dev/daemon --filter @lightpath-dev/mcp --filter @lightpath-dev/cli publish --dry-run   # 5 tarballs, sends nothing
+```
+
+The dry run must list exactly these 5, each at `0.1.2`: `protocol`, `core`, `daemon`, `mcp`, `cli`.
+
+### 2. Publish to npm, in dependency order
+
+```powershell
+pnpm --filter @lightpath-dev/protocol publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/core publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/daemon publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/mcp publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/cli publish --publish-wait-timeout 600000
+```
+
+If one fails, fix the cause and go on with the ones not yet published. Never publish a version twice.
+
+### 3. Check what npm serves
+
+```powershell
+npm view @lightpath-dev/cli@0.1.2 dependencies      # daemon 0.1.2, mcp 0.1.2, protocol 0.1.2; browser 0.1.1, node-agent 0.1.0
+npm view @lightpath-dev/daemon@0.1.2 dependencies   # core 0.1.2, protocol 0.1.2
+npm view @lightpath-dev/mcp@0.1.2 dependencies      # protocol 0.1.2
+npm view @lightpath-dev/core@0.1.2 dependencies     # protocol 0.1.2
+cd $env:TEMP; npx -y @lightpath-dev/cli@0.1.2 --version   # lightpath/0.1.2 ...
+```
+
+### 4. Tag the release
+
+```powershell
+cd $HOME\Desktop\lightpath-publish
+git tag -a v0.1.2 -m "Lightpath 0.1.2"
+git push origin v0.1.2
+```
+
+### 5. After publishing
+
+Change the `0.1.2` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR.
