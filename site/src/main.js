@@ -65,15 +65,20 @@
   // Copy buttons.
   for (const btn of document.querySelectorAll('.copy')) {
     const label = btn.firstChild;
+    // Screen readers hear the result too (intent: "Missing Feedback").
+    const status = btn.parentElement.querySelector('[role="status"]');
     btn.addEventListener('click', async () => {
       try {
         await navigator.clipboard.writeText(btn.dataset.copy);
         label.textContent = 'Copied';
+        if (status) status.textContent = 'Commands copied to the clipboard.';
       } catch {
         label.textContent = 'Select and copy';
+        if (status) status.textContent = 'Could not copy. Select the commands and copy them.';
       }
       setTimeout(() => {
         label.textContent = 'Copy';
+        if (status) status.textContent = '';
       }, 2000);
     });
   }

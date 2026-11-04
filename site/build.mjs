@@ -52,7 +52,7 @@ function tabs() {
   const panels = AGENTS.map((a, i) => {
     const cmd = `npx @lightpath-dev/cli init --agent ${a.id}\nnpx @lightpath-dev/cli doctor`;
     return `<div class="panel" role="tabpanel" id="panel-${a.id}" aria-labelledby="tab-${a.id}" tabindex="0"${i === 0 ? '' : ' hidden'}>
-        <div class="cmd"><pre><code>${esc(cmd)}</code></pre><button type="button" class="copy" data-copy="${esc(cmd)}">Copy<span class="visually-hidden"> the ${a.name} commands</span></button></div>
+        <div class="cmd"><pre><code>${esc(cmd)}</code></pre><button type="button" class="copy" data-copy="${esc(cmd)}">Copy<span class="visually-hidden"> the ${a.name} commands</span></button><span class="visually-hidden" role="status"></span></div>
         <p><code>init</code> writes <code>${a.writes}</code>, <code>lightpath.config.json</code> and a short block in <code>AGENTS.md</code>. <code>doctor</code> checks what it wrote. Then restart ${a.name}.</p>
         <p class="src">${a.status} <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/agents/${a.id}.md">${a.name} guide</a>.</p>
       </div>`;
@@ -147,10 +147,11 @@ export function build() {
   const trace = traceHtml(readTrace(join(repo, 'docs/media/tududi-run/transcript.jsonl')));
   const [s1, s2, s3] = spotSvgs();
   const { tablist, panels } = tabs();
-  const h1 = 'See the exact lines one click ran.'
-    .split(' ')
-    .map((w) => pixelWord(w))
-    .join(' ');
+  // "click ran." never splits, so no line ends on a lone "ran." (taste-skill copy.md, orphans).
+  const h1 = [
+    ...'See the exact lines one'.split(' ').map((w) => pixelWord(w)),
+    `<span class="px-group">${pixelWord('click')}${pixelWord('ran.')}</span>`,
+  ].join(' ');
   const gif = readFileSync(join(repo, 'docs/media/tududi-demo.gif'));
   const gifW = gif.readUInt16LE(6);
   const gifH = gif.readUInt16LE(8);
