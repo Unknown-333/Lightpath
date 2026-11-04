@@ -64,10 +64,10 @@ describe('mapFunctions (D-116)', () => {
   it("lists nested functions and names the shop Cart's untaken blocks inside lines (vite-jsx)", () => {
     const fns = functionsOf('vite-jsx');
     expect(brief(fns)).toEqual([
-      'Cart 11-50 x4 not run: 29',
+      'Cart 11-50 x4 not run: 28,29',
       '(anonymous) 16-19 x2 not run: ',
       '(anonymous) 17-17 x2 not run: ',
-      'checkout 21-33 x1 not run: 29',
+      'checkout 21-33 x1 not run: 28,29',
     ]);
     expect(fns.flatMap((f) => f.notRunSpans.map((s) => `${s.line}: ${s.text}`))).toEqual([
       "47: ? 'error' : ''",

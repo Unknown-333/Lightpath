@@ -1,6 +1,6 @@
 /**
  * Just enough of JSON with comments (JSONC) to read an agent's MCP config and to set one member in
- * it as a text edit, so every other byte of the file stays as the user wrote it (D-161): other
+ * it as a text edit, so every other byte of the file stays as the user wrote it (D-151): other
  * servers, their order, indentation, line endings, comments and trailing commas.
  */
 

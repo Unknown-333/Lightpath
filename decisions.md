@@ -1341,7 +1341,21 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: all 7 at 0.1.1 so the numbers match (four identical tarballs under new numbers, as rejected in D-107); bumping the extension for the icon (a Marketplace publish with no change in what it does; D-137 keeps the owner's focus on the MCP).
 - Revert: set the three `package.json` versions back to 0.1.0 before anything is published. After publishing, npm keeps each version for good, so the fix is a 0.1.2.
 
-### D-160 `examples/invoices` runs when copied out of the repo: its `tsconfig.json` no longer extends the repo's base (Phase B)
+### D-149 A line's count comes from its code, not from its punctuation or comments (Phase A accuracy audit; amends the line rule of ARCHITECTURE section 4.3)
+
+- Date: 2026-11-04 (written before the engine change)
+- Decision: In `packages/core`, a line takes the highest count of its code characters: names, keywords, literals and operators. Brackets, braces, parentheses, `;` and `,` count only on a line that has nothing else. Comments never count. A line whose only code is `break` or `continue` takes the lower of its own count and the count of the code just before it. The same rule applies on both paths: plain scripts (`rangesToLines`) and source-mapped ones (`mapToOriginal`, where each mapping's generated text is classified the same way). A small lexer (`code-mask.ts`, no dependency) marks each character of the script V8 ran as space or comment, punctuation, or code, so `//` inside a string or a template is not a comment.
+- Evidence: the audit's first run (`scripts/accuracy`, raw output in `C:\Users\user\lightpath-trials\goal\accuracy-raw\run1-node.txt` and `v8-ranges-run1.txt`). V8's ranges are right; the old line rule (the maximum of every range touching a line's non-space text) read them wrong in these common cases, in type stripping, tsx and tsc alike:
+  - `} else if (kind === 'c') {` of an else-if that was never reached showed as run: its `}` closes the block that ran.
+  - The untaken arm of a multi-line ternary (`: 'guest';`) and of `&&` (`&& user.name)`) showed as run: the `;` or `)` belongs to the whole statement.
+  - The body of an untaken `default:` and of an untaken `case 'c':` showed as run: a trailing comment on the line sits outside V8's clause range, in the function's.
+  - The `break;` of an untaken `case` showed as run: V8's clause range ends where `break` starts (measured: `[1332,1388) case 'apple': … cents = 50;` with `x0`, then `break` in the function's range).
+- Tests whose assertions change (Tier 2), each to the truth, none weakened: `packages/core/test/fixtures.test.ts` plain-js: line 43 (`// Expected: drone delivery doesn't exist.`) is a comment and now has no count (was `36-47:1`, now `36-42:1, 44-47:1`); plain-js line 25 and ts-strip line 11, loop headers (`for (const line of …) {`), now show the loop statement's count (1) instead of the body's, because the `{` that opens the body is punctuation; vite-jsx line 28 (`} catch (err) {`) now shows 0: the catch did not run (the old comment said the line was lit only by the `}` before it). `packages/core/test/functions.test.ts`: Cart and checkout list 28 as not run with 29. All other unit, e2e-api and VS Code tests pass unchanged.
+- Regression tests: `packages/core/test/accuracy.test.ts`; 5 of its 6 fail on main's `packages/core/src` and all pass here (raw: `accuracy-raw\regress-main.txt`, `regress-fix.txt`).
+- Alternatives: the first character of a line (wrong for `} else if`, whose first character is the `}` of the block that ran); the last character (wrong for `: 'guest';`); a full JavaScript parser (a new runtime dependency in a published package for the same result); leaving the rule and listing the cases as limits (they are ordinary code; the owner's stop rule names them).
+- Revert: drop `code-mask.ts` and its use in `lines.ts` and `sourcemap.ts`; the old rule comes back unchanged.
+
+### D-150 `examples/invoices` runs when copied out of the repo: its `tsconfig.json` no longer extends the repo's base (Phase B)
 
 - Date: 2026-11-04
 - Decision: `examples/invoices/tsconfig.json` carries its own compiler options instead of `"extends": "../../tsconfig.base.json"`. The options are the base's, minus the ones for building packages (`composite`, `declaration`, `declarationMap`, `sourceMap`), plus the app's own (`jsx`, `dom` libs, `bundler` resolution, `noEmit`). `pnpm --filter invoices typecheck` passes as before.
@@ -1351,7 +1365,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: copy `tsconfig.base.json` along in the script (hides the problem from anyone who copies the folder by hand); drop `tsconfig.json` (loses `pnpm --filter invoices typecheck`).
 - Revert: restore the `extends` line and the old options.
 
-### D-161 `init` edits only its own entry in an agent's MCP config, as text, and accepts comments and trailing commas (Phase B; amends D-120)
+### D-151 `init` edits only its own entry in an agent's MCP config, as text, and accepts comments and trailing commas (Phase B; amends D-120)
 
 - Date: 2026-11-04 (written before the code)
 - Decision: `lightpath init` no longer parses the agent's MCP config and writes all of it back with `JSON.stringify`. A small JSON-with-comments reader (`packages/cli/src/jsonc.ts`, no new dependency) finds the `"lightpath"` member under the servers key and either replaces its value or inserts it after the last server. Every other byte of the file stays as it was: other servers, their order, indentation (spaces or tabs), line endings, a byte order mark, comments and trailing commas. The new entry uses the file's own indentation and line endings. After the edit the result is parsed again; if the other servers or keys don't come back equal and in the same order, or the entry isn't there, nothing is written and init prints the entry to paste by hand, as before. An entry that already equals the one init would write is left as it is, whatever its formatting, so a second run changes nothing. `doctor` reads the configs with the same reader, so a `.vscode/mcp.json` with comments is checked instead of being reported as unreadable.
@@ -1361,7 +1375,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: `jsonc-parser` (Microsoft's, what VS Code uses; a new runtime dependency in a published package for one edit); keep the rewrite but detect indentation (still loses comments and inline arrays).
 - Revert: restore the `JSON.stringify` branch in `init.ts` and the old test.
 
-### D-162 Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (Phase B)
+### D-152 Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (Phase B)
 
 - Date: 2026-11-04
 - Decision: `loadConfig` turns `\` into `/` in `webRoot` and each `roots` entry before resolving them, so `"webRoot": "packages\\web"` written on Windows names the same folder on macOS and Linux. (`ignore` globs already did this, in `compileIgnore`.) When the file isn't JSON and a string in it has a backslash that isn't a JSON escape, like `"C:\Users\me\web"`, the error adds: backslashes in JSON must be doubled, so write it as `"C:/Users/me/web"`.
@@ -1369,3 +1383,20 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: the Phase B brief asks for correct paths in `lightpath.config.json` with backslashes and spaces. A committed config is shared between a team's OSes. Spaces in paths already worked: a Windows run with the app in `lp b\my invoices` and npm's cache in `lp npm cache …` returned its trace (`win-invoices-spaces.log`).
 - Alternatives: reject backslashes with an error (breaks configs that work on Windows today); leave it to docs.
 - Revert: drop the two `replace` calls and the hint in `config.ts`.
+### D-153 Lines after a call that threw show as "unknown", never as run (Phase A accuracy audit; Tier 2: adds `unknown` to `FunctionHit` in the wire protocol)
+
+- Date: 2026-11-04 (written before the protocol and engine change; the owner approved this fix path the same day)
+- Decision: When the `catch` of a `try` ran during a trace, the code in that try block after the line of its first statement, where it only has the block's own count, has no count: it shows neither as run nor as not run. Its lines go in a new optional `FunctionHit.unknown: { lines: number[], threwAfter: number }[]`, where `threwAfter` is the line of the try block's first statement, the last line known to have run. The trace text says `unknown: 55-56 (a call threw on or after line 54)` on the function's line, and `get_trace` slices print `// unknown: lines 55-56 (a call threw on or after line 54)` where they would print code. Code with its own counter inside the region (an inner block or a function called there) keeps its count: V8's block counts are exact.
+- Why "on or after": coverage says the try block was left early, not where. The first statement ran (it started the block); the throw came from it or a later one. Naming one line as the throw site would be a guess.
+- Evidence: the audit's `call-throws` scenario (raw output `C:\Users\user\lightpath-trials\goal\accuracy-raw\run1-node.txt`, `v8-ranges-run1.txt`): `mustBePositive(n)` threw inside `try`; V8 gives `checkQty` one range, `x1`, over the whole function, with no counter after the call, so `const doubled = qty * 2;` and `return ...` read as run. The catch has no range of its own because its count equals the function's; a catch that never ran always has a range with `x0`, so `countAt` at the catch's first character tells the two apart.
+- Not covered (stays a V8 limit, listed in the audit as `throw-escapes`): a throw that leaves a function with no `catch` of its own. That function's coverage has no sign of it; the catch that ran is in a caller, and coverage has no call graph.
+- Protocol: `unknown` is optional, so older clients ignore it and older daemons never send it. `docs/PROTOCOL.md` lists it.
+- Tests: new regression tests in `packages/core/test/accuracy.test.ts` for the four failure cases (else-if, switch default and break, multi-line ternary and `&&`, a call that threw); each fails on main and passes here (`accuracy-raw\regress-main.txt`). No existing assertion changes for this entry.
+- Alternatives: leave the lines as V8 counts them (the owner's stop rule names this case); mark every line of the try block unknown (also hides the first statement, which did run); pause on exceptions to find the throw site (the Node agent's in-process inspector can't pause its own thread, and the browser pause budget is 20 ms).
+- Revert: drop `throws.ts` and its call in `pipeline.ts`, the `unknown` field and its two text lines.
+
+### D-154 0.1.2 carries D-149 and D-153: `protocol`, `core`, `daemon`, `mcp` and `cli` move to 0.1.2; `browser` stays at 0.1.1, `node-agent` at 0.1.0 (D-107's rule)
+
+- Date: 2026-11-04 (written before the version bump)
+- Decision: bump only the packages whose packed tarball differs from the version npm serves (evidence in `C:\Users\user\lightpath-trials\goal\accuracy-raw\tarballs.txt`): `protocol` (the `unknown` field), `core` (the line rule and the unknown lines), `daemon` (passes `unknown` on), `mcp` (prints it), and `cli`, whose `package.json` pins the new `daemon` and `mcp`. `browser` and `node-agent` don't change: `browser` 0.1.1 keeps its pins on `core` and `protocol` 0.1.0, which is fine because it uses neither the line rule nor `FunctionHit`. After the bump, `browser` and `node-agent` packed from the branch differ from npm only in `package.json` (their `workspace:*` pins would read 0.1.2); no code differs, so they are not republished. Nothing is published here; `docs/RELEASE.md` has the steps for the owner.
+- Revert: set the five versions back before anything is published.

@@ -84,7 +84,7 @@ export async function loadConfig(dir: string, file?: string): Promise<LoadedConf
   }
   const base = dirname(path);
   const config = { ...parsed.data };
-  // `\` or `/`, so a config written on Windows names the same folders on macOS and Linux (D-162).
+  // `\` or `/`, so a config written on Windows names the same folders on macOS and Linux (D-152).
   const local = (p: string) => resolve(base, p.replace(/\\/g, '/'));
   if (config.webRoot) config.webRoot = local(config.webRoot);
   if (config.roots) config.roots = config.roots.map(local);
@@ -95,7 +95,7 @@ export async function loadConfig(dir: string, file?: string): Promise<LoadedConf
 
 /**
  * For a file that isn't JSON: when a string has a backslash that isn't a JSON escape, like a
- * Windows path `"C:\Users\me"`, the same path with forward slashes (D-162). Empty otherwise.
+ * Windows path `"C:\Users\me"`, the same path with forward slashes (D-152). Empty otherwise.
  */
 function backslashHint(raw: string): string {
   for (const m of raw.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) {

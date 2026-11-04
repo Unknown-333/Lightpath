@@ -128,7 +128,7 @@ export async function setupChecks(
     const setup = AGENT_SETUP[agent];
     const raw = await readFile(join(cwd, setup.file), 'utf8').catch(() => undefined);
     if (raw === undefined) continue;
-    // Comments and trailing commas are fine (D-161): VS Code allows them in its config files.
+    // Comments and trailing commas are fine (D-151): VS Code allows them in its config files.
     const json = parseJsonc(raw) as Record<string, Record<string, unknown> | undefined> | undefined;
     const name = `${setup.name} MCP config`;
     if (json === undefined || typeof json !== 'object' || json === null) {

@@ -11,7 +11,8 @@
       "!agents/python",
       "!pnpm-lock.yaml",
       "!packages/core/test/fixtures/*.json",
-      "!packages/cli/test/fixtures"
+      "!packages/cli/test/fixtures",
+      "!scripts/accuracy/fixtures"
     ]
   },
   "formatter": {

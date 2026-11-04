@@ -120,6 +120,13 @@ export const FunctionHit = z.object({
       }),
     )
     .optional(),
+  /**
+   * Lines with no count because a call threw before them (D-153): the catch of their try ran.
+   * `threwAfter` is the try block's first line, the last one known to have run.
+   */
+  unknown: z
+    .array(z.object({ lines: z.array(z.number().int().positive()), threwAfter: z.number().int().positive() }))
+    .optional(),
   /** Index into `Trace.phases`. */
   phase: z.number().int().nonnegative(),
 });

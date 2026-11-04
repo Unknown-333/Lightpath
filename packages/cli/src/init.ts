@@ -176,7 +176,7 @@ export async function init(options: InitOptions): Promise<number> {
   const report = (outcome: Outcome, file: string, note = '') => out(`${outcome.padEnd(9)} ${file}${note}`);
 
   // 1. The agent's MCP config: only the "lightpath" entry is written, as a text edit, so other
-  // servers, comments and formatting stay byte for byte (D-161).
+  // servers, comments and formatting stay byte for byte (D-151).
   const entry = mcpEntry(agent, version, platform);
   const configPath = join(cwd, setup.file);
   const raw = await readFile(configPath, 'utf8').catch(() => undefined);
@@ -243,7 +243,7 @@ export async function init(options: InitOptions): Promise<number> {
 }
 
 /**
- * The agent config text with the "lightpath" entry set (D-161), `raw` itself when the entry is
+ * The agent config text with the "lightpath" entry set (D-151), `raw` itself when the entry is
  * already there (in any key order or formatting), or undefined when the file can't be edited
  * safely: not JSON even with comments allowed, servers not an object, or an edit that wouldn't
  * keep everything else equal.

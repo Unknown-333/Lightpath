@@ -88,13 +88,24 @@ const FAQ = [
     a: ['Node.js 22.12 or newer, and Chrome or Edge for the browser side.'],
   },
   {
-    q: 'Does it make agents fix bugs faster?',
+    q: 'Does it help agents fix more bugs?',
     a: [
       'Not in our benchmark. With Lightpath the agent didn’t fix more bugs, and it used more steps and tokens. On 7 seeded bugs in our example shop it fixed 21 of 21 runs without Lightpath and 20 of 21 with it. On 3 bugs in tududi it fixed 15 of 15 both ways. On 2 held-out tududi bugs it fixed 9 of 10 without and 6 of 10 with.',
-      'The shop’s bugs were easy, the tududi sample is small, and all 5 tududi fixes are public, so the model may have seen them. Only Kiro CLI with one model was run.',
+      'The shop’s bugs were easy, the tududi sample is small, and all 5 tududi fixes are public, so the model may have seen them. Only Kiro CLI with one model was run. In a one-run case study on 0.1.2, both agents fixed a planted bug at step 4; the one with Lightpath used about 4,400 tokens, the one without about 2,300.',
       'What Lightpath does is show the agent the exact lines a click ran, without asking you to click.',
     ],
     link: { href: BENCH, text: 'Read the full benchmark' },
+  },
+  {
+    q: 'How sure are the lines it reports?',
+    a: [
+      'They come from V8’s own coverage counters, mapped back to your files with source maps. pnpm accuracy runs small Node and React apps and checks every line against results written by hand.',
+      'Version 0.1.2 fixed lines that showed as run when they did not: untaken else if and switch branches, the untaken arm of a ternary, and lines after a call that threw. V8 has no count after a throw, so those lines now read unknown, with the line that threw.',
+    ],
+    link: {
+      href: 'https://github.com/Unknown-333/Lightpath/releases/tag/v0.1.2',
+      text: 'Read the 0.1.2 release notes',
+    },
   },
   {
     q: 'Can I use it in production?',

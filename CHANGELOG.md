@@ -2,6 +2,11 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## [0.1.2] - 2026-11-04
+
+- Fix: resolve false-positive line attribution in un-taken else-if/switch branches and post-throw statements.
+- Decisions: D-149 (the line rule), D-153 (lines after a call that threw are "unknown"), D-154 (which packages move to 0.1.2).
+
 ## [0.1.1] - 2026-11-04
 
 Six fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps went](https://github.com/Unknown-333/Lightpath/pull/59)), the code that ran on request (`includeCode`), a security fix: `get_trace` showed secrets written in your source code, and the new logo. Needs Node.js 22.12 or newer, as before.
