@@ -1340,3 +1340,13 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: D-107's rule. Republishing the four unchanged packages would put a new number on identical bytes, and every install would download them again for nothing.
 - Alternatives: all 7 at 0.1.1 so the numbers match (four identical tarballs under new numbers, as rejected in D-107); bumping the extension for the icon (a Marketplace publish with no change in what it does; D-137 keeps the owner's focus on the MCP).
 - Revert: set the three `package.json` versions back to 0.1.0 before anything is published. After publishing, npm keeps each version for good, so the fix is a 0.1.2.
+
+### D-150 `examples/invoices` runs when copied out of the repo: its `tsconfig.json` no longer extends the repo's base (Phase B)
+
+- Date: 2026-11-04
+- Decision: `examples/invoices/tsconfig.json` carries its own compiler options instead of `"extends": "../../tsconfig.base.json"`. The options are the base's, minus the ones for building packages (`composite`, `declaration`, `declarationMap`, `sourceMap`), plus the app's own (`jsx`, `dom` libs, `bundler` resolution, `noEmit`). `pnpm --filter invoices typecheck` passes as before.
+- Evidence (raw output in `C:\Users\user\lightpath-trials\goal\firstrun-raw\finding-invoices-tsconfig-main-win.log`): the folder copied out of main, `npm install`, then `npx @lightpath-dev/cli@0.1.1 init --agent claude-code`, `doctor` (all checks pass) and a first `run_action` from a script acting as the agent. Vite answered every page script with `[TSCONFIG_ERROR] Failed to load tsconfig '../../tsconfig.base.json': Tsconfig not found` (500), the page stayed blank, and the agent got `run_action did not record a trace: not_found. No element matches button "Mark as paid" within "Kestrel Labs".` With this change the same run returns the trace in 4.1 s (`win-invoices.log`).
+- Why: the Phase B brief copies the demo app out of the repo, as a developer trying it alone would. Vite 8 reads `tsconfig.json` for every `.tsx` file, so a missing base breaks the page, not only `tsc`.
+- Test: the `first-run` CI job copies `examples/invoices` out of the checkout on Linux, macOS and Windows and fails without a trace.
+- Alternatives: copy `tsconfig.base.json` along in the script (hides the problem from anyone who copies the folder by hand); drop `tsconfig.json` (loses `pnpm --filter invoices typecheck`).
+- Revert: restore the `extends` line and the old options.
