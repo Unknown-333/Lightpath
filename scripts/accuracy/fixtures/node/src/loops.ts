@@ -16,7 +16,7 @@ export function sumTo(n: number): number { //! 1
 export function firstNegative(list: number[]): number { //! 1
   let i = 0; //! 1
   while (i < list.length) { //! +
-    if ((list[i] ?? 0) < 0) { //! 3
+    if ((list[i] ?? 0) < 0) { //! 3 span:0
       break; //! 1
     } //! ?
     i++; //! 2
