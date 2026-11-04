@@ -128,6 +128,42 @@ export async function startLightpathDev(trialDir, lightpath, logFile, timeoutMs 
   throw new Error(`lightpath dev not watching the page after ${timeoutMs} ms; see ${logFile}`);
 }
 
+/** True when `url` answers at all within 2 s. */
+async function answers(url) {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Suite v2 Step 4 (STEP4-RULE.md, item it_eaec2cc9): `lightpath dev` can open the page before the
+ * app's API listens, so the page's first data request fails and the page shows no data. After
+ * "watching", wait for the API (`backendUrl`); if it wasn't answering when the page opened, re-save
+ * the page's HTML file unchanged (`pageHtml`, relative to the trial) so the dev server reloads the
+ * page, then wait `settleMs`. Returns what happened, for the run's record.
+ */
+export async function waitAppBackend(trialDir, { backendUrl, pageHtml }, timeoutMs = 120_000, settleMs = 8000) {
+  if (!backendUrl) return null;
+  const upAtReady = await answers(backendUrl);
+  const started = Date.now();
+  while (!(await answers(backendUrl))) {
+    if (Date.now() - started > timeoutMs) throw new Error(`app backend ${backendUrl} not answering after ${timeoutMs} ms`);
+    await sleep(500);
+  }
+  const waitedMs = Date.now() - started;
+  let reloaded = false;
+  if (!upAtReady && pageHtml) {
+    const file = join(trialDir, pageHtml);
+    writeFileSync(file, readFileSync(file));
+    reloaded = true;
+    await sleep(settleMs);
+  }
+  return { backendUrl, upAtReady, waitedMs, reloaded };
+}
+
 /**
  * Asks an MCP server for `initialize` and `tools/list` over stdio, started exactly as the agent
  * file gives it (no model call). Returns { tools, instructions }.
