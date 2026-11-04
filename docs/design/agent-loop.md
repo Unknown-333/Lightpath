@@ -474,7 +474,7 @@ server/routes/orders.ts (trace t_p6szzi2njx9d, phase POST /api/orders)
 - **Source text is read from disk by the MCP server**, from the workspace roots in the daemon's `welcome`. Only paths in the trace are read, and only when their real path is inside a root. When the file's modification time is later than the trace's start, the first line says: `warning: <path> changed after this trace; line numbers may not match. Rerun the action for a fresh trace.`
 - Lines longer than 200 characters are cut with "…" (minified code).
 - **Paging**: pages break between functions. One function longer than a page breaks between lines. Each page ends with `page 1 of 3. Call get_trace with traceId "t_…", file "<path>", page 2 for the next.` On the shop the largest file's slice was 1,580 characters, so each shop file is one page.
-- Redaction never runs over source lines (section 9). They are the user's own files, which the agent can read anyway.
+- Source lines go through `redactSource` (D-145, section 9), which keeps line numbers. Since D-145 the trace answers also end with these executed lines for each file, most-used first, inside the 16,000 cap.
 
 ### 6.4 `diff_traces` at function level
 
@@ -535,7 +535,7 @@ failed requests: 1 (first: POST /api/orders → 500)
 
 ## 9. Redaction
 
-Ruling 9, D-123. One module, `packages/mcp/src/redact.ts`, applied to every field that comes from the app at runtime: problem messages, request paths and URLs, the page URL, and trace labels. Never to source slices (section 6.3). Rule 6 ships with build 1, since `fill` does; rules 2 to 5 with build 4.
+Ruling 9, D-123. One module, `packages/mcp/src/redact.ts`, applied to every field that comes from the app at runtime: problem messages, request paths and URLs, the page URL, and trace labels. Source code a tool returns gets `redactSource`, a variant for code (D-145, below the table). Rule 6 ships with build 1, since `fill` does; rules 2 to 5 with build 4.
 
 | Rule | What                                                                                                                                                                                                                                                             | Example in → out                                                                        |
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -547,6 +547,7 @@ Ruling 9, D-123. One module, `packages/mcp/src/redact.ts`, applied to every fiel
 | 6    | run_action `fill` values (lead's decision): never in tool output, traces, labels or logs. The MCP server replaces every occurrence of a value it sent in this call (4 characters or longer) in the result text; the collector and daemon never log or store them | App echoes `hunter2` into a console error → `[redacted]`                                |
 - Each rule gets its own test, plus one test that runs a trace with all of them through every tool.
 - Rules 2 and 5 over-redact on purpose (`monkey=1` matches `key`). A missed secret is worse than a hidden harmless value.
+- Source code (D-145): rules 3 and 4 as above, rule 2 inside URLs, rule 5 for string literals only (so `const session = await getSession()` stays readable), plus well-known key formats and PEM private keys. Rule 6 runs over the code too.
 - Redaction happens at the MCP output, not at capture: the daemon keeps raw text in memory on the user's own machine, as it keeps source code today. Loosening this rule later is Tier 3.
 
 ## 10. Setup: init, doctor, CI
