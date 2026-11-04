@@ -309,7 +309,8 @@ async function main() {
   record.check = { pass: check.pass, detail: check.detail, ms: check.ms };
   record.typecheck = { ok: types.ok, output: types.ok ? '' : types.output.slice(0, 2000) };
   record.checkUntouched = JSON.stringify(hashesBefore) === JSON.stringify(hashesAfter);
-  record.correct = check.pass && types.ok && record.checkUntouched;
+  // Suite v2 difficulty check: a run stopped at the step cap is not correct (SCORING.md v2).
+  record.correct = check.pass && types.ok && record.checkUntouched && !record.stepCapped;
   if (S.agentDiff) {
     // The real-app trial has no .git (owner's rule): diff against its clean copy instead.
     const changes = S.agentDiff(trialDir);
