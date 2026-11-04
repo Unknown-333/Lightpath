@@ -47,6 +47,37 @@
         "scripts/*.py (21), e.g. banned_phrase_scan.py, structure_scan.py, suggest.py",
         "evals/*.py (many)"
       ]
+    },
+    {
+      "name": "intent",
+      "repo": "https://github.com/ghaida/intent",
+      "commit": "1806110106a472bc588d7a8a2b7e3d39aee4a4b8",
+      "path": "(whole repo)",
+      "licence": "CC0-1.0 (repo licence, README)",
+      "scripts": [
+        "build.sh",
+        "release.sh",
+        "hooks/*.sh (2)",
+        "skills/present/references/build_deck.py",
+        "skills/wireframe/references/viewer.js",
+        "tests/present/test_build_deck.py",
+        "docs/ (an Astro site: 51 .astro, 5 .ts/.js)",
+        ".github/workflows/*.yml (2)"
+      ]
+    },
+    {
+      "name": "taste-skill",
+      "repo": "https://github.com/Leonxlnx/taste-skill",
+      "commit": "12af471f627f866411b4bd785b19646d3672784c",
+      "path": "(whole repo)",
+      "licence": "MIT (repo licence)",
+      "scripts": [
+        "install.sh",
+        "skills/taste-skill/scripts/*.mjs (10; assets.mjs and inspect.mjs make network calls)",
+        "skills/taste-skill/assets/*.js (3)",
+        "tests/*.mjs (4)",
+        ".github/workflows/check-skills.yml"
+      ]
     }
   ],
   "skipped": [
@@ -62,14 +93,6 @@
     },
     {
       "name": "Text Skill",
-      "why": "No single repo found."
-    },
-    {
-      "name": "test skill",
-      "why": "No single repo found."
-    },
-    {
-      "name": "intent",
       "why": "No single repo found."
     }
   ]
