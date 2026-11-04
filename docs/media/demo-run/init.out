@@ -1,0 +1,5 @@
+created   .kiro/settings/mcp.json
+created   lightpath.config.json
+created   AGENTS.md
+note      Kiro custom agents see AGENTS.md only with "resources": ["file://AGENTS.md"] in the agent file.
+Done. Restart Kiro so it loads the server, then run lightpath doctor.

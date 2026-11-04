@@ -1185,3 +1185,21 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: (a) Wait longer before opening (a fixed delay is a guess, and it slows every app). (b) Wait until `/` answers the same HTML twice in a row (the two HTML answers here are the same size; a hash compare would work for webpack but not for an app whose HTML changes on every request). (c) A `reload` option for run_action (gives the agent a step to spend, and a fresh agent doesn't know the page is broken). (d) Reload on any failed script at any time (would reset the app state in the middle of a person's work).
 - Test: `packages/browser/test/collector.integration.test.ts`, "reloads the first page when its own script failed to load (D-135)": a fixture server answers the first `/` with HTML that names a bundle which then answers 404, and every later `/` with a working page that renders a form. Before the fix the page has no field; after it, the field is there and run_action can fill it.
 - Revert: remove the reload loop in `BrowserCollector.start()` and the test; the first page opens once, as before.
+
+### D-136 The README GIF runs on a new example app, `examples/invoices`, recorded by script from a real agent run
+
+- Date: 2026-11-04 (written before the app and the scripts)
+- Decision: The owner asked for a good-looking, professional demo app for the GIF (2026-11-04 02:12 UTC). We build option (a): a new example, `examples/invoices` ("Harbor Billing", an invoices dashboard in React + Vite with an Express API), and don't use a third-party app (option b). The GIF shows one real kiro-cli run on a copy of it with one planted bug: the user reports it, the agent calls `run_action`, reads the trace and fixes the code.
+- Why (a), not (b):
+  - Control over what the viewer reads. A 10-20 s GIF has room for one bug, a handful of files and one trace. The real apps we ran have hundreds of files on one click (Actual: 263 frontend files, `docs/tested-apps.md`), so the trace in the GIF would be cut to a few lines anyway.
+  - No licence or credit risk, and nothing to vendor or download in CI. tududi needs webpack source maps turned on and compiles twice at start (D-135), which makes a demo fragile.
+  - `examples/shop` and `bench/` stay as they are: the frozen suite uses them (D-108, D-110).
+  - Honesty: the bug is planted, and the README says so under the GIF. A real app would also need a planted bug, since its real fixed bugs are public (D-110).
+- How:
+  - `examples/invoices`: React 19 + Vite on port 5174, Express 5 under `tsx watch` on 3002 (the shop keeps 3001/5173, so both can run). Plain CSS, no UI library. The data is made up.
+  - Its CI test, `scripts/e2e-invoices.mjs` (`pnpm e2e:invoices`, in the CI job "end-to-end"): the MCP server auto-starts `lightpath dev` from the app's config, `run_action` clicks "Mark as paid", and the test checks that the trace has the React file, the Express route and the service, and the request with its status.
+  - The bug: one line that clears the summary cache after a payment is left out in the run's copy (`examples/invoices/demo/record-run.mjs` removes it and checks that it did). The app in the repo has no bug.
+  - Recording, by script only: the agent's MCP calls act on Lightpath's own browser (the collector page, headless). Its frames come from a DevTools screencast of that page through Playwright, with the time each arrived. No OS screen capture, mouse or keyboard. The terminal side is drawn from the run's own stream-json transcript (each line timed as it arrived). `examples/invoices/demo/render-gif.mjs` puts both side by side and encodes the GIF in JavaScript (`gifenc`, a dev dependency of the example only), because no full ffmpeg is on this machine.
+  - The run's prompt, transcript, timings, kiro-cli version, model, credits and steps are committed in `docs/media/demo-run/`.
+- Rejected: (b) a real open-source app, for the reasons above; filming VS Code (the extension is low priority, owner 2026-11-01); a staged terminal typed by a script (the owner asked for a real run).
+- Revert: delete `examples/invoices`, `scripts/e2e-invoices.mjs`, its CI step and `docs/media/demo-run/`, and point the README at the old `docs/media/demo.gif`.

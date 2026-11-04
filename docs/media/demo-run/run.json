@@ -1,0 +1,41 @@
+{
+  "model": "claude-sonnet-5.5",
+  "effort": "medium",
+  "prompt": "I click \"Mark as paid\" on the Kestrel Labs invoice. The row turns Paid, but Outstanding at the top stays at $42,485.50. Please fix it. The app is already running; use Lightpath to see what the click runs.",
+  "viewport": {
+    "width": 1100,
+    "height": 760
+  },
+  "kiroCli": "kiro-cli 2.37.0",
+  "cpuStart": 16,
+  "args": [
+    "chat",
+    "--no-interactive",
+    "--trust-all-tools",
+    "--trust-workspace",
+    "--require-mcp-startup",
+    "--agent",
+    "demo",
+    "--model",
+    "claude-sonnet-5.5",
+    "--effort",
+    "medium",
+    "--output-format",
+    "stream-json",
+    "--wrap",
+    "never"
+  ],
+  "startedAt": 1793759256945,
+  "exitCode": 0,
+  "endedAt": 1793759280923,
+  "cpuEnd": 19.5,
+  "steps": 6,
+  "credits": 0.5358762775953565,
+  "tokensEst": 2869,
+  "tokensMethod": "transcript-chars/4",
+  "status": "success",
+  "wallMs": 23978,
+  "frames": 15,
+  "tools": ["Tool Load", "@lightpath/run_action", "Read File", "Read File", "Replace in File", "Grep Search"],
+  "fixLineBack": true
+}

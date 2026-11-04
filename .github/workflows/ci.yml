@@ -41,6 +41,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # GitHub's Ubuntu images ship Google Chrome, which the collector launches with channel "chrome".
       - run: pnpm e2e
+      # The README demo app (D-136): run_action auto-starts lightpath dev and traces "Mark as paid".
+      - run: node scripts/e2e-invoices.mjs
       - run: LIGHTPATH_BROWSER_TESTS=1 pnpm --filter @lightpath-dev/browser test
 
   editor:
