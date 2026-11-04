@@ -47,6 +47,8 @@ Each take writes a folder `~/lightpath-demo-takes/take-<time>/` with these files
 | `end.png`                                    | the page when kiro-cli exited                                                                                                                         |
 | `app.log`, `kiro-cli.stderr.log`, `init.out` | logs                                                                                                                                                  |
 
+Each take also leaves its tududi copy (about 1 GB with `node_modules`) in `~/lightpath-demo-takes/trials/demo-take-<number>/`. Its changes are already in `agent-fix.diff`, so you can delete it after the take (and `trials/_pristine/demo-take-<number>/`). Keep `trials/_cache/`, so the next take doesn't rebuild tududi.
+
 Raw recordings and take folders stay out of git. Only the chosen take's prompt and transcript are committed, next to the exports.
 
 ## Before recording (once per session)
