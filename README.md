@@ -10,9 +10,9 @@
 
 Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the code that click ran, in the browser and on the server, line by line. It reads V8's own coverage, so it shows what ran, not a guess from file names.
 
-![A user reports that Outstanding doesn't drop after "Mark as paid". The agent calls run_action, the trace shows getSummary returned early from a cache, and the agent adds the missing line](docs/media/agent-demo.gif)
+![In tududi, a user reports that "Plan your day" lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison](docs/media/tududi-demo.gif)
 
-<sub>A real kiro-cli run (claude-sonnet-5.5) on the example app `examples/invoices`, with one bug planted for the demo. Time is shortened; the run took 24 s. Transcript, frames and the scripts that made this GIF: [docs/media/demo-run](docs/media/demo-run).</sub>
+<sub>A real kiro-cli 2.37.0 run (claude-sonnet-5.5, 6 tool calls, 0.68 credits, 31 s) on [tududi](https://github.com/chrisvel/tududi), an open-source task manager (MIT, © Tududi Developers), run locally. The bug was planted for the demo; tududi doesn't have it. Time is shortened. The "after" picture is from the recording script, not the agent. Transcript, frames and scripts: [docs/media/tududi-run](docs/media/tududi-run).</sub>
 
 ## Quick start
 
@@ -32,7 +32,7 @@ Needs Node.js 22.12+ and Chrome or Edge.
 
 ## What your agent gets
 
-This is the agent's `run_action` call from the GIF, and the start of what came back (cut where it says `…`; the full answer is in [the transcript](docs/media/demo-run/transcript.jsonl)):
+This is an agent's `run_action` call on this repo's small example app, `examples/invoices`, from an earlier recorded run with a planted bug, and the start of what came back (cut where it says `…`; the full answer is in [the transcript](docs/media/demo-run/transcript.jsonl)). It is shown here instead of the GIF's tududi trace because it is short enough to read whole:
 
 ```
 run_action  target: button "Mark as paid"  within: "Kestrel Labs"

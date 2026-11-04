@@ -8,9 +8,9 @@
 
 Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the code that click ran, in the browser and on the server, line by line. It reads V8's own coverage, so it shows what ran, not a guess from file names.
 
-![A user reports that Outstanding doesn't drop after "Mark as paid". The agent calls run_action, the trace shows getSummary returned early from a cache, and the agent adds the missing line](https://raw.githubusercontent.com/Unknown-333/Lightpath/main/docs/media/agent-demo.gif)
+![In tududi, a user reports that "Plan your day" lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison](https://raw.githubusercontent.com/Unknown-333/Lightpath/main/docs/media/tududi-demo.gif)
 
-A real kiro-cli run (claude-sonnet-5.5) on the example app, with one bug planted for the demo. Time is shortened. [How it was made](https://github.com/Unknown-333/Lightpath/tree/main/docs/media/demo-run).
+A real kiro-cli 2.37.0 run (claude-sonnet-5.5, 6 tool calls, 0.68 credits) on [tududi](https://github.com/chrisvel/tududi), an open-source task manager (MIT, © Tududi Developers), run locally. The bug was planted for the demo; tududi doesn't have it. Time is shortened. [How it was made](https://github.com/Unknown-333/Lightpath/tree/main/docs/media/tududi-run).
 
 ## Quick start
 
