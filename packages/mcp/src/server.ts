@@ -16,6 +16,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { AUTO_START_WAIT_MS, AutoStarter, type AutoStartOptions, DEV_LOG } from './autostart.js';
 import { fitText, MAX_CHARS } from './budget.js';
+import { withCode } from './code.js';
 import { diffFunctions, hasFunctions } from './diff.js';
 import {
   describeActionResult,
@@ -86,8 +87,22 @@ async function appUrl(dirs: readonly string[]): Promise<string | undefined> {
   return undefined;
 }
 
-/** run_request (design section 4A, D-125): one request on loopback, then its backend trace. */
-async function runRequest(options: McpOptions, found: Live, input: RunRequestInput): Promise<string> {
+/** A trace to answer with, its workspace roots, and its text within a given cap (D-145). */
+interface TraceAnswer {
+  trace: Trace;
+  roots: readonly string[];
+  render: (max: number) => string;
+}
+
+/**
+ * run_request (design section 4A, D-125): one request on loopback, then its backend trace. A
+ * string when there is no trace to show.
+ */
+async function runRequest(
+  options: McpOptions,
+  found: Live,
+  input: RunRequestInput,
+): Promise<string | TraceAnswer> {
   const method = input.method ?? 'GET';
   const target = await resolveRequestTarget(
     input.url,
@@ -130,12 +145,12 @@ async function runRequest(options: McpOptions, found: Live, input: RunRequestInp
           (note ? `\n${note}` : '')
         );
       }
-      return describeRequestResult(
-        method,
-        path,
-        { ...sent, redirect: loopbackLocation(sent.location, target.url) },
+      const shown = { ...sent, redirect: loopbackLocation(sent.location, target.url) };
+      return {
         trace,
-      );
+        roots: client.workspaceRoots,
+        render: (max) => describeRequestResult(method, path, shown, trace, max),
+      };
     } finally {
       off();
     }
@@ -154,9 +169,20 @@ const VERSION = (
  * cap again, since a `[redacted]` can be longer than what it hides.
  */
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(redact(t)) }] });
-/** Source slices only: the user's own files are never redacted (design section 9). */
-const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
+/** Source slices and trace answers with code: their source lines are redacted by `redactSource` (D-145). */
+const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(t) }] });
 const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
+/** Opt-in (D-146): the trace answer adds the executed source lines (D-145). */
+const includeCodeSchema = z.boolean().optional().describe('Also return the code that ran');
+/**
+ * Trace ids and `page` are checked in the handlers, not in the schema (D-146, as D-140 did for
+ * run_action): the id pattern and zod's safe-integer bound cost 115 characters of tools/list.
+ */
+const idSchema = z.string();
+const badIds = (...ids: (string | undefined)[]) =>
+  ids.filter((id): id is string => id !== undefined && !traceIdSchema.safeParse(id).success);
+const badIdText = (tool: string, ids: string[]) =>
+  `${tool} did nothing: ${ids.map((id) => JSON.stringify(id)).join(', ')} is not a trace id like "t_abc123def456". list_traces shows them.`;
 
 /**
  * Builds the MCP server (docs/ARCHITECTURE.md section 9.3). Every call reads the discovery file
@@ -188,12 +214,40 @@ export function createMcpServer(options: McpOptions): McpServer {
     note = undefined;
     return text(n ? `${n}\n${t}` : t);
   };
-  /** A source slice: the start line, redacted like any other, then the user's lines as they are. */
+  /** A source slice: the start line, redacted like any other, then the slice (redacted by sliceTrace). */
   const sourceReply = (t: string) => {
     const n = note;
     note = undefined;
     return sourceText(n ? `${redact(n)}\n${t}` : t);
   };
+  /**
+   * A trace answer: the trace text, then `tail` (a compareTo diff), within 16,000. With `code`
+   * (`includeCode`, D-145, D-146) the auto-start line, the trace text redacted like any runtime
+   * text, the code that ran (redacted as source), then the diff. Without it, the 0.1.0 answer.
+   */
+  const traceReply = async (
+    answer: TraceAnswer,
+    { code = false, fill = [], tail }: { code?: boolean; fill?: readonly string[]; tail?: string } = {},
+  ) => {
+    if (!code)
+      return reply(
+        tail ? `${answer.render(MAX_CHARS - tail.length - 2)}\n\n${tail}` : answer.render(MAX_CHARS),
+      );
+    const n = note;
+    note = undefined;
+    const head = n ? `${redact(n)}\n` : '';
+    const end = tail ? `\n\n${fitText(redact(tail), MAX_DIFF_CHARS)}` : '';
+    const body = await withCode(
+      answer.trace,
+      workspaceReader(answer.roots),
+      (m) => fitText(redact(answer.render(m)), m, answer.trace.id),
+      MAX_CHARS - head.length - end.length,
+      fill,
+    );
+    return sourceText(`${head}${body}${end}`);
+  };
+  /** The daemon's workspace roots, or none when they can't be read (the answer then has no code). */
+  const rootsNow = () => withClient(async (c) => c.workspaceRoots).catch(() => [] as readonly string[]);
 
   const withClient = async <T>(fn: (c: DaemonClient) => Promise<T>): Promise<T> => {
     const { info } = await ensure();
@@ -214,9 +268,10 @@ export function createMcpServer(options: McpOptions): McpServer {
         within: withinSchema.optional(),
         // One key instead of `action` plus `key` (D-140); the daemon still takes both.
         press: z.enum(['Enter', 'Space']).optional().describe('Press this key instead of clicking'),
-        // An integer from 500 to 30,000, checked by the daemon (D-140). Not `.int()` here: zod writes
-        // the whole safe-integer range into the schema for it, 60 characters for nothing.
-        timeoutMs: z.number().optional().describe('Settle cap, default 5000'),
+        // An integer from 500 to 30,000 (the settle cap, default 5,000), checked by the daemon
+        // (D-140). Not `.int()` here: zod writes the whole safe-integer range into the schema for it,
+        // 60 characters for nothing. No description, to make room for includeCode (D-146).
+        timeoutMs: z.number().optional(),
         fill: z
           .array(
             // Same forms as target and within. Bounds and descriptions aren't repeated here, to keep
@@ -234,9 +289,10 @@ export function createMcpServer(options: McpOptions): McpServer {
           .describe('Repeat it; one trace, counts added'),
         // A trace id or "last", checked below (a union would double the schema text, D-144).
         compareTo: z.string().optional().describe('Trace id, or "last": adds the diff'),
+        includeCode: includeCodeSchema,
       },
     },
-    async ({ press, times, compareTo, ...rest }) => {
+    async ({ press, times, compareTo, includeCode, ...rest }) => {
       const input = { ...rest, ...(press ? { action: 'press' as const, key: press } : {}) };
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
@@ -283,7 +339,13 @@ export function createMcpServer(options: McpOptions): McpServer {
         }
         if (runs > 1) notes.unshift(repeatedLine(done, runs));
         const shown = runs > 1 ? repeated(done) : result;
-        if (compareTo === undefined) return reply(describeActionResult(input, shown, notes));
+        const answer: TraceAnswer = {
+          trace: shown.trace,
+          roots: includeCode ? await rootsNow() : [],
+          render: (max) => describeActionResult(input, shown, notes, max),
+        };
+        const code = includeCode === true;
+        if (compareTo === undefined) return await traceReply(answer, { code, fill: values });
         // `compareTo` (D-144): the last run against an earlier trace, as diff_traces would compare them.
         const last = (done.at(-1) as OkAction).trace;
         const ids = new Set(done.map((r) => r.trace.id));
@@ -300,7 +362,7 @@ export function createMcpServer(options: McpOptions): McpServer {
               ? `compareTo: no trace ${before.id}; it may have been evicted. Nothing to compare.`
               : `compareTo: no earlier trace of "${last.label}" to compare with; this is the first.`,
           );
-          return reply(describeActionResult(input, shown, notes));
+          return await traceReply(answer, { code, fill: values });
         }
         const diff = fitText(
           hasFunctions(before.trace) && hasFunctions(last)
@@ -309,8 +371,8 @@ export function createMcpServer(options: McpOptions): McpServer {
           MAX_DIFF_CHARS,
         );
         notes.push(`compareTo: ${before.trace.id}; what changed against it is at the end.`);
-        const text = describeActionResult(input, shown, notes, MAX_CHARS - diff.length - 2);
-        return reply(`${text}\n\n${diff}`);
+        // The trace, its code, then the diff (D-144, D-145).
+        return await traceReply(answer, { code, fill: values, tail: diff });
       } catch (err) {
         return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
@@ -336,7 +398,8 @@ export function createMcpServer(options: McpOptions): McpServer {
       } catch (err) {
         return reply(`${(err as Error).message} Nothing was sent.`);
       }
-      return reply(await runRequest(options, live, input));
+      const sent = await runRequest(options, live, input);
+      return typeof sent === 'string' ? reply(sent) : await traceReply(sent);
     },
   );
 
@@ -347,11 +410,13 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: { action: z.string().min(1).describe('Words from the button or link label') },
     },
     async ({ action }) => {
-      const trace = await withClient(async (c) => {
+      const found = await withClient(async (c) => {
         const [match] = await c.listTraces({ label: action, limit: 1 });
-        return match ? c.getTrace(match.id) : null;
+        return { trace: match ? await c.getTrace(match.id) : null, roots: c.workspaceRoots };
       });
-      return reply(trace ? summarizeTrace(trace) : noRecordedAction(action));
+      const { trace, roots } = found;
+      if (!trace) return reply(noRecordedAction(action));
+      return await traceReply({ trace, roots, render: (max) => summarizeTrace(trace, [], max) });
     },
   );
 
@@ -360,22 +425,30 @@ export function createMcpServer(options: McpOptions): McpServer {
     {
       description: DESCRIPTIONS.get_trace,
       inputSchema: {
-        traceId: traceIdSchema,
+        traceId: idSchema,
         file: z.string().min(1).optional(),
         function: z.string().min(1).optional(),
-        page: z.number().int().min(1).optional(),
+        page: z.number().min(1).optional(),
+        includeCode: includeCodeSchema,
       },
     },
-    async ({ traceId, file, function: fn, page }) => {
+    async ({ traceId, file, function: fn, page, includeCode }) => {
+      const bad = badIds(traceId);
+      if (bad.length) return { ...reply(badIdText('get_trace', bad)), isError: true };
+      if (page !== undefined && !Number.isInteger(page))
+        return { ...reply('get_trace did nothing: page must be a whole number, 1 or more.'), isError: true };
       const found = await withClient(async (c) => ({
         trace: await c.getTrace(traceId),
         roots: c.workspaceRoots,
       }));
-      if (!found.trace) return reply(`No trace ${traceId}; it may have been evicted.`);
-      if (file === undefined && fn === undefined) return reply(summarizeTrace(found.trace));
-      return sourceReply(
-        await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)),
-      );
+      const { trace, roots } = found;
+      if (!trace) return reply(`No trace ${traceId}; it may have been evicted.`);
+      if (file === undefined && fn === undefined)
+        return await traceReply(
+          { trace, roots, render: (max) => summarizeTrace(trace, [], max) },
+          { code: includeCode === true },
+        );
+      return sourceReply(await sliceTrace(trace, { file, function: fn, page }, workspaceReader(roots)));
     },
   );
 
@@ -402,9 +475,11 @@ export function createMcpServer(options: McpOptions): McpServer {
     'diff_traces',
     {
       description: DESCRIPTIONS.diff_traces,
-      inputSchema: { a: traceIdSchema, b: traceIdSchema },
+      inputSchema: { a: idSchema, b: idSchema },
     },
     async ({ a, b }) => {
+      const bad = badIds(a, b);
+      if (bad.length) return { ...reply(badIdText('diff_traces', bad)), isError: true };
       const [ta, tb] = await withClient((c) => Promise.all([c.getTrace(a), c.getTrace(b)]));
       if (!ta || !tb) return reply(`Trace not found: ${[!ta && a, !tb && b].filter(Boolean).join(', ')}`);
       // Traces from a daemon before build 2 have no function list: compare lines.
