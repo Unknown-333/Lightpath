@@ -24,7 +24,8 @@
     "test:vscode": "pnpm build && pnpm bundle && pnpm --filter lightpath-vscode test:editor",
     "lightpath": "node packages/cli/dist/bin.js",
     "shop": "pnpm --filter shop dev",
-    "brand:build": "node brand/build.mjs"
+    "brand:build": "node brand/build.mjs",
+    "brand:logo": "node brand/logo/build.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
