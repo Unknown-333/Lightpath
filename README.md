@@ -116,23 +116,6 @@ No code changes to your app. The daemon listens on `127.0.0.1` and needs a token
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PROTOCOL.md](docs/PROTOCOL.md), [docs/adr](docs/adr).
 
-## Benchmark
-
-**Lightpath did not help the agent fix more bugs, and it cost more.** We ran kiro-cli 2.37.0 (`claude-sonnet-5.5`) on seeded bugs in two apps, with and without Lightpath. Without it, the agent already fixed every visible bug. With it, the agent used more steps and more credits in every set.
-
-| Set                     | Fixed, without | Fixed, with | Credits per run, without → with | Steps per run, without → with |
-| ----------------------- | -------------- | ----------- | ------------------------------- | ----------------------------- |
-| Shop, 7 bugs            | 21 of 21       | 20 of 21 *  | 0.317 → 0.493                   | 5.00 → 7.10                   |
-| tududi, 3 bugs          | 15 of 15       | 15 of 15    | 0.980 → 1.329                   | 9.87 → 13.47                  |
-| Shop, 3 held-out bugs   | 9 of 9         | 9 of 9      | 0.339 → 0.434                   | 5.67 → 6.56                   |
-| tududi, 2 held-out bugs | 9 of 10        | 6 of 10 *   | 1.116 → 1.333                   | 12.50 → 13.44                 |
-
-\* A flaw in the scoring's void check counts one shop run and one tududi run against `with`; without it, 21 of 21 and 7 of 10. The flaw is logged, not fixed.
-
-Read it with these limits: one agent and one model; [tududi](https://github.com/chrisvel/tududi) has only 3 visible bugs, and all 5 of its fixes are public, so the model may have seen them; 3 runs per bug on the shop, 5 on tududi. With Lightpath set up, the agent called it by itself in 31 of 53 valid runs.
-
-So the claim is only what was measured: your agent can see the exact lines one click ran, browser and server. Methods, every run and the variance: [bench/agent-suite/results/2026-11-03-full-benchmark.md](bench/agent-suite/results/2026-11-03-full-benchmark.md).
-
 ## Compared with other tools
 
 As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend ([docs/research/competitors.md](docs/research/competitors.md), read 2026-11-01). Other tools are better at other things:
