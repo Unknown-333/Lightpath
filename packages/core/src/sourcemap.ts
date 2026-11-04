@@ -28,7 +28,7 @@ export function mapToOriginal(
   const tracer = newTraceMap(map, mapUrl);
   const mask = generated.mask;
   const text = generated.source;
-  /** Counts from mappings that start with code, and from mappings with only punctuation (D-149). */
+  /** Counts from mappings that start with code, and from mappings with only punctuation (D-150). */
   const code: OriginalCounts = new Map();
   const punct: OriginalCounts = new Map();
   const keep = (into: OriginalCounts, source: string, line: number, count: number) => {
@@ -57,9 +57,9 @@ export function mapToOriginal(
     const at = codeAt ?? punctAt;
     if (at === undefined) return; // only whitespace or comments: nothing ran here
     let count = countAt(segments, at);
-    if (count === undefined || count < 0) return; // no data, or unknown (D-150)
+    if (count === undefined || count < 0) return; // no data, or unknown (D-151)
     if (codeAt !== undefined && isJumpOnly(text, mask, codeAt, stop)) {
-      // V8 ends a `case` clause's range where its `break` starts (D-149).
+      // V8 ends a `case` clause's range where its `break` starts (D-150).
       const before = previousCode(mask, codeAt);
       const prior = before === undefined ? undefined : countAt(segments, before);
       if (prior !== undefined && prior >= 0 && prior < count) count = prior;

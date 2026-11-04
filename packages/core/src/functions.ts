@@ -26,7 +26,7 @@ export interface FunctionResult {
   /** Lines inside the function with count 0 in this delta, sorted. */
   notRun: number[];
   notRunSpans: NotRunSpan[];
-  /** Lines with no count because a call threw on or after `threwAfter` (D-150). */
+  /** Lines with no count because a call threw on or after `threwAfter` (D-151). */
   unknown: { lines: number[]; threwAfter: number }[];
 }
 
@@ -56,7 +56,7 @@ export function mapFunctions(
   input: ScriptInput,
   files: ReadonlyMap<string, LineCounts>,
   ctx: ResolveContext,
-  /** `mapScript`'s `unknown` for the same input (D-150). */
+  /** `mapScript`'s `unknown` for the same input (D-151). */
   unknownLines?: ReadonlyMap<string, ReadonlyMap<number, number>>,
 ): FunctionResult[] {
   const source = input.source;

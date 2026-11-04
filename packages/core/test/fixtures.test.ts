@@ -108,7 +108,7 @@ const cases: Case[] = [
     // The shop's Cart.tsx as Vite served it, during one Checkout click. Cart rendered 4 times: two
     // state updates (busy, then the result) under StrictMode, which renders twice. The subtotal callback
     // (17-18) ran only in the 2 renders before onCheckedOut emptied the cart. checkout() ran once; its
-    // catch body (29) didn't, and neither did its `catch (err)` (28, D-149); `finally` (30) ran.
+    // catch body (29) didn't, and neither did its `catch (err)` (28, D-150); `finally` (30) ran.
     // Line 42 is lit by `onChange={...}` itself; the arrow's body never ran but shares the line.
     // Line 45 is JSX text with no code. Type-only lines (5-9) and imports have no data.
     name: 'vite-jsx',

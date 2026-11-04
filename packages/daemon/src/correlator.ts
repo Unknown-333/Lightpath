@@ -325,7 +325,7 @@ export class Correlator {
     else delete hit.notRun;
     if (spans.length) hit.notRunSpans = spans;
     else delete hit.notRunSpans;
-    // Unknown lines (D-150) add up; a line another delta ran is shown as run by its file.
+    // Unknown lines (D-151) add up; a line another delta ran is shown as run by its file.
     if (fn.unknown.length) {
       const merged = new Map((hit.unknown ?? []).map((u) => [u.threwAfter, new Set(u.lines)]));
       for (const u of fn.unknown) {

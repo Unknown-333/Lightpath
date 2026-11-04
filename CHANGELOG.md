@@ -5,7 +5,7 @@ All notable changes to Lightpath are listed here. Versions follow [Semantic Vers
 ## [0.1.2] - TBD (not published yet)
 
 - Fix: resolve false-positive line attribution in un-taken else-if/switch branches and post-throw statements.
-- Decisions: D-149 (the line rule), D-150 (lines after a call that threw are "unknown"), D-151 (which packages move to 0.1.2).
+- Decisions: D-150 (the line rule), D-151 (lines after a call that threw are "unknown"), D-152 (which packages move to 0.1.2).
 
 ## [0.1.1] - 2026-11-04
 

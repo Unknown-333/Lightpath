@@ -41,13 +41,13 @@ export function compareScenario(trace, scenario, all, options = {}) {
           const around = (trace.functions ?? []).filter(
             (f) => f.path === path && f.startLine <= m.line && m.line <= f.endLine,
           );
-          // Shown as unknown (a call threw before it, D-150) is not shown as run: that is allowed.
+          // Shown as unknown (a call threw before it, D-151) is not shown as run: that is allowed.
           const unknown = around.some((f) => (f.unknown ?? []).some((u) => u.lines.includes(m.line)));
           if (around.length > 0 && !unknown && !around.some((f) => (f.notRun ?? []).includes(m.line)))
             add(path, m.line, 'not-run-unmarked', 'listed as not run', 'not listed', m.text);
         }
       } else if (got !== m.expect) {
-        // Unknown (D-150) is no claim: it loses a count but never says ran or not run.
+        // Unknown (D-151) is no claim: it loses a count but never says ran or not run.
         const unknown = (trace.functions ?? []).some(
           (f) => f.path === path && (f.unknown ?? []).some((u) => u.lines.includes(m.line)),
         );

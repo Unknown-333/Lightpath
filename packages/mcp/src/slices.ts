@@ -201,7 +201,7 @@ function outermost(path: string, fns: readonly FunctionHit[], trace: Trace): Uni
 /** The printed lines of one unit. */
 function unitLines(u: Unit, src: readonly string[], lit: ReadonlySet<number>): string[] {
   const notRun = new Set(u.fns.flatMap((f) => f.notRun ?? []));
-  // Lines with no count: a call threw before them (D-150). A line another phase ran shows as run.
+  // Lines with no count: a call threw before them (D-151). A line another phase ran shows as run.
   const unknown = new Map<number, number>();
   for (const f of u.fns)
     for (const x of f.unknown ?? []) for (const l of x.lines) if (!lit.has(l)) unknown.set(l, x.threwAfter);
@@ -264,7 +264,7 @@ function unitLines(u: Unit, src: readonly string[], lit: ReadonlySet<number>): s
   return out;
 }
 
-/** `// unknown: lines 55-56 (a call threw on or after line 54)` (D-150). */
+/** `// unknown: lines 55-56 (a call threw on or after line 54)` (D-151). */
 const unknownMarker = (from: number, to: number, at: number) =>
   `      // unknown: ${from === to ? `line ${from}` : `lines ${from}-${to}`} (a call threw on or after line ${at})`;
 

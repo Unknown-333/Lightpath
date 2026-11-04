@@ -28,7 +28,7 @@ jobs:
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      # The trace accuracy audit (scripts/accuracy, D-149, D-150): hand-written expected lines vs Lightpath.
+      # The trace accuracy audit (scripts/accuracy, D-150, D-151): hand-written expected lines vs Lightpath.
       - run: node scripts/accuracy/run.mjs
 
   e2e:

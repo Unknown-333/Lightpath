@@ -2,11 +2,11 @@ import type { FunctionCoverage } from '@lightpath-dev/protocol';
 import { CODE, codeMask, PUNCT } from './code-mask.js';
 import { countAt, type Segment } from './flatten.js';
 
-/** A segment count meaning "unknown": the line shows neither as run nor as not run (D-150). */
+/** A segment count meaning "unknown": the line shows neither as run nor as not run (D-151). */
 export const UNKNOWN = -1;
 
 /**
- * Marks code after a call that threw as unknown (D-150).
+ * Marks code after a call that threw as unknown (D-151).
  *
  * V8 keeps no counter after a call that throws: the rest of the block keeps the block's count, so
  * `const doubled = qty * 2` after a `mustBePositive(n)` that threw reads as run. When the `catch` of

@@ -1,5 +1,5 @@
 /**
- * Character classes of a script, for the line rule (D-149): space or comment, punctuation, or code.
+ * Character classes of a script, for the line rule (D-150): space or comment, punctuation, or code.
  *
  * A line takes its count from its code characters. Brackets, braces, parentheses, `;` and `,` count
  * only on a line with nothing else, and comments never count: a `;` or `)` closing a whole statement,
