@@ -158,7 +158,9 @@ if (!dry) run.kiroCli = execFileSync(KIRO, ['--version'], { encoding: 'utf8' }).
 // 1. The copy with the bug planted, and Lightpath set up for Kiro.
 log(`take folder: ${out}`);
 const template = tududi.prepareTemplate((s) => log(s));
-const trial = tududi.createTrial({ id: `demo-take-${Date.now()}`, bugDir: here, template });
+// The planted bug is PR #56's scripts/demo-gif/bug.patch, so both demos plant the same bytes.
+const bugDir = join(repo, 'scripts', 'demo-gif');
+const trial = tududi.createTrial({ id: `demo-take-${Date.now()}`, bugDir, template });
 const rankingPath = join(trial, 'backend', 'modules', 'daily-plan', 'ranking.js');
 if (readFileSync(rankingPath, 'utf8').includes(FIX_LINE)) throw new Error('bug.patch did not apply');
 const cliBin = join(repo, 'packages', 'cli', 'dist', 'bin.js');
@@ -529,7 +531,7 @@ try {
       let text;
       if (step.fix) {
         const restarts = run.apiRestarts.length;
-        tududi.applyPatch(trial, join(here, 'bug.patch'), { reverse: true });
+        tududi.applyPatch(trial, join(bugDir, 'bug.patch'), { reverse: true });
         const until = Date.now() + 30_000;
         while (run.apiRestarts.length === restarts && Date.now() < until) await sleep(200);
         while (!(await up(`${API}/api/version`)) && Date.now() < until) await sleep(300);
