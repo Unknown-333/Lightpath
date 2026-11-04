@@ -50,7 +50,7 @@ A run is **void** when:
 - the agent hit the 15-minute limit, or
 - the transcript shows the agent reading files outside its trial folder (a tool call that names a path outside it, or a shell command with an absolute path outside it or a `..` that leaves it). The check is conservative; each hit is listed in the run's `outsidePaths` for review.
 
-  Amended by D-149 (2026-11-04, after results existed; both numbers are in `results/2026-11-04-rescore-d149.md`): a path in URL form (`/c:/x`, `file:///c:/x`) is read as the drive path it names, and a `..` path inside a shell command's text counts only if the place it resolves to exists on disk when the run is scored, so a module path written into a file (`require('../utils')`) is not a read. Each hit these two rules drop is kept in the run's `ignoredOutsidePaths` for review. The code is `lib/outside.mjs`.
+  Amended by D-147 (2026-11-04, after results existed; both numbers are in `results/2026-11-04-rescore-d147.md`): a path in URL form (`/c:/x`, `file:///c:/x`) is read as the drive path it names, and a `..` path inside a shell command's text counts only if the place it resolves to exists on disk when the run is scored, so a module path written into a file (`require('../utils')`) is not a read. Each hit these two rules drop is kept in the run's `ignoredOutsidePaths` for review. The code is `lib/outside.mjs`.
 
 A void run is rerun once. The number of void runs is reported per condition. A rerun that is void again is reported as void and counted as not correct.
 

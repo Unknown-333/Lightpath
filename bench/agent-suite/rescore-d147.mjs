@@ -1,10 +1,10 @@
-// Re-scores the 2026-11-01 and 2026-11-03 results under D-149's void check, from saved data only.
+// Re-scores the 2026-11-01 and 2026-11-03 results under D-147's void check, from saved data only.
 // Runs no agent, app or browser, and edits no result file.
 //
-//   node bench/agent-suite/rescore-d149.mjs [--json <out.json>]
+//   node bench/agent-suite/rescore-d147.mjs [--json <out.json>]
 //
 // For each run it re-parses the saved transcript, re-runs the D-108 rule and requires it to give
-// the stored `outsidePaths` exactly (so the re-parse matches the run), then applies the D-149 rule.
+// the stored `outsidePaths` exactly (so the re-parse matches the run), then applies the D-147 rule.
 // Slots: a bug has 3 planned runs (shop) or 5 (tududi). A void run is rerun once (SCORING.md); a
 // run past the planned count is the rerun of that bug's earliest void run without one. Under the
 // new rule, a slot whose first run is no longer void counts that run, and its rerun is listed as

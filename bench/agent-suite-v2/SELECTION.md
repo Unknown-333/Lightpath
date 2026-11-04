@@ -1,6 +1,6 @@
 # How the suite v2 bugs are picked
 
-Written and committed before any candidate was looked at: no tududi commit after the v1 pin, no issue, and no line of tududi or `examples/invoices` code had been read for this suite when this rule was saved. What was known: `SPEC.md`, the v1 suites and their selection (`../agent-suite/realapp/SELECTION.md`), and the file names in `examples/invoices`. No with-Lightpath result was read while designing (the D-149 re-score read only the stored pass/void counts).
+Written and committed before any candidate was looked at: no tududi commit after the v1 pin, no issue, and no line of tududi or `examples/invoices` code had been read for this suite when this rule was saved. What was known: `SPEC.md`, the v1 suites and their selection (`../agent-suite/realapp/SELECTION.md`), and the file names in `examples/invoices`. No with-Lightpath result was read while designing (the D-147 re-score read only the stored pass/void counts).
 
 ## Size and where the bugs go
 
