@@ -4,7 +4,7 @@ A checklist for the owner. Agents prepare a release; only the owner publishes. K
 
 Commands are PowerShell on Windows. If `pnpm` isn't on `PATH`, run `corepack enable` once, or start each shell with `$env:PATH = "$env:LOCALAPPDATA\corepack-shims;$env:PATH"`.
 
-Steps 1 to 7 are how 0.0.1 went out. For 0.0.2, follow [Releasing 0.0.2](#releasing-002). For 0.1.0, follow [Releasing 0.1.0](#releasing-010) at the end.
+Steps 1 to 7 are how 0.0.1 went out. For 0.0.2, follow [Releasing 0.0.2](#releasing-002). For 0.1.0, follow [Releasing 0.1.0](#releasing-010). For 0.1.1, follow [Releasing 0.1.1](#releasing-011) at the end.
 
 ## What 0.0.1 publishes
 
@@ -278,3 +278,78 @@ git push origin v0.1.0
 Change the `0.1.0` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR. Then the MCP Registry entry can go up ([docs/launch/awesome-mcp.md](launch/awesome-mcp.md)): it reads `mcpName` from the published cli.
 
 What the 0.1.0 checks found: see "Install test" in the release prep PR. The 7 packed tarballs, installed together into a fresh folder outside the repo, print `lightpath/0.1.0`, and `lightpath init --agent kiro` and `lightpath doctor` run there.
+
+## Releasing 0.1.1
+
+0.1.1 publishes 3 npm packages: `@lightpath-dev/browser`, `@lightpath-dev/mcp` and `@lightpath-dev/cli`. The other 4 stay at 0.1.0, because their tarballs are byte for byte the same as 0.1.0's (D-107, D-148).
+
+| Moves to 0.1.1           | Why                                                                                              |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `@lightpath-dev/browser` | Fix 1 (sign-in pages, D-139) and the `press` key (D-140) in `dist/target.js`                     |
+| `@lightpath-dev/mcp`     | Fixes 2 to 6 (D-140 to D-144), `includeCode` and the source redaction fix (D-145, D-146)         |
+| `@lightpath-dev/cli`     | The `lightpath init` fix-check line (D-144), the npm page README, and it needs browser/mcp 0.1.1 |
+
+| Stays                                                       | Why                                                                                                                                    |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `@lightpath-dev/protocol`, `core`, `node-agent`, `daemon`   | Packed from `main`, each tarball is identical to the 0.1.0 one on npm                                                                  |
+| VS Code extension `lightpath-dev.lightpath-vscode` at 0.0.1 | Not republished (D-137). Its icon (`extensions/vscode/media/icon.png`) changed in the repo only, so the Marketplace keeps the old look |
+| `lightpath-agent` (PyPI) at 0.0.1                           | Nothing in `agents/python` changed                                                                                                     |
+
+Publishing must run in a real interactive terminal: a PowerShell window you type in. npm asks for the security key on every publish. A non-interactive shell (an agent, a script, CI) can't answer it and fails with `ERR_PNPM_OTP_NON_INTERACTIVE` or `EOTP`, as happened on the first try of 0.1.0.
+
+### 1. Sync the clean clone
+
+The release PR is merged into `main` and every CI check on `main` is green. Then, in a new PowerShell window:
+
+```powershell
+$env:PATH = "$env:LOCALAPPDATA\corepack-shims;$env:PATH"
+cd $HOME\Desktop\lightpath-publish
+git switch main
+git pull
+git status                     # must say "nothing to commit, working tree clean"
+pnpm install --frozen-lockfile
+pnpm check
+pnpm build
+npm whoami                     # must print unknown-333; if not, run npm login first
+pnpm -r --filter @lightpath-dev/browser --filter @lightpath-dev/mcp --filter @lightpath-dev/cli publish --dry-run   # shows 3 tarballs, sends nothing
+```
+
+`pnpm bundle` isn't needed: it builds only the VS Code extension, which isn't published.
+
+The dry run must list exactly these 3, each at `0.1.1`, and nothing else: `@lightpath-dev/browser`, `@lightpath-dev/mcp`, `@lightpath-dev/cli`.
+
+### 2. Publish to npm, in dependency order
+
+browser and mcp first, cli last: the cli's `package.json` names browser 0.1.1 and mcp 0.1.1, so npm must serve both before anyone installs cli 0.1.1. Have the security key ready for every line.
+
+```powershell
+pnpm --filter @lightpath-dev/browser publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/mcp publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/cli publish --publish-wait-timeout 600000
+```
+
+If one fails, fix the cause and go on with the ones not yet published. npm accepts each version once; never publish a version twice.
+
+### 3. Check what npm serves
+
+```powershell
+npm view @lightpath-dev/cli@0.1.1 dependencies   # browser 0.1.1, mcp 0.1.1; daemon, node-agent, protocol 0.1.0
+npm view @lightpath-dev/browser@0.1.1 dependencies   # core 0.1.0, protocol 0.1.0
+npm view @lightpath-dev/mcp@0.1.1 dependencies   # protocol 0.1.0
+npm view @lightpath-dev/cli@0.1.1 mcpName        # io.github.Unknown-333/lightpath
+cd $env:TEMP; npx -y @lightpath-dev/cli@0.1.1 --version   # lightpath/0.1.1 ...
+```
+
+### 4. Tag the release
+
+```powershell
+cd $HOME\Desktop\lightpath-publish
+git tag -a v0.1.1 -m "Lightpath 0.1.1"
+git push origin v0.1.1
+```
+
+### 5. After publishing
+
+Change the `0.1.1` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR.
+
+What the 0.1.1 checks found: see "Install test" in the release prep PR. The 7 tarballs packed from the release branch (3 at 0.1.1, 4 at 0.1.0), installed together into a fresh folder outside the repo, print `lightpath/0.1.1`. `lightpath init --agent kiro` writes `@lightpath-dev/cli@0.1.1` into `.kiro/settings/mcp.json`, `lightpath doctor` passes, and `tools/list` over stdio shows `includeCode` in `run_action`.

@@ -1,6 +1,12 @@
 // Turns brand prints (brand/src) into inline SVG for the site: two ink layers, the pink layer
 // overprinting (multiply) and shifted for misregistration, tints as halftone dot patterns, and
 // grain from an feTurbulence filter on the large flat areas only. Text never gets any of this.
+
+import { CONCEPTS } from '../../brand/logo/src/concepts.mjs';
+import { pathData } from '../../brand/logo/src/geom.mjs';
+import { horizontal } from '../../brand/logo/src/lockup.mjs';
+import { RECOMMENDED } from '../../brand/logo/src/notes.mjs';
+import { loadFont } from '../../brand/logo/src/ttf.mjs';
 import { drawA, SCENE_A } from '../../brand/src/concepts.mjs';
 import { GLYPHS, measure } from '../../brand/src/font.mjs';
 import { INDIGO, INDIGO_TINT, PAPER, PINK, PINK_TINT } from '../../brand/src/palette.mjs';
@@ -62,6 +68,7 @@ export function defs() {
 <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.988 0 0 0 0 0.961 0 0 0 0 0.925 0 0 0 9 -5.6" result="dots"/>
 <feComposite in="dots" in2="SourceAlpha" operator="in"/>
 </filter>
+${logoSymbol()}
 </defs></svg>`;
 }
 
@@ -143,23 +150,32 @@ export function pixelWord(word, cls = 'px-word') {
   return `<svg class="${cls}" viewBox="0 0 ${w} 9" style="--w:${w}" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path d="${d}"/></svg>`;
 }
 
-/** The wordmark: indigo pixel letters, the dot of the i lit pink (as in the brand art). */
-export function wordmarkSvg() {
-  const word = 'Lightpath';
-  const w = measure(word);
-  let d = '';
-  let cx = 0;
-  for (const ch of word) {
-    const g = GLYPHS[ch];
-    g.forEach((row, j) => {
-      [...row].forEach((v, i) => {
-        // The i's dot (column 6, row 0) is drawn separately in pink.
-        if (v === '#' && !(cx === 6 && j === 0)) d += `M${cx + i} ${j}h1v1h-1z`;
-      });
-    });
-    cx += g[0].length + 1;
-  }
-  return `<svg class="wordmark" viewBox="0 0 ${w} 9" style="--w:${w}" aria-hidden="true" focusable="false" shape-rendering="crispEdges"><path class="wm-ink" d="${d}"/><rect class="wm-dot" x="6" y="0" width="1" height="1"/></svg>`;
+// ---- The official logo (brand/logo), clean: no print effects ----------------------------------
+
+/**
+ * The horizontal lockup from brand/logo, the same outlines as its SVG files, as one <symbol>.
+ * Its two inks read custom properties, so each <use> picks its colours in CSS (indigo and pink on
+ * paper in the top bar, paper and pink on the indigo footer).
+ */
+function lockup() {
+  const font = loadFont(new URL('../../brand/logo/fonts/IBMPlexSans-SemiBold.ttf', import.meta.url));
+  const geo = CONCEPTS.find((k) => k.id === RECOMMENDED).draw();
+  const art = horizontal(font, geo);
+  const ink = (role) =>
+    art.layers.filter((l) => (role === 'pink') === (l.role === 'pink')).flatMap((l) => l.segs);
+  const r = (v) => Math.round(v * 1000) / 1000;
+  return { w: r(art.w), h: r(art.h), indigo: pathData(ink('indigo')), pink: pathData(ink('pink')) };
+}
+
+export function logoSymbol() {
+  const l = lockup();
+  return `<symbol id="lp-logo" viewBox="0 0 ${l.w} ${l.h}"><path style="fill:var(--logo-i)" d="${l.indigo}"/><path style="fill:var(--logo-p)" d="${l.pink}"/></symbol>`;
+}
+
+/** One use of the logo. Decorative: the link around it carries the name. */
+export function logoSvg(cls = 'logo') {
+  const l = lockup();
+  return `<svg class="${cls}" viewBox="0 0 ${l.w} ${l.h}" aria-hidden="true" focusable="false"><use href="#lp-logo"/></svg>`;
 }
 
 // ---- Spot illustrations for "How it works" ---------------------------------------------------

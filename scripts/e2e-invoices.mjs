@@ -79,6 +79,36 @@ try {
   check(/^ {4}payInvoice /m.test(paid.out), 'the trace names the route handler payInvoice');
   check(/^ {4}markPaid /m.test(paid.out), 'the trace names the service function markPaid');
 
+  // D-146: no code by default, so the answer is main's. D-145: with includeCode, get_trace adds the
+  // code that ran, the browser's as its original .tsx source.
+  check(!paid.out.includes('code that ran'), 'run_action adds no code by default');
+  const firstId = /Trace (t_[a-z0-9]{12})/.exec(paid.out)?.[1];
+  const withCode = await call('get_trace', { traceId: firstId, includeCode: true });
+  const codeLine = (file, text) => {
+    const n = lineOf(file, text);
+    const src = readFileSync(join(app, file), 'utf8').split('\n')[n - 1]?.replace(/\r$/, '');
+    return n > 0 && withCode.out.includes(`\n${String(n).padStart(4)}  ${src}\n`);
+  };
+  check(
+    withCode.out.length <= 16_000,
+    `get_trace with includeCode is at most 16,000 characters (${withCode.out.length})`,
+  );
+  check(
+    withCode.out.includes('\n\ncode that ran, most-used files first'),
+    'includeCode adds the code that ran',
+  );
+  check(
+    codeLine('server/services/ledger.ts', 'summaryCache = null; // the totals changed'),
+    'the code shows ledger.ts clearing the cache, with its line number',
+  );
+  check(
+    codeLine('src/App.tsx', 'const { invoice, summary } = await payInvoice(id);'),
+    'the code shows App.tsx pay() as written in the .tsx file',
+  );
+  check(
+    !/jsxDEV|_jsx\(|import\.meta\.hot/.test(withCode.out),
+    'the code has no Vite or JSX-transform output',
+  );
   // The line that clears the cache ran, and the totals were summed again for the response.
   const id = /Trace (t_[a-z0-9]{12})/.exec(paid.out)?.[1];
   const ledger = await call('get_trace', { traceId: id, file: 'server/services/ledger.ts' });

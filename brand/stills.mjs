@@ -20,11 +20,14 @@ export function buildStills() {
   const titles = { a: 'A pixel path', b: 'B typographic', c: 'C flat cartoon' };
   const grain = {};
   for (const [id, make] of Object.entries(concepts)) {
-    const { print, scale } = make();
-    const img = printRaster(print, scale, { offset: MISREGISTER, grain: GRAIN[id] });
+    const { print, scale, stamp } = make();
+    const opts = { offset: MISREGISTER };
+    const img = printRaster(print, scale, { ...opts, grain: GRAIN[id] });
+    stamp?.(img, scale, opts);
     if (img.w !== 1200 || img.h !== 630) throw new Error(`concept ${id} is ${img.w}x${img.h}, not 1200x630`);
     writeFileSync(join(review, `concept-${id}.png`), encodeIndexed(img, RGB));
-    const plain = printRaster(print, scale, { offset: MISREGISTER, grain: null });
+    const plain = printRaster(print, scale, { ...opts, grain: null });
+    stamp?.(plain, scale, opts);
     const withGrain = toRGB(img, RGB);
     const noGrain = toRGB(plain, RGB);
     const sheet = reviewSheet(titles[id], withGrain, noGrain);

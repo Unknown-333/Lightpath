@@ -207,14 +207,12 @@ h3 code {
   padding: 0.35rem 0;
 }
 
-.wordmark {
-  width: calc(var(--w) * 3px);
-  height: 27px;
-  fill: currentColor;
-}
-
-.wm-dot {
-  fill: var(--pink);
+/* The official logo (brand/logo), always clean: no grain, halftone or misregistration. */
+.logo {
+  --logo-i: var(--indigo);
+  --logo-p: var(--pink);
+  width: auto;
+  height: 30px;
 }
 
 .bar nav {
@@ -744,6 +742,8 @@ h3 code {
   align-self: center;
   display: block;
   height: 12px;
+  /* Bubblegum pink, 2.83:1 on paper: kept by the owner's choice (2026-11-04). Every count is
+     also printed as ×N text, so no information depends on the dots alone. */
   background: var(--pink);
 }
 
@@ -1127,10 +1127,7 @@ tbody th {
   display: none;
 }
 
-.qa[open] summary::before {
-  background: var(--pink);
-  box-shadow: 1px 1px 0 var(--indigo);
-}
+/* Open shows a minus in indigo: the shape carries the state (pink on paper is under 3:1). */
 
 .qa > div {
   padding-bottom: 1rem;
@@ -1157,10 +1154,9 @@ tbody th {
   font-weight: 600;
 }
 
-.foot .wordmark {
-  width: calc(var(--w) * 4px);
-  height: 36px;
-  fill: var(--paper);
+.foot .logo {
+  --logo-i: var(--paper);
+  height: 40px;
 }
 
 .foot-links {
@@ -1183,7 +1179,10 @@ tbody th {
   font-size: 0.875rem;
 }
 
-.foot :focus-visible {
+/* On indigo surfaces the plum ring would be 1.34:1; pink tint is 7.37:1. */
+.foot :focus-visible,
+.card-local :focus-visible,
+.cmd :focus-visible {
   outline-color: var(--pink-tint);
 }
 
@@ -1268,6 +1267,11 @@ tbody th {
 @media (max-width: 26rem) {
   .fx-long {
     display: none;
+  }
+  /* The lockup is wider than the old pixel wordmark; at phone width this keeps logo, switch and
+     GitHub on one row (checked at 360 and 390 px). */
+  .bar .logo {
+    height: 24px;
   }
   .bar nav a {
     padding-inline: 0.45rem;

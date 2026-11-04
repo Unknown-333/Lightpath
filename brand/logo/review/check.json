@@ -1,0 +1,96 @@
+{
+  "ok": true,
+  "fails": [],
+  "files": {
+    "png/app-icon-1024.png": 9473,
+    "png/app-icon-256.png": 1451,
+    "png/app-icon-512.png": 3651,
+    "png/apple-touch-icon.png": 1202,
+    "png/avatar-400.png": 2902,
+    "png/favicon-16.png": 215,
+    "png/favicon-32.png": 360,
+    "png/favicon-48.png": 506,
+    "png/favicon.ico": 1135,
+    "png/lightpath-mark-colour-1024.png": 11838,
+    "png/lightpath-mark-colour-256.png": 1875,
+    "png/lightpath-mark-colour-64.png": 387,
+    "README.md": 12463,
+    "review/concept-1-path.png": 292018,
+    "review/concept-2-letter.png": 209327,
+    "review/concept-3-pixel.png": 341277,
+    "review/concept-4-lines.png": 220924,
+    "review/concept-5-branch.png": 306959,
+    "review/concepts-overview.png": 41588,
+    "review/logo-sheet.png": 591095,
+    "riso/lightpath-lockup-horizontal-riso-preview.png": 21159,
+    "riso/lightpath-lockup-horizontal-riso.svg": 33425,
+    "riso/lightpath-mark-riso-preview.png": 3602,
+    "riso/lightpath-mark-riso.svg": 2728,
+    "svg/app-icon.svg": 529,
+    "svg/favicon.svg": 462,
+    "svg/lightpath-lockup-horizontal-black.svg": 5802,
+    "svg/lightpath-lockup-horizontal-colour.svg": 5829,
+    "svg/lightpath-lockup-horizontal-indigo.svg": 5802,
+    "svg/lightpath-lockup-horizontal-reversed.svg": 5829,
+    "svg/lightpath-lockup-horizontal-white.svg": 5802,
+    "svg/lightpath-lockup-stacked-black.svg": 5725,
+    "svg/lightpath-lockup-stacked-colour.svg": 5752,
+    "svg/lightpath-lockup-stacked-indigo.svg": 5725,
+    "svg/lightpath-lockup-stacked-reversed.svg": 5752,
+    "svg/lightpath-lockup-stacked-white.svg": 5725,
+    "svg/lightpath-mark-black.svg": 346,
+    "svg/lightpath-mark-colour.svg": 373,
+    "svg/lightpath-mark-indigo.svg": 346,
+    "svg/lightpath-mark-reversed.svg": 373,
+    "svg/lightpath-mark-white.svg": 346,
+    "svg/lightpath-wordmark-black.svg": 4491,
+    "svg/lightpath-wordmark-colour.svg": 4491,
+    "svg/lightpath-wordmark-indigo.svg": 4491,
+    "svg/lightpath-wordmark-white.svg": 4491,
+    "tokens.css": 196,
+    "tokens.json": 134
+  },
+  "favicon16": {
+    "pixels": 256,
+    "opaque_pixels": 236,
+    "mark_pixels": 85,
+    "blended_opaque_pixels": 16
+  },
+  "contrast": [
+    {
+      "fg": "lp-indigo",
+      "bg": "lp-marshmallow",
+      "ratio": 11.33
+    },
+    {
+      "fg": "lp-indigo",
+      "bg": "lp-white",
+      "ratio": 12.26
+    },
+    {
+      "fg": "lp-pink",
+      "bg": "lp-marshmallow",
+      "ratio": 2.83
+    },
+    {
+      "fg": "lp-pink",
+      "bg": "lp-white",
+      "ratio": 3.06
+    },
+    {
+      "fg": "lp-pink",
+      "bg": "lp-indigo",
+      "ratio": 4.01
+    },
+    {
+      "fg": "lp-white",
+      "bg": "lp-indigo",
+      "ratio": 12.26
+    },
+    {
+      "fg": "lp-indigo",
+      "bg": "chrome dark tab #35363a",
+      "ratio": 1.02
+    }
+  ]
+}

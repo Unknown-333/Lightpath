@@ -1,5 +1,6 @@
 import type { FunctionHit, Trace } from '@lightpath-dev/protocol';
 import { fitText, MAX_CHARS } from './budget.js';
+import { redactSource } from './redact.js';
 import { functionName, numberRanges, phaseTitle } from './summary.js';
 
 export interface SourceFile {
@@ -101,7 +102,8 @@ export async function sliceTrace(trace: Trace, query: SliceQuery, read: ReadSour
       `${path}: can't read this file from the workspace, so only line numbers are shown.\nlines that ran: ${numberRanges([...lit])}`,
     );
   }
-  const src = source.text.split(/\r?\n/);
+  // Hard-coded keys and tokens never come back (D-145); line numbers stay the same.
+  const src = redactSource(source.text).split(/\r?\n/);
   const phaseNames = [
     ...new Set(
       fns
@@ -161,6 +163,18 @@ function listMessage(
   return fitText(`${head}\n${shown.map((o) => `  ${o}`).join('\n')}${more}`);
 }
 
+/**
+ * The executed lines of one file of the trace, as `get_trace` with `file` prints them (D-117),
+ * from `text` (already redacted): one block of lines per outermost function, merged over phases.
+ */
+export function executedLines(trace: Trace, path: string, text: string): string[][] {
+  const lit = new Set((trace.files.find((f) => f.path === path)?.lines ?? []).map((l) => l.line));
+  const src = text.split(/\r?\n/);
+  return outermost(path, trace.functions ?? [], trace)
+    .map((u) => unitLines(u, src, lit))
+    .filter((b) => b.length > 0);
+}
+
 /** The outermost functions of one file, merged over phases, or one unit for a file without any. */
 function outermost(path: string, fns: readonly FunctionHit[], trace: Trace): Unit[] {
   const mine = fns.filter((f) => f.path === path);
@@ -205,7 +219,7 @@ function unitLines(u: Unit, src: readonly string[], lit: ReadonlySet<number>): s
         line
           .slice(s.startColumn, s.endColumn - 1 + tail)
           .trim()
-          .slice(0, 40) || s.text;
+          .slice(0, 40) || redactSource(s.text);
       if (text) spans.set(s.line, [...(spans.get(s.line) ?? []), text]);
     }
   }

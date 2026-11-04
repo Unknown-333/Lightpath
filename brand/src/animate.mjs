@@ -6,6 +6,7 @@ import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { drawA, SCENE_A } from './concepts.mjs';
 import { encodeGIF } from './gif.mjs';
+import { stampLogo } from './logo.mjs';
 import { RGB } from './palette.mjs';
 import { encodeIndexed } from './png.mjs';
 import { printRaster } from './raster.mjs';
@@ -56,7 +57,8 @@ export function stateAt(f) {
 }
 
 export function frameRaster(f, k, dot = 1) {
-  return printRaster(drawA(stateAt(f)), k, { offset: MISREGISTER, grain: GRAIN.a, dot });
+  const r = printRaster(drawA(stateAt(f)), k, { offset: MISREGISTER, grain: GRAIN.a, dot });
+  return stampLogo(r, k, { offset: MISREGISTER, dot });
 }
 
 function encodeVideo(ffmpeg, args, k) {

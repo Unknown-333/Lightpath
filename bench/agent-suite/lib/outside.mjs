@@ -1,4 +1,4 @@
-// The void check's "read outside the trial folder" rule (SCORING.md, D-108, amended by D-145).
+// The void check's "read outside the trial folder" rule (SCORING.md, D-108, amended by D-149).
 import { existsSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
@@ -32,7 +32,7 @@ function insideTest(trialDir) {
 }
 
 /**
- * D-145: `/c:/x` and `file:///c:/x` name the drive path `c:/x`. Anything else is returned as is.
+ * D-149: `/c:/x` and `file:///c:/x` name the drive path `c:/x`. Anything else is returned as is.
  */
 export function fromUrlForm(p) {
   const m = /^(?:file:\/\/)?\/([a-z]):([\\/].*)?$/i.exec(p);
@@ -40,9 +40,9 @@ export function fromUrlForm(p) {
 }
 
 /**
- * Paths a tool call names that resolve outside the trial folder (D-145). Returns `{ hits, ignored }`:
+ * Paths a tool call names that resolve outside the trial folder (D-149). Returns `{ hits, ignored }`:
  * `hits` void the run; `ignored` are what the D-108 rule would also have flagged, with the reason
- * D-145 drops them, kept for review. `exists` is injectable for tests.
+ * D-149 drops them, kept for review. `exists` is injectable for tests.
  */
 export function outsidePaths(toolCalls, trialDir, { exists = existsSync } = {}) {
   const inside = insideTest(trialDir);
@@ -71,7 +71,7 @@ export function outsidePaths(toolCalls, trialDir, { exists = existsSync } = {}) 
 }
 
 /**
- * The D-108 rule, verbatim from run.mjs before D-145. Kept only so rescore-d145.mjs can prove
+ * The D-108 rule, verbatim from run.mjs before D-149. Kept only so rescore-d149.mjs can prove
  * that re-parsing a saved transcript gives the stored `outsidePaths`. Not used to score.
  */
 export function outsidePathsD108(toolCalls, trialDir) {

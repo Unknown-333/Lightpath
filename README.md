@@ -1,4 +1,9 @@
-# Lightpath
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/logo/svg/lightpath-lockup-horizontal-reversed.svg">
+    <img alt="Lightpath" src="brand/logo/svg/lightpath-lockup-horizontal-colour.svg" height="56">
+  </picture>
+</h1>
 
 [![npm](https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837)](https://www.npmjs.com/package/@lightpath-dev/cli)
 [![CI](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml/badge.svg)](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml)
@@ -26,9 +31,7 @@ npx @lightpath-dev/cli doctor                     # checks what init wrote
 
 That's all. The first time the agent calls a Lightpath tool, Lightpath starts your dev server and its own browser by itself, and stops them when the agent closes.
 
-Needs Node.js 22.12+ and Chrome or Edge.
-
-> **0.1.0 is not on npm yet.** Until it is, `npx` gets 0.0.2, which has no `init`, `run_action` or auto-start ([CHANGELOG](CHANGELOG.md)).
+Needs Node.js 22.12+ and Chrome or Edge. Latest release: 0.1.1 ([CHANGELOG](CHANGELOG.md)).
 
 ## What your agent gets
 
@@ -78,6 +81,16 @@ Every answer is at most 16,000 characters (about 4,000 tokens). When a trace is 
 | `list_traces`          | Recent actions, newest first, with their trace ids                                               |
 
 `run_action` can fill form fields first, for example to sign in. The values it types never appear in any output. The whole tool list is under 4,000 characters, so it costs your agent little context (`packages/mcp/test/output.test.ts`).
+
+Options on `run_action`, new in 0.1.1:
+
+| Option        | What it does                                                                                                                                                                   |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `compareTo`   | Re-runs the action and returns the new trace plus what ran in only one of the two, so a fix is checked in one call ([D-144](decisions.md), `scripts/e2e-invoices-fix.mjs`)     |
+| `times`       | Repeats the same action, up to 5 times, in one call and one trace ([D-142](decisions.md))                                                                                      |
+| `includeCode` | Adds the code of the lines that ran, with not-run lines folded. Off by default, because it makes answers about 4-6 times longer ([D-145](decisions.md), [D-146](decisions.md)) |
+
+When a target isn't found, the answer names the closest buttons and links on the page, and says when the page is a sign-in form ([D-139](decisions.md)). Code in any answer is redacted the same way as everything else: keys and tokens written in your source come back as `[redacted]`.
 
 ## Set up your agent
 

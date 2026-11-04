@@ -50,21 +50,21 @@
   ],
   "files": {
     "out/og.png": {
-      "bytes": 14094,
+      "bytes": 14513,
       "w": 1200,
       "h": 630,
       "uniqueColours": 9,
       "outsidePalette": 0
     },
     "out/poster.png": {
-      "bytes": 10445,
+      "bytes": 10691,
       "w": 1440,
       "h": 756,
       "uniqueColours": 9,
       "outsidePalette": 0
     },
     "review/concept-a.png": {
-      "bytes": 14094,
+      "bytes": 14513,
       "w": 1200,
       "h": 630,
       "uniqueColours": 9,
@@ -85,7 +85,7 @@
       "outsidePalette": 0
     },
     "out/loop.gif": {
-      "bytes": 59828,
+      "bytes": 59945,
       "w": 960,
       "h": 504,
       "frames": 100,
@@ -95,30 +95,30 @@
       "localColourTables": 0
     },
     "out/loop.mp4": {
-      "bytes": 172027,
+      "bytes": 173569,
       "frame": 72,
       "maxChannelError": 7,
-      "meanChannelError": 2.384,
+      "meanChannelError": 2.383,
       "pixelsNearestToAnotherPaletteColour": 0,
       "crop2x": "review/video-2x-mp4.png"
     },
     "out/loop.webm": {
-      "bytes": 121901,
+      "bytes": 122578,
       "frame": 72,
       "maxChannelError": 4,
-      "meanChannelError": 2.383,
+      "meanChannelError": 2.382,
       "pixelsNearestToAnotherPaletteColour": 0,
       "crop2x": "review/video-2x-webm.png"
     }
   },
   "summary": {
-    "out/og.png": "14094 bytes, 9 colours, 0 outside",
-    "out/poster.png": "10445 bytes, 9 colours, 0 outside",
-    "review/concept-a.png": "14094 bytes, 9 colours, 0 outside",
+    "out/og.png": "14513 bytes, 9 colours, 0 outside",
+    "out/poster.png": "10691 bytes, 9 colours, 0 outside",
+    "review/concept-a.png": "14513 bytes, 9 colours, 0 outside",
     "review/concept-b.png": "12581 bytes, 7 colours, 0 outside",
     "review/concept-c.png": "13329 bytes, 7 colours, 0 outside",
-    "out/loop.gif": "59828 bytes, table 9 colours, 0 outside",
-    "out/loop.mp4": "172027 bytes, max err 7, mean 2.384, off-palette px 0",
-    "out/loop.webm": "121901 bytes, max err 4, mean 2.383, off-palette px 0"
+    "out/loop.gif": "59945 bytes, table 9 colours, 0 outside",
+    "out/loop.mp4": "173569 bytes, max err 7, mean 2.383, off-palette px 0",
+    "out/loop.webm": "122578 bytes, max err 4, mean 2.382, off-palette px 0"
   }
 }

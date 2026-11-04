@@ -290,7 +290,7 @@ async function main() {
     ];
   }
   record.shellFlags = auditShellCommands(parsed.toolCalls, trialDir);
-  // D-145: hits void the run; what the D-108 rule also flagged but D-145 drops is kept for review.
+  // D-149: hits void the run; what the D-108 rule also flagged but D-149 drops is kept for review.
   const outside = outsidePaths(parsed.toolCalls, trialDir);
   record.outsidePaths = outside.hits;
   record.ignoredOutsidePaths = outside.ignored;

@@ -166,6 +166,212 @@ const css = read('styles.css');
   report.checks.copy = { words: text.split(' ').length };
 }
 
+// Non-text contrast (WCAG 1.4.11), measured on the rendered page: graphics that carry meaning need
+// 3:1 against what is next to them. Colours are read from computed styles (and from the halftone
+// data URIs), so changing a colour in the CSS changes the result.
+// Shadows and ticks listed here are decoration: the thing they sit on has its own 3:1 edge.
+const DECORATIVE = {
+  '.btn-quiet': 'misprint shadow; the button has a 2px indigo border',
+  '.card-local': 'misprint shadow; the card is filled indigo',
+  '.card': 'misprint shadow; the card has a 2px indigo border',
+  '.trace': 'misprint shadow; the box has a 2px indigo border',
+  '.cmd': 'misprint shadow; the box is filled indigo',
+  '.demo img': 'misprint shadow; the image has a 2px indigo border',
+  '.why-lit': 'misprint shadow; the box has a 2px indigo border',
+  '[role="tab"][aria-selected="true"]': 'misprint shadow; selection is shown by the indigo fill',
+  '.ticks li': 'list bullet; the list is marked up as a list',
+};
+
+// The halftone count bars stay bubblegum pink (2.83:1) by the owner's choice (2026-11-04); every count
+// is also shown as ×N text. They are measured and reported, not failed.
+const EXEMPT_BARS = 'owner choice 2026-11-04: bars stay bubblegum pink; every count is also shown as ×N text';
+
+async function nonTextContrast(page) {
+  const rows = await page.evaluate(
+    ({ decorative, exemptBars }) => {
+      const parse = (c) => {
+        const m = /rgba?\(([^)]+)\)/.exec(c ?? '');
+        if (!m) return null;
+        const [r, g, b, a = 1] = m[1]
+          .split(/[\s,/]+/)
+          .filter(Boolean)
+          .map(Number);
+        return { r, g, b, a };
+      };
+      const fromHex = (h) => ({
+        r: Number.parseInt(h.slice(0, 2), 16),
+        g: Number.parseInt(h.slice(2, 4), 16),
+        b: Number.parseInt(h.slice(4, 6), 16),
+        a: 1,
+      });
+      const hex = (c) =>
+        `#${[c.r, c.g, c.b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`;
+      const lum = (c) => {
+        const l = [c.r, c.g, c.b].map((v) => {
+          const s = v / 255;
+          return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+        });
+        return 0.2126 * l[0] + 0.7152 * l[1] + 0.0722 * l[2];
+      };
+      const ratio = (a, b) => {
+        const [x, y] = [lum(a), lum(b)].sort((m, n) => n - m);
+        return (x + 0.05) / (y + 0.05);
+      };
+      const behind = (el) => {
+        for (let e = el; e; e = e.parentElement) {
+          const c = parse(getComputedStyle(e).backgroundColor);
+          if (c && c.a > 0) return c;
+        }
+        return parse(getComputedStyle(document.body).backgroundColor);
+      };
+      const out = [];
+      const EXEMPT_BARS = exemptBars;
+      const add = (what, fg, bg, extra = {}) => {
+        const r = ratio(fg, bg);
+        out.push({
+          what,
+          fg: hex(fg),
+          bg: hex(bg),
+          ratio: +r.toFixed(2),
+          pass: r >= 3 || Boolean(extra.exempt),
+          ...extra,
+        });
+      };
+      // 1. Halftone count bars (trace and legend), one per density step and place.
+      const seen = new Set();
+      for (const bar of document.querySelectorAll('.t-bar')) {
+        const place = bar.closest('.legend') ? 'legend' : 'trace';
+        const key = `${place} ${[...bar.classList].join('.')}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const st = getComputedStyle(bar);
+        let fg = parse(st.backgroundColor);
+        if (!fg || fg.a === 0) {
+          const m = /%23([0-9a-f]{6})/i.exec(st.backgroundImage);
+          fg = m ? fromHex(m[1]) : null;
+        }
+        // Exempt by name: the owner keeps the bars in bubblegum pink (2.83:1) by choice (2026-11-04).
+        // Every count is also printed as ×N text, so no information depends on the dots alone.
+        // The ratio is still measured and reported.
+        if (fg) add(`count bar (${key})`, fg, behind(bar.parentElement), { exempt: EXEMPT_BARS });
+      }
+      // 2. Control edges: a border or a fill must stand out from what is around the control.
+      for (const sel of [
+        '.btn-primary',
+        '.btn-quiet',
+        '[role="tab"]',
+        '.copy',
+        '.fx-toggle',
+        '.motion-toggle',
+      ]) {
+        const el = document.querySelector(sel);
+        if (!el) continue;
+        const st = getComputedStyle(el);
+        const around = behind(el.parentElement);
+        const border = parse(st.borderTopColor);
+        const fill = parse(st.backgroundColor);
+        const best = [border, fill]
+          .filter((c) => c && c.a > 0)
+          .sort((a, b) => ratio(b, around) - ratio(a, around))[0];
+        if (best) add(`control edge (${sel})`, best, around);
+      }
+      // 3. State marks: the effects switch's dot when on, and the FAQ's open marker.
+      const fx = document.querySelector('.fx-toggle');
+      if (fx) {
+        const was = document.documentElement.classList.contains('fx');
+        fx.setAttribute('aria-pressed', 'true');
+        const dot = getComputedStyle(fx, '::before');
+        add('effects switch, "on" dot vs its ring', parse(dot.backgroundColor), parse(dot.borderTopColor));
+        fx.setAttribute('aria-pressed', String(was));
+      }
+      const qa = document.querySelector('details.qa');
+      if (qa) {
+        const was = qa.open;
+        qa.open = true;
+        const sum = qa.querySelector('summary');
+        add('FAQ open marker', parse(getComputedStyle(sum, '::before').backgroundColor), behind(sum));
+        qa.open = was;
+      }
+      // 4. Misprint shadows and bullets: each must be listed as decoration or reach 3:1.
+      for (const el of document.querySelectorAll(
+        '.btn, .card, .trace, .cmd, .demo img, .why-col, [role="tab"], .ticks li',
+      )) {
+        const target = el.matches('.ticks li') ? el : el;
+        const st = el.matches('.ticks li') ? getComputedStyle(el, '::before') : getComputedStyle(target);
+        const shadow = st.boxShadow;
+        if (!shadow || shadow === 'none') continue;
+        const sel = Object.keys(decorative).find((s) => el.matches(s));
+        const c = parse(shadow);
+        const what = `misprint shadow (${el.className || el.tagName.toLowerCase()})`;
+        if (seen.has(what)) continue;
+        seen.add(what);
+        if (sel) out.push({ what, fg: hex(c), decorative: decorative[sel], pass: true });
+        else add(what, c, behind(el.parentElement));
+      }
+      return out;
+    },
+    { decorative: DECORATIVE, exemptBars: EXEMPT_BARS },
+  );
+  // 5. Focus rings, reached the way a keyboard user reaches them.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const ringSeen = new Set();
+  for (let i = 0; i < 80; i++) {
+    await page.keyboard.press('Tab');
+    const r = await page.evaluate(() => {
+      const el = document.activeElement;
+      if (!el || el === document.body) return null;
+      const parse = (c) => {
+        const m = /rgba?\(([^)]+)\)/.exec(c ?? '');
+        const [r, g, b] = m[1]
+          .split(/[\s,/]+/)
+          .filter(Boolean)
+          .map(Number);
+        return [r, g, b];
+      };
+      let bg = null;
+      for (let e = el.parentElement; e; e = e.parentElement) {
+        const c = /rgba?\(([^)]+)\)/.exec(getComputedStyle(e).backgroundColor);
+        const parts = c
+          ? c[1]
+              .split(/[\s,/]+/)
+              .filter(Boolean)
+              .map(Number)
+          : [];
+        if (parts.length && (parts[3] ?? 1) > 0) {
+          bg = parts.slice(0, 3);
+          break;
+        }
+      }
+      return {
+        ring: parse(getComputedStyle(el).outlineColor),
+        bg,
+        tag: el.tagName.toLowerCase(),
+        cls: el.className,
+      };
+    });
+    if (!r) break;
+    const key = `${r.ring} on ${r.bg}`;
+    if (ringSeen.has(key)) continue;
+    ringSeen.add(key);
+    const [a, b] = [r.ring, r.bg ?? [252, 245, 236]].map(([x, y, z]) => ({ r: x, g: y, b: z }));
+    const l = (c) =>
+      [c.r, c.g, c.b]
+        .map((v) => (v / 255 <= 0.04045 ? v / 255 / 12.92 : ((v / 255 + 0.055) / 1.055) ** 2.4))
+        .reduce((s, v, k) => s + v * [0.2126, 0.7152, 0.0722][k], 0);
+    const [x, y] = [l(a), l(b)].sort((m, n) => n - m);
+    const ratio = +((x + 0.05) / (y + 0.05)).toFixed(2);
+    const hx = (c) => `#${[c.r, c.g, c.b].map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    rows.push({
+      what: `focus ring (first seen on ${r.tag}.${r.cls || '-'})`,
+      fg: hx(a),
+      bg: hx(b),
+      ratio,
+      pass: ratio >= 3,
+    });
+  }
+  return rows;
+}
+
 // 7. In Chrome, served under the real prefix: axe (effects on and off), 404s, outside requests, weight.
 {
   const site = await serve();
@@ -206,6 +412,11 @@ const css = read('styles.css');
       for (const v of res.violations)
         fail('axe', `effects ${fx}: ${v.id} (${v.nodes.length}): ${v.nodes[0]?.target.join(' ')}`);
       for (const u of outside) fail('requests', `effects ${fx}: request to ${u}`);
+      const nt = await nonTextContrast(page);
+      report.checks.nonText ??= {};
+      report.checks.nonText[fx] = nt;
+      for (const r of nt.filter((x) => !x.pass))
+        fail('non-text', `effects ${fx}: ${r.what}: ${r.fg} on ${r.bg} is ${r.ratio}:1, needs 3:1`);
       if (fx === 'on') {
         report.checks.weight = {
           beforeMediaKB: +(bytes.total / 1024).toFixed(1),
