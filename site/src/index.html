@@ -97,7 +97,7 @@
     <div class="why">
       <div class="why-col">
         <h3>Without it</h3>
-        <p>Your agent reads a bug report and can only read code. It guesses where to look from file names and text search. When that runs out, it asks you to click the button and paste what you see.</p>
+        <p>Your agent reads a bug report and can only read code. It picks where to look from file names and text search. When that runs out, it asks you to click the button and paste what you see.</p>
       </div>
       <div class="why-col why-lit">
         <h3>With Lightpath MCP</h3>
@@ -109,7 +109,7 @@
         </ul>
       </div>
     </div>
-    <p class="note">Lines come from V8’s own coverage counters, so they show what ran, not a guess from the code.</p>
+    <p class="note">Lines come from V8’s own coverage counters, so they show what ran, not what the code seems to do.</p>
   </div>
 </section>
 
@@ -169,13 +169,13 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
       </article>
       <article class="card">
         <h3>Errors come with the trace</h3>
-        <p>A thrown error and failed requests, like a 409 or a 400, show up in the same answer as the code that ran.</p>
-        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-121</a>, tested in <code>scripts/e2e-shop.mjs</code>.</p>
+        <p>A thrown error and failed requests, like a 409 or a 400, show up in the same answer as the code that ran. Lines after a call that threw read <code>unknown</code>, never run: V8 has no count for them.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-121, D-153</a>, tested in <code>scripts/e2e-shop.mjs</code> and <code>pnpm accuracy</code>.</p>
       </article>
       <article class="card">
-        <h3><code>diff_traces</code> checks a fix</h3>
-        <p>Trace the click, fix the code, trace it again. The diff lists functions that ran in only one trace, changed not-run lines and changed request status.</p>
-        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-118</a>, <code>packages/mcp/test/output.test.ts</code>.</p>
+        <h3>Check a fix in one call</h3>
+        <p>After a fix, the agent runs the same click with <code>compareTo: "last"</code>. The answer adds what ran in only one of the two traces: functions, not-run lines and request status.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-118, D-144</a>, tested in <code>scripts/e2e-invoices-fix.mjs</code>.</p>
       </article>
       <article class="card card-list">
         <h3><code>run_request</code> for API backends</h3>
@@ -206,7 +206,7 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
       </div>
       {{PANELS}}
     </div>
-    <p class="notice"><strong>0.1.0 is not on npm yet.</strong> Until it is, <code>npx</code> gets 0.0.2, which has no <code>init</code>, <code>run_action</code> or auto-start. See the <a href="https://github.com/Unknown-333/Lightpath/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p class="notice"><strong>0.1.2 is on npm.</strong> It fixes lines that showed as run when they did not run, in untaken <code>else if</code> and <code>switch</code> branches and after a call that threw. See the <a href="https://github.com/Unknown-333/Lightpath/releases/tag/v0.1.2">release notes</a>.</p>
     <p>The first time your agent calls a Lightpath tool, Lightpath starts your dev server and its own browser, and stops them when the agent closes. Then tell the agent the bug the way a user would: “I click Save and the list doesn’t update.”</p>
   </div>
 </section>
@@ -250,26 +250,8 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
         <li>No Python backends in click traces yet; a Python agent is in preview.</li>
         <li><code>run_action</code> clicks and presses Enter or Space. No hover, drag, file upload, dialogs, popups or iframes.</li>
       </ul>
-      <p>After 0.1.0, in this order: Next.js, socket.io, then Python (FastAPI).</p>
+      <p>Next, in this order: Next.js, socket.io, then Python (FastAPI).</p>
     </div>
-  </div>
-</section>
-
-<section id="compare" class="sec" aria-labelledby="compare-title">
-  <div class="wrap">
-    <h2 id="compare-title">Compared with other tools</h2>
-    <p class="intro">As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend (<a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/research/competitors.md">our research</a>, read 2026-11-01). Each tool below is better than Lightpath at something.</p>
-    <div class="table-wrap">
-      <table class="compare">
-        <thead><tr><th scope="col">Tool</th><th scope="col">Better than Lightpath at</th><th scope="col">Where Lightpath differs</th></tr></thead>
-        <tbody>
-          <tr><th scope="row">Chrome DevTools MCP</th><td>Console, network bodies, screenshots, DOM and performance</td><td>Lightpath returns the lines a click ran, and the Node server’s lines too. Chrome DevTools MCP collects usage statistics by default, with an opt-out; Lightpath sends nothing.</td></tr>
-          <tr><th scope="row">Playwright MCP</th><td>Console, network bodies, screenshots, DOM. Runs Firefox and WebKit too</td><td>Lightpath is Chromium only, and adds the code that ran.</td></tr>
-          <tr><th scope="row">Replay MCP</th><td>Values at any moment and time travel, from a recording</td><td>Replay shows frontend statements from a recording; its Node runtime is Node 16 only. Lightpath joins browser and Node lines for one click, live.</td></tr>
-        </tbody>
-      </table>
-    </div>
-    <p class="note">Sentry and Datadog work in production; Lightpath is a development tool and doesn’t watch production.</p>
   </div>
 </section>
 
