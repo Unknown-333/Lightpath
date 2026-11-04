@@ -17,11 +17,12 @@ Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps w
 
 - `run_action` takes `times` (1 to 5): it does the same action that many times and returns one trace with the counts added up. Pressing "Add to cart" twice on the shop goes from 2 calls and 888 characters to 1 call and 633 (D-142).
 - `run_action` takes `compareTo` (a trace id, or `"last"` for the newest earlier trace of the same action): the answer adds the function-level diff, so checking a fix is one call. The server instructions and the `lightpath init` block now point to it instead of `diff_traces` (D-144). A new CI end-to-end test, `scripts/e2e-invoices-fix.mjs`, plants the demo bug in `examples/invoices`, fixes it, and checks that one call's diff shows `getSummary` running its summing lines again.
-- Trace answers (`run_action`, `run_request`, `find_code_for_action`, and `get_trace` without a file) end with the code of the lines that ran: each file's executed lines with their numbers, not-run lines folded as `// not run: lines A-B`, most-used files first, inside the same 16,000-character cap. A last line names what was left out and the `get_trace` call for it. On the shop, the Checkout answer goes from 1,114 to 6,619 characters; on `examples/invoices`, "Mark as paid" from 1,549 to 10,900 (D-145).
+- `run_action` and `get_trace` take `includeCode` (opt-in, off by default). With `includeCode: true`, the trace answer ends with the code of the lines that ran: each file's executed lines with their numbers, not-run lines folded as `// not run: lines A-B`, most-used files first, inside the same 16,000-character cap. A last line names what was left out and the `get_trace` call for it. With it, the shop's Checkout answer goes from 1,114 to 6,619 characters, and `examples/invoices`' "Mark as paid" from 1,549 to 10,900. Without it, answers are unchanged (D-145, D-146).
+- `get_trace` and `diff_traces` check trace ids, and `get_trace` its `page`, in the tool instead of the schema, and `run_action`'s `timeoutMs` has no description. That keeps `tools/list` under 4,000 characters with `includeCode` (D-146).
 
 ### Security
 
-- Source code a tool returns is now redacted too, in trace answers and in `get_trace` slices: Bearer tokens, JWT-like strings, well-known key formats (Stripe, AWS, GitHub, Slack, Google), PEM private keys, secret query values, and string literals named with a secret word (`apiKey = "…"`) become `[redacted]`. Values that `run_action` filled are hidden in the code as well (D-145).
+- Source code a tool returns is now redacted too, in `get_trace` slices and in the `includeCode` section: Bearer tokens, JWT-like strings, well-known key formats (Stripe, AWS, GitHub, Slack, Google), PEM private keys, secret query values, and string literals named with a secret word (`apiKey = "…"`) become `[redacted]`. Values that `run_action` filled are hidden in the code as well (D-145).
 
 ## [0.1.0] - 2026-11-04
 

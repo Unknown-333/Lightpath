@@ -474,7 +474,7 @@ server/routes/orders.ts (trace t_p6szzi2njx9d, phase POST /api/orders)
 - **Source text is read from disk by the MCP server**, from the workspace roots in the daemon's `welcome`. Only paths in the trace are read, and only when their real path is inside a root. When the file's modification time is later than the trace's start, the first line says: `warning: <path> changed after this trace; line numbers may not match. Rerun the action for a fresh trace.`
 - Lines longer than 200 characters are cut with "…" (minified code).
 - **Paging**: pages break between functions. One function longer than a page breaks between lines. Each page ends with `page 1 of 3. Call get_trace with traceId "t_…", file "<path>", page 2 for the next.` On the shop the largest file's slice was 1,580 characters, so each shop file is one page.
-- Source lines go through `redactSource` (D-145, section 9), which keeps line numbers. Since D-145 the trace answers also end with these executed lines for each file, most-used first, inside the 16,000 cap.
+- Source lines go through `redactSource` (D-145, section 9), which keeps line numbers. With `includeCode: true` (opt-in, D-145, D-146), `run_action` and `get_trace` without `file` also end with these executed lines for each file, most-used first, inside the 16,000 cap.
 
 ### 6.4 `diff_traces` at function level
 
