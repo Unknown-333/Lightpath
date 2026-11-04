@@ -85,7 +85,12 @@ export function describeAction(input: ActionInput): string {
  * Every fill value in the text is redacted (rule 6). itText runs again after redaction, which can lengthen
  * the text.
  */
-export function describeActionResult(input: ActionInput, result: ActionResult): string {
+export function describeActionResult(
+  input: ActionInput,
+  result: ActionResult,
+  /** Lines after the page line, before warnings: `times` and `compareTo` notes (D-142, D-144). */
+  notes: readonly string[] = [],
+): string {
   const values = (input.fill ?? []).map((f) => f.value);
   if (!result.ok) {
     const { error } = result;
@@ -99,6 +104,7 @@ export function describeActionResult(input: ActionInput, result: ActionResult): 
   const text = summarizeTrace(result.trace, [
     `action: ${describeAction(input)} (boundary ${result.boundary}, settled ${result.settled})`,
     `page: ${result.pageUrl}`,
+    ...notes,
     ...result.warnings.map((w) => `warning (${w.code}): ${w.message}`),
   ]);
   return fitText(redactFillValues(text, values), MAX_CHARS, result.trace.id);

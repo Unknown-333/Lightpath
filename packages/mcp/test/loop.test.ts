@@ -17,6 +17,8 @@ let client: Client;
 const received: ActionRequest[] = [];
 let queue: ((id: string) => Trace)[] = [];
 let n = 0;
+/** The 1-based call (within one test) that answers not_found, if any. */
+let failAt = 0;
 
 const fn = (over: Partial<FunctionHit> & Pick<FunctionHit, 'path' | 'name' | 'startLine' | 'endLine'>) =>
   ({ collector: 'browser', count: 1, phase: 0, ...over }) as FunctionHit;
@@ -55,6 +57,9 @@ beforeAll(async () => {
   daemon = await startDaemon({ workspaceRoots: [root] });
   daemon.setActionRunner(async (request) => {
     received.push(request);
+    if (failAt === received.length) {
+      return { ok: false, error: { code: 'not_found', message: 'No element matches button "Add to cart".' } };
+    }
     n += 1;
     const id = `t_${String(n).padStart(12, '0')}`;
     const make = queue.shift() ?? addToCart;
@@ -85,6 +90,7 @@ afterAll(async () => {
 beforeEach(() => {
   received.length = 0;
   queue = [];
+  failAt = 0;
 });
 
 /** One tool call's text and error flag. */
@@ -106,5 +112,58 @@ describe('run_action input (D-140)', () => {
       ['press', 'Space'],
       [undefined, undefined],
     ]);
+  });
+});
+
+/** b04's two presses: the first adds a line (lines 18-19 run), the second finds it (16-17 run). */
+const firstAdd = (id: string) =>
+  traceOf(id, 'button: Add to cart', [
+    fn({ path: 'src/App.tsx', name: 'addToCart', startLine: 15, endLine: 24, notRun: [16, 17] }),
+  ]);
+const secondAdd = (id: string) =>
+  traceOf(id, 'button: Add to cart', [
+    fn({ path: 'src/App.tsx', name: 'addToCart', startLine: 15, endLine: 24, notRun: [18, 19] }),
+  ]);
+
+describe('run_action times (D-142)', () => {
+  it('does the action that many times and returns one trace with the counts added up', async () => {
+    queue = [firstAdd, secondAdd];
+    const { text, isError } = await call('run_action', {
+      target: 'button "Add to cart"',
+      within: 'Desk lamp',
+      times: 2,
+    });
+    expect(isError).toBe(false);
+    expect(received).toHaveLength(2);
+    const lines = text.split('\n');
+    const [, , , rep] = lines;
+    expect(lines[1]).toBe(
+      'action: click button "Add to cart" within "Desk lamp" (boundary press, settled quiet)',
+    );
+    expect(rep).toMatch(
+      /^repeated: 2 of 2 runs \((t_\d{12}), (t_\d{12})\); line and call counts below are added up over them\. get_trace on \2 shows the last run alone\.$/,
+    );
+    // The last run's id heads the trace; each branch ran in one of the runs, so none is "not run".
+    const lastId = /, (t_\d{12})\)/.exec(rep ?? '')?.[1];
+    expect(lines[0]).toBe(`Trace ${lastId}: button: Add to cart`);
+    expect(text).toMatch(/^ {4}addToCart 15-24 ×2$/m);
+    expect(text).not.toContain('not run');
+  });
+
+  it('stops at the first run that misses and says which', async () => {
+    failAt = 3;
+    const { text, isError } = await call('run_action', { target: 'button "Add to cart"', times: 4 });
+    expect(isError).toBe(false);
+    expect(received).toHaveLength(3);
+    expect(text).toContain('repeated: 2 of 4 runs');
+    expect(text).toContain(
+      'warning (repeat_stopped): run 3 of 4 did not record a trace: not_found. No element matches button "Add to cart".',
+    );
+  });
+
+  it('refuses more than 5 runs', async () => {
+    const { isError } = await call('run_action', { target: 'button "Add to cart"', times: 6 });
+    expect(isError).toBe(true);
+    expect(received).toHaveLength(0);
   });
 });

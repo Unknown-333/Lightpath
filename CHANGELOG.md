@@ -12,6 +12,10 @@ Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps w
 - `run_action`'s schema is shorter: Kiro's `tool_load` text for it goes from 2,409 to 2,091 characters. The daemon checks the bounds the schema no longer repeats, and `press: "Enter" | "Space"` replaces `action: "press"` plus `key`; a call with the old keys now clicks (D-140).
 - A trace with 3 or more backend requests shows each backend file that ran in 3 or more of them once, with request counts, instead of under every request. On a tududi Login trace (13 requests) that is 14,810 → 11,441 characters, with the same files left out (D-141).
 
+### Added
+
+- `run_action` takes `times` (1 to 5): it does the same action that many times and returns one trace with the counts added up. Pressing "Add to cart" twice on the shop goes from 2 calls and 888 characters to 1 call and 633 (D-142).
+
 ## [0.1.0] - 2026-11-04
 
 Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages move to 0.1.0, because every one of them ships changed files (D-133). The VS Code extension stays at 0.0.1, which still reads 0.1.0 traces (D-137). Needs Node.js 22.12 or newer, as before.

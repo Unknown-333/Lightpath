@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   type ActionRequest,
+  type ActionResult,
   DaemonClient,
   DaemonDiscovery,
   DISCOVERY_FILE,
@@ -23,6 +24,7 @@ import {
   diffTraces,
   redirectNote,
 } from './format.js';
+import { mergeTraces } from './merge.js';
 import { redact, redactFillValues } from './redact.js';
 import {
   hasBackend,
@@ -211,8 +213,9 @@ export function createMcpServer(options: McpOptions): McpServer {
         within: withinSchema.optional(),
         // One key instead of `action` plus `key` (D-140); the daemon still takes both.
         press: z.enum(['Enter', 'Space']).optional().describe('Press this key instead of clicking'),
-        // 500 to 30,000, checked by the daemon (D-140).
-        timeoutMs: z.number().int().optional().describe('Settle cap, default 5000'),
+        // An integer from 500 to 30,000, checked by the daemon (D-140). Not `.int()` here: zod writes
+        // the whole safe-integer range into the schema for it, 60 characters for nothing.
+        timeoutMs: z.number().optional().describe('Settle cap, default 5000'),
         fill: z
           .array(
             // Same forms as target and within. Bounds and descriptions aren't repeated here, to keep
@@ -221,9 +224,16 @@ export function createMcpServer(options: McpOptions): McpServer {
           )
           .optional()
           .describe('Filled first, in order; values never shown'),
+        times: z
+          .number()
+          .int()
+          .min(1)
+          .max(MAX_TIMES)
+          .optional()
+          .describe('Repeat it; one trace, counts added'),
       },
     },
-    async ({ press, ...rest }) => {
+    async ({ press, times, ...rest }) => {
       const input = { ...rest, ...(press ? { action: 'press' as const, key: press } : {}) };
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
@@ -247,7 +257,27 @@ export function createMcpServer(options: McpOptions): McpServer {
           await sleep(500);
           result = await send();
         }
-        return { ...reply(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
+        const runs = times ?? 1;
+        if (!result.ok || runs === 1) {
+          return { ...reply(describeActionResult(input, result)), ...(result.ok ? {} : { isError: true }) };
+        }
+        // `times` (D-142): the same action again, one call at a time, stopping at the first miss.
+        const done: OkAction[] = [result];
+        let stopped: string | undefined;
+        for (let k = 2; k <= runs; k++) {
+          const next = await send();
+          if (!next.ok) {
+            stopped = `warning (repeat_stopped): run ${k} of ${runs} did not record a trace: ${next.error.code}. ${next.error.message.split('\n')[0]}`;
+            break;
+          }
+          done.push(next);
+        }
+        return reply(
+          describeActionResult(input, repeated(done), [
+            repeatedLine(done, runs),
+            ...(stopped ? [stopped] : []),
+          ]),
+        );
       } catch (err) {
         return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
@@ -372,6 +402,31 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** After an auto-start, how long run_action retries a target that isn't on the page yet. */
 const STARTED_RENDER_WAIT_MS = 10_000;
+
+/** Most runs one run_action call may do with `times` (D-142). */
+export const MAX_TIMES = 5;
+
+type OkAction = Extract<ActionResult, { ok: true }>;
+
+/** The runs of one `times` call as one result: the last run's details, one merged trace (D-142). */
+function repeated(runs: readonly OkAction[]): OkAction {
+  const last = runs.at(-1) as OkAction;
+  const warnings = new Map<string, OkAction['warnings'][number]>();
+  for (const r of runs) for (const w of r.warnings) warnings.set(`${w.code}|${w.message}`, w);
+  return {
+    ...last,
+    trace: mergeTraces(runs.map((r) => r.trace)),
+    settled: runs.some((r) => r.settled === 'timeout') ? 'timeout' : last.settled,
+    backend: runs.some((r) => r.backend === 'partial') ? 'partial' : 'complete',
+    warnings: [...warnings.values()],
+  };
+}
+
+/** `repeated: 3 of 3 runs (t_a, t_b, t_c); …`, the line that says the counts are added up. */
+function repeatedLine(runs: readonly OkAction[], asked: number): string {
+  const ids = runs.map((r) => r.trace.id);
+  return `repeated: ${runs.length} of ${asked} runs (${ids.join(', ')}); line and call counts below are added up over them. get_trace on ${ids.at(-1)} shows the last run alone.`;
+}
 
 /** The discovery file's daemon, if it is up: a stale file (a hard-killed daemon) counts as none. */
 async function liveDaemon(workspaceRoot: string): Promise<Live | undefined> {
