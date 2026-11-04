@@ -73,4 +73,6 @@ These change the rule above after the walk had started. Each is a forced change,
    - The public demo bugs are not reused, and a place whose bug would show the same symptom as a public demo bug is passed over and logged.
    - These are added after the list above as X1-X4 and are visible. The held-out positions (R2, S1, S4) don't change. Total stays at most 12.
 
+7. **2 real bugs accepted (owner's credit-freeze directive, 2026-11-04).** The walk was not extended. The suite has 2 real bugs, below the spec's 3. R1 (`#92`) is visible v01, R2 (`#99`) is held out. Slots R3 and R4 are left empty, and the seeded list S1-S5 stays as picked before (S5 stays interaction order). X1 is covered by v05 (a cached copy returned early and not refreshed after a write). Final list: 10 bugs, 3 held out (R2, S1, S4).
+
 Picked bugs that this suite does not use are kept, with their patches, in `lightpath-trials/goal/suite2-raw/dropped/`, outside the repo.

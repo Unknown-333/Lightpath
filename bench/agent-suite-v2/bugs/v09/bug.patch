@@ -1,0 +1,13 @@
+diff --git a/src/styles.css b/src/styles.css
+index 43ef2b5..adffd5e 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -29,7 +29,7 @@ body {
+ 
+ .layout {
+   display: grid;
+-  grid-template-columns: 208px 1fr;
++  grid-template-columns: 1fr 208px;
+   min-height: 100vh;
+ }
+ 

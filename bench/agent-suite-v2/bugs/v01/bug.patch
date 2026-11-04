@@ -1,0 +1,179 @@
+diff --git a/backend/modules/comments/repository.js b/backend/modules/comments/repository.js
+index 187daf7f..1c82617d 100644
+--- a/backend/modules/comments/repository.js
++++ b/backend/modules/comments/repository.js
+@@ -16,7 +16,7 @@ class CommentsRepository extends BaseRepository {
+                 {
+                     model: User,
+                     as: 'Author',
+-                    attributes: ['id', 'uid', 'name', 'surname', 'email'],
++                    attributes: ['id', 'uid', 'name', 'email'],
+                 },
+             ],
+             order: [['created_at', 'ASC']],
+@@ -31,7 +31,7 @@ class CommentsRepository extends BaseRepository {
+                 {
+                     model: User,
+                     as: 'Author',
+-                    attributes: ['id', 'uid', 'name', 'surname', 'email'],
++                    attributes: ['id', 'uid', 'name', 'email'],
+                 },
+             ],
+         });
+diff --git a/backend/modules/comments/service.js b/backend/modules/comments/service.js
+index fd254dd6..f14e334c 100644
+--- a/backend/modules/comments/service.js
++++ b/backend/modules/comments/service.js
+@@ -58,38 +58,18 @@ async function resolveMentionedPeopleMap(uids) {
+ 
+ // The author's name is linked to their People profile, which is addressed
+ // by Person uid, not User uid - resolve each author's canonical self-person.
+-async function resolveAuthorPersonMap(userIds) {
++async function resolveAuthorPersonUidMap(userIds) {
+     if (userIds.length === 0) return new Map();
+     const selfPeople = await peopleRepository.findSelfPeopleByUserIds(
+         Array.from(userIds)
+     );
+-    return new Map(selfPeople.map((p) => [p.linked_user_id, p]));
+-}
+-
+-// Many accounts never fill in a profile name (email-only sign-ups), so fall
+-// back to the surname, the author's People entry, then the email.
+-function authorDisplayName(author, selfPerson) {
+-    const fullName = [author.name, author.surname]
+-        .map((part) => (part || '').trim())
+-        .filter(Boolean)
+-        .join(' ');
+-    return fullName || selfPerson?.name || author.email || null;
+-}
+-
+-function serializeAuthor(author, authorPersonByUserId) {
+-    const selfPerson = authorPersonByUserId.get(author.id);
+-    return {
+-        uid: author.uid,
+-        name: authorDisplayName(author, selfPerson),
+-        email: author.email,
+-        person_uid: selfPerson?.uid || null,
+-    };
++    return new Map(selfPeople.map((p) => [p.linked_user_id, p.uid]));
+ }
+ 
+ function serializeComment(
+     comment,
+     mentionedPeopleByUid = new Map(),
+-    authorPersonByUserId = new Map(),
++    authorPersonUidByUserId = new Map(),
+     reactionCountsByCommentId = {},
+     myReactionByCommentId = {}
+ ) {
+@@ -109,7 +89,13 @@ function serializeComment(
+         created_at: comment.created_at,
+         deleted_at: comment.deleted_at || null,
+         author: comment.Author
+-            ? serializeAuthor(comment.Author, authorPersonByUserId)
++            ? {
++                  uid: comment.Author.uid,
++                  name: comment.Author.name,
++                  email: comment.Author.email,
++                  person_uid:
++                      authorPersonUidByUserId.get(comment.Author.id) || null,
++              }
+             : null,
+         // Populated by listComments for a top-level comment; a reply never
+         // carries its own nested replies (one level of nesting only).
+@@ -144,12 +130,12 @@ async function listComments(userId, taskUid) {
+     const allCommentIds = comments.map((c) => c.id);
+     const [
+         mentionedPeopleByUid,
+-        authorPersonByUserId,
++        authorPersonUidByUserId,
+         reactionCountsByCommentId,
+         myReactionByCommentId,
+     ] = await Promise.all([
+         resolveMentionedPeopleMap(allMentionedUids),
+-        resolveAuthorPersonMap(allAuthorUserIds),
++        resolveAuthorPersonUidMap(allAuthorUserIds),
+         commentsRepository.countReactionsByComment(allCommentIds),
+         commentsRepository.findMyReactionsByComment(allCommentIds, userId),
+     ]);
+@@ -162,7 +148,7 @@ async function listComments(userId, taskUid) {
+             ...serializeComment(
+                 comment,
+                 mentionedPeopleByUid,
+-                authorPersonByUserId,
++                authorPersonUidByUserId,
+                 reactionCountsByCommentId,
+                 myReactionByCommentId
+             ),
+@@ -346,17 +332,17 @@ async function addComment(
+     await notifyAboutComment(task, comment, userId, parentAuthorUserId);
+ 
+     comment.Author = await User.findByPk(userId, {
+-        attributes: ['id', 'uid', 'name', 'surname', 'email'],
++        attributes: ['id', 'uid', 'name', 'email'],
+     });
+-    const [mentionedPeopleByUid, authorPersonByUserId] = await Promise.all([
++    const [mentionedPeopleByUid, authorPersonUidByUserId] = await Promise.all([
+         resolveMentionedPeopleMap(comment.mentioned_person_uids || []),
+-        resolveAuthorPersonMap([userId]),
++        resolveAuthorPersonUidMap([userId]),
+     ]);
+     return {
+         ...serializeComment(
+             comment,
+             mentionedPeopleByUid,
+-            authorPersonByUserId
++            authorPersonUidByUserId
+         ),
+         is_own: true,
+     };
+@@ -422,9 +408,9 @@ async function removeComment(userId, commentUid) {
+         deleted_at: new Date(),
+     });
+ 
+-    const authorPersonByUserId = await resolveAuthorPersonMap([userId]);
++    const authorPersonUidByUserId = await resolveAuthorPersonUidMap([userId]);
+     return {
+-        ...serializeComment(comment, new Map(), authorPersonByUserId),
++        ...serializeComment(comment, new Map(), authorPersonUidByUserId),
+         is_own: true,
+     };
+ }
+diff --git a/backend/tests/integration/comments.test.js b/backend/tests/integration/comments.test.js
+index 1fa8e9e4..4c7a3e79 100644
+--- a/backend/tests/integration/comments.test.js
++++ b/backend/tests/integration/comments.test.js
+@@ -105,33 +105,6 @@ describe('Task comments and mentions', () => {
+         );
+     });
+ 
+-    test('an author without a profile name is not shown as unknown', async () => {
+-        await ownerUser.update({ name: null, surname: null }, { hooks: false });
+-        const ownerSelf = await Person.findOne({
+-            where: { user_id: ownerUser.id, linked_user_id: ownerUser.id },
+-        });
+-
+-        const createResponse = await ownerAgent
+-            .post(`/api/task/${task.uid}/comments`)
+-            .send({ body: 'Nameless comment' });
+-        expect(createResponse.status).toBe(201);
+-        expect(createResponse.body.author.name).toBe(ownerSelf.name);
+-
+-        const listResponse = await collaboratorAgent.get(
+-            `/api/task/${task.uid}/comments`
+-        );
+-        expect(listResponse.body.comments[0].author.name).toBe(ownerSelf.name);
+-    });
+-
+-    test('an author name includes the surname', async () => {
+-        await ownerUser.update({ surname: 'Smith' });
+-
+-        const createResponse = await ownerAgent
+-            .post(`/api/task/${task.uid}/comments`)
+-            .send({ body: 'Full name' });
+-        expect(createResponse.body.author.name).toBe('Owner Smith');
+-    });
+-
+     test('a mention notifies the mentioned collaborator and logs a task event', async () => {
+         const collaboratorSelf = await Person.findOne({
+             where: {

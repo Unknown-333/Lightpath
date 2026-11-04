@@ -240,7 +240,9 @@ async function main() {
   record.cpuLoadStart = load;
   const agentStartIso = new Date().toISOString();
   log(`agent start (${MODEL}, effort ${EFFORT}, limit ${AGENT_TIMEOUT_MS / 60000} min)`);
-  const agent = await runAgent({ trialDir, prompt, outDir });
+  const maxSteps = args['max-steps'] === undefined ? null : Number(args['max-steps']);
+  record.maxSteps = maxSteps;
+  const agent = await runAgent({ trialDir, prompt, outDir, maxSteps });
   log(
     `agent stopped: exit ${agent.exitCode}${agent.timedOut ? ' (timed out)' : ''} after ${agent.wallMs} ms`,
   );
@@ -254,6 +256,8 @@ async function main() {
   record.wallMs = agent.wallMs;
   record.exitCode = agent.exitCode;
   record.timedOut = agent.timedOut;
+  // Suite v2 difficulty check: a run stopped at the step cap is scored as it stands (not void).
+  record.stepCapped = agent.stepCapped;
   record.transcript = agent.transcript;
 
   const events = readJsonl(agent.transcript);
@@ -323,7 +327,8 @@ async function main() {
 
   const voidReasons = [];
   const harnessFailed =
-    agent.error || (!agent.timedOut && (agent.exitCode !== 0 || record.agentStatus === null));
+    agent.error ||
+    (!agent.timedOut && !agent.stepCapped && (agent.exitCode !== 0 || record.agentStatus === null));
   if (harnessFailed)
     voidReasons.push(`harness: kiro-cli exit ${agent.exitCode}${agent.error ? ` ${agent.error}` : ''}`);
   if (record.cleanup.leftAlone.length > 0)
