@@ -39,10 +39,27 @@ function render(parts: SummaryParts, keep: (path: string) => boolean): string {
  * lowest rank first (background before foreground, then fewest hits), from every phase at once,
  * and ends with one line saying what was cut and how to see it.
  */
-export function fit(parts: SummaryParts, max = MAX_CHARS): string {
-  const full = render(parts, () => true);
-  if (full.length <= max) return full;
+export function fit(parts: SummaryParts, max = MAX_CHARS, basis?: SummaryParts): string {
+  // The files to leave out are picked on `basis` when given: a folded summary (D-141) keeps the
+  // files the unfolded one would keep, so folding only ever makes the text shorter.
+  const dropped = droppedFiles(basis ?? parts, max);
+  if (dropped.size === 0)
+    return fitText(
+      render(parts, () => true),
+      max,
+      parts.traceId,
+    );
+  const { bytes, fns } = sizes(parts);
+  const chars = [...dropped].reduce((sum, p) => sum + (bytes.get(p) ?? 0), 0);
+  return fitText(
+    `${render(parts, (p) => !dropped.has(p))}\n${cutLine(parts.traceId, dropped, fns, chars)}`,
+    max,
+    parts.traceId,
+  );
+}
 
+/** Each file's characters and function count over all sections. */
+function sizes(parts: SummaryParts) {
   const bytes = new Map<string, number>();
   const fns = new Map<string, number>();
   for (const s of parts.sections) {
@@ -51,6 +68,30 @@ export function fit(parts: SummaryParts, max = MAX_CHARS): string {
       fns.set(f.path, (fns.get(f.path) ?? 0) + f.functions);
     }
   }
+  return { bytes, fns };
+}
+
+function cutLine(
+  traceId: string,
+  dropped: ReadonlySet<string>,
+  fns: ReadonlyMap<string, number>,
+  chars: number,
+) {
+  const top = [...dropped].at(-1) ?? '';
+  const n = dropped.size;
+  const m = [...dropped].reduce((sum, p) => sum + (fns.get(p) ?? 0), 0);
+  return (
+    `not shown: ${n} file${n === 1 ? '' : 's'}, ${m} function${m === 1 ? '' : 's'} ` +
+    `(${chars.toLocaleString('en-US')} chars). Call get_trace with traceId "${traceId}" and file "${top}" to see one.`
+  );
+}
+
+/** The files `fit()` leaves out of `parts`, lowest rank first, so the rest fits in `max`. */
+export function droppedFiles(parts: SummaryParts, max = MAX_CHARS): Set<string> {
+  const dropped = new Set<string>();
+  const full = render(parts, () => true);
+  if (full.length <= max) return dropped;
+  const { bytes, fns } = sizes(parts);
   // Lowest rank first.
   const order = [...bytes.keys()].sort((a, b) => {
     const ra = parts.rank(a);
@@ -58,26 +99,16 @@ export function fit(parts: SummaryParts, max = MAX_CHARS): string {
     if (ra.background !== rb.background) return ra.background ? -1 : 1;
     return ra.hits - rb.hits || b.localeCompare(a);
   });
-  const dropped = new Set<string>();
   let length = full.length;
   let droppedChars = 0;
-  const cut = () => {
-    const top = [...dropped].at(-1) ?? '';
-    const n = dropped.size;
-    const m = [...dropped].reduce((sum, p) => sum + (fns.get(p) ?? 0), 0);
-    return (
-      `not shown: ${n} file${n === 1 ? '' : 's'}, ${m} function${m === 1 ? '' : 's'} ` +
-      `(${droppedChars.toLocaleString('en-US')} chars). Call get_trace with traceId "${parts.traceId}" and file "${top}" to see one.`
-    );
-  };
   for (const path of order) {
-    if (length + 1 + cut().length <= max) break;
+    if (length + 1 + cutLine(parts.traceId, dropped, fns, droppedChars).length <= max) break;
     dropped.add(path);
     const b = bytes.get(path) ?? 0;
     length -= b;
     droppedChars += b;
   }
-  return fitText(`${render(parts, (p) => !dropped.has(p))}\n${cut()}`, max, parts.traceId);
+  return dropped;
 }
 
 /**

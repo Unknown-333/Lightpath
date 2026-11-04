@@ -6,7 +6,7 @@ import type {
   TraceProblem,
   TraceRequest,
 } from '@lightpath-dev/protocol';
-import { type FileBlock, fit, type SummaryParts } from './budget.js';
+import { droppedFiles, type FileBlock, fit, MAX_CHARS, type SummaryParts } from './budget.js';
 
 const MAX_REQUEST_LINES = 20;
 
@@ -111,6 +111,65 @@ export function functionLine(f: FunctionHit): string {
 
 const litRanges = (f: FileHits) => numberRanges(f.lines.map((l) => l.line));
 
+/** A backend file shows once when it ran in this many requests of one trace, or more (D-141). */
+export const FOLD_MIN_REQUESTS = 3;
+const SHARED_NAME = `in ${FOLD_MIN_REQUESTS} or more requests`;
+const SHARED_TITLE = `${SHARED_NAME} [backend, shown once]`;
+
+/**
+ * The "in 3 or more requests" section (D-141): each shared backend file once, with how many
+ * requests ran it, and its functions with calls added up over those requests. A function that ran
+ * in fewer of them says in how many; a line is "not run" only when no request ran it.
+ */
+function foldShared(
+  shared: ReadonlyMap<string, readonly number[]>,
+  byPhase: ReadonlyMap<number, ReadonlyMap<string, FunctionHit[]>>,
+  requests: number,
+  order: (paths: Iterable<string>) => string[],
+  fileOf: (path: string) => FileHits | undefined,
+): { section: { title: string; files: FileBlock[] }; saved: Map<string, number> } | undefined {
+  if (shared.size === 0) return undefined;
+  const size = (lines: readonly string[]) => lines.reduce((n, l) => n + l.length + 1, 0);
+  const files: FileBlock[] = [];
+  /** Per file: characters under each request before folding, less its folded block. */
+  const saved = new Map<string, number>();
+  for (const path of order(shared.keys())) {
+    const phases = shared.get(path) ?? [];
+    const merged = new Map<string, { fn: FunctionHit; in: number; notRun: Set<number> }>();
+    let before = 0;
+    for (const i of phases) {
+      const fns = byPhase.get(i)?.get(path) ?? [];
+      before += size([`  ${path}`, ...fns.map((f) => `    ${functionLine(f)}`)]);
+      for (const f of fns) {
+        const key = `${f.name}|${f.startLine}|${f.endLine}`;
+        const m = merged.get(key);
+        if (!m) {
+          merged.set(key, { fn: { ...f }, in: 1, notRun: new Set(f.notRun ?? []) });
+          continue;
+        }
+        m.fn.count += f.count;
+        m.in += 1;
+        const mine = new Set(f.notRun ?? []);
+        for (const l of m.notRun) if (!mine.has(l)) m.notRun.delete(l);
+      }
+    }
+    const fns = [...merged.values()].sort(
+      (a, b) => a.fn.startLine - b.fn.startLine || b.fn.endLine - a.fn.endLine,
+    );
+    const bg = fileOf(path)?.background ? ', background' : '';
+    const lines = [
+      `  ${path} (in ${phases.length} of ${requests} requests${bg})`,
+      ...fns.map((m) => {
+        const line = functionLine({ ...m.fn, notRun: [...m.notRun] });
+        return `    ${line}${m.in < phases.length ? ` (in ${m.in})` : ''}`;
+      }),
+    ];
+    files.push({ path, lines, functions: fns.length });
+    saved.set(path, before - size(lines));
+  }
+  return { section: { title: SHARED_TITLE, files }, saved };
+}
+
 /**
  * The default trace text (design section 6.1, D-116): header lines, then one block per phase with
  * its files and their functions in line order, cut to 16,000 characters by `fit()`.
@@ -127,7 +186,6 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
 
   const fileOf = new Map(trace.files.map((f) => [f.path, f]));
   const phases = trace.phases ?? [];
-  const sections: SummaryParts['sections'] = phases.map((p) => ({ title: phaseTitle(trace, p), files: [] }));
   const byPhase = new Map<number, Map<string, FunctionHit[]>>();
   for (const fn of trace.functions ?? []) {
     let files = byPhase.get(fn.phase);
@@ -137,7 +195,15 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
     }
     files.set(fn.path, [...(files.get(fn.path) ?? []), fn]);
   }
-  const placed = new Set<string>();
+  // D-141: a backend file that ran in FOLD_MIN_REQUESTS or more requests is shown once, not under each.
+  const backend = phases.flatMap((p, i) => (p.kind === 'backend' ? [i] : []));
+  const shared = new Map<string, number[]>();
+  if (backend.length >= FOLD_MIN_REQUESTS) {
+    const where = new Map<string, number[]>();
+    for (const i of backend)
+      for (const path of byPhase.get(i)?.keys() ?? []) where.set(path, [...(where.get(path) ?? []), i]);
+    for (const [path, list] of where) if (list.length >= FOLD_MIN_REQUESTS) shared.set(path, list);
+  }
   const order = (paths: Iterable<string>) =>
     [...paths].sort((a, b) => {
       const fa = fileOf.get(a);
@@ -145,60 +211,89 @@ export function summarizeTrace(trace: Trace, extraHeader: readonly string[] = []
       const bg = Number(Boolean(fa?.background)) - Number(Boolean(fb?.background));
       return bg || (fa?.firstSeenAt ?? 0) - (fb?.firstSeenAt ?? 0) || a.localeCompare(b);
     });
-  for (const [i, files] of byPhase) {
-    const section = sections[i];
-    if (!section) continue;
-    for (const path of order(files.keys())) {
-      const fns = (files.get(path) ?? []).sort((a, b) => a.startLine - b.startLine || b.endLine - a.endLine);
-      const bg = fileOf.get(path)?.background ? ' (background)' : '';
-      section.files.push({
-        path,
-        lines: [`  ${path}${bg}`, ...fns.map((f) => `    ${functionLine(f)}`)],
-        functions: fns.length,
-      });
-      placed.add(path);
-    }
-  }
 
-  // Files with no function list (Python lines, or code outside any function): by line range, in
-  // the phase their collector belongs to, else in a last section.
-  const rest = order(trace.files.filter((f) => !placed.has(f.path)).map((f) => f.path));
-  let other: { title: string; files: FileBlock[] } | undefined;
-  for (const path of rest) {
-    const f = fileOf.get(path) as FileHits;
-    const i = phases.findIndex((p) =>
-      f.collector === 'browser'
-        ? p.kind === 'browser' || p.kind === 'after-response'
-        : p.kind === 'backend' &&
-          p.request !== undefined &&
-          trace.requests[p.request]?.collector === f.collector,
-    );
-    const block: FileBlock = {
-      path,
-      lines: [`  ${path} [${f.collector}] lines ${litRanges(f)}${f.background ? ' (background)' : ''}`],
-      functions: 0,
-    };
-    const section = i >= 0 ? sections[i] : undefined;
-    if (section) section.files.push(block);
-    else {
-      if (!other) {
-        other = { title: phases.length ? 'other files' : 'files', files: [] };
-        sections.push(other);
+  /** The phase sections, with shared backend files folded into one section when `fold` is set. */
+  const build = (fold: ReadonlyMap<string, readonly number[]>) => {
+    const sections: SummaryParts['sections'] = phases.map((p) => ({
+      title: phaseTitle(trace, p),
+      files: [],
+    }));
+    const placed = new Set<string>();
+    for (const [i, files] of byPhase) {
+      const section = sections[i];
+      if (!section) continue;
+      for (const path of order(files.keys())) {
+        placed.add(path);
+        if (fold.get(path)?.includes(i)) continue;
+        const fns = (files.get(path) ?? []).sort(
+          (a, b) => a.startLine - b.startLine || b.endLine - a.endLine,
+        );
+        const bg = fileOf.get(path)?.background ? ' (background)' : '';
+        section.files.push({
+          path,
+          lines: [`  ${path}${bg}`, ...fns.map((f) => `    ${functionLine(f)}`)],
+          functions: fns.length,
+        });
       }
-      other.files.push(block);
     }
-  }
+    const folded = foldShared(fold, byPhase, backend.length, order, (p) => fileOf.get(p));
+    if (folded) sections.push(folded.section);
+
+    // Files with no function list (Python lines, or code outside any function): by line range, in
+    // the phase their collector belongs to, else in a last section.
+    const rest = order(trace.files.filter((f) => !placed.has(f.path)).map((f) => f.path));
+    let other: { title: string; files: FileBlock[] } | undefined;
+    for (const path of rest) {
+      const f = fileOf.get(path) as FileHits;
+      const i = phases.findIndex((p) =>
+        f.collector === 'browser'
+          ? p.kind === 'browser' || p.kind === 'after-response'
+          : p.kind === 'backend' &&
+            p.request !== undefined &&
+            trace.requests[p.request]?.collector === f.collector,
+      );
+      const block: FileBlock = {
+        path,
+        lines: [`  ${path} [${f.collector}] lines ${litRanges(f)}${f.background ? ' (background)' : ''}`],
+        functions: 0,
+      };
+      const section = i >= 0 ? sections[i] : undefined;
+      if (section) section.files.push(block);
+      else {
+        if (!other) {
+          other = { title: phases.length ? 'other files' : 'files', files: [] };
+          sections.push(other);
+        }
+        other.files.push(block);
+      }
+    }
+    return { sections, folded };
+  };
 
   const hidden = trace.dropped.filter((d) => d.count > 0);
   const footer = hidden.length ? [`hidden: ${hidden.map((d) => `${d.count} ${d.reason}`).join(', ')}`] : [];
-  return fit({
-    traceId: trace.id,
-    header,
-    sections,
-    footer,
-    rank: (path) => {
-      const f = fileOf.get(path);
-      return { background: Boolean(f?.background), hits: f ? f.lines.reduce((n, l) => n + l.count, 0) : 0 };
-    },
-  });
+  const rank = (path: string) => {
+    const f = fileOf.get(path);
+    return { background: Boolean(f?.background), hits: f ? f.lines.reduce((n, l) => n + l.count, 0) : 0 };
+  };
+  const { sections, folded } = build(shared);
+  if (!folded) return fit({ traceId: trace.id, header, sections, footer, rank });
+  // The files shown are the ones the unfolded text would show (D-141): folding never adds files,
+  // and the fold line counts only the shared files that stay in view.
+  const unfolded = { traceId: trace.id, header, sections: build(new Map()).sections, footer, rank };
+  const dropped = droppedFiles(unfolded, MAX_CHARS);
+  const kept = folded.section.files.filter((f) => !dropped.has(f.path)).map((f) => f.path);
+  if (kept.length === 0)
+    return fit({ traceId: trace.id, header, sections, footer, rank }, MAX_CHARS, unfolded);
+  const n = kept.length;
+  const saved = kept.reduce((sum, p) => sum + (folded.saved.get(p) ?? 0), 0) - (SHARED_TITLE.length + 1);
+  const foldLine =
+    `folded: ${n} backend file${n === 1 ? '' : 's'} that ran in ${FOLD_MIN_REQUESTS} or more of the ${backend.length} requests ` +
+    `${n === 1 ? 'is' : 'are'} shown once under "${SHARED_NAME}", not under each request ` +
+    `(${Math.max(0, saved).toLocaleString('en-US')} chars saved). Call get_trace with traceId "${trace.id}" and file "${kept[0]}" to see one file's lines.`;
+  return fit(
+    { traceId: trace.id, header, sections, footer: [...footer, foldLine], rank },
+    MAX_CHARS,
+    unfolded,
+  );
 }

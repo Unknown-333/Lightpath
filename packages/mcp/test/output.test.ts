@@ -138,6 +138,142 @@ describe('summarizeTrace (design section 6.1)', () => {
   });
 });
 
+describe('summarizeTrace folds backend files that ran in 3 or more requests (D-141)', () => {
+  const request = (path: string): Trace['requests'][number] => ({
+    collector: 'node',
+    pid: 1,
+    method: 'GET',
+    path,
+    status: 200,
+    durationMs: 5,
+    overlapped: false,
+  });
+  const node = (over: Parameters<typeof fn>[0]) => fn({ collector: 'node', ...over });
+
+  it('shows a shared file once, with request counts, and keeps per-request files apart', () => {
+    const paths = ['/api/a', '/api/b', '/api/c', '/api/d'];
+    const many: Trace = {
+      id: 't_fold00000001',
+      label: 'button: Login',
+      origin: 'browser',
+      startedAt: 0,
+      endedAt: 10,
+      files: [
+        { path: 'backend/app.js', collector: 'node', lines: hits(10, 11, 20), firstSeenAt: 1 },
+        { path: 'backend/routes/a.js', collector: 'node', lines: hits(5), firstSeenAt: 2 },
+      ],
+      requests: paths.map(request),
+      dropped: [],
+      phases: paths.map((_, i) => ({ kind: 'backend', request: i })),
+      functions: [
+        ...paths.map((_, i) =>
+          node({
+            path: 'backend/app.js',
+            name: 'logger',
+            startLine: 10,
+            endLine: 14,
+            notRun: i === 0 ? [12, 13] : [13],
+            phase: i,
+          }),
+        ),
+        node({ path: 'backend/app.js', name: 'auth', startLine: 20, endLine: 22, phase: 0 }),
+        node({ path: 'backend/routes/a.js', name: 'getA', startLine: 5, endLine: 9, phase: 0 }),
+      ],
+    };
+    expect(summarizeTrace(many)).toBe(
+      [
+        'Trace t_fold00000001: button: Login',
+        'request: GET /api/a → 200 (node, 5 ms)',
+        'request: GET /api/b → 200 (node, 5 ms)',
+        'request: GET /api/c → 200 (node, 5 ms)',
+        'request: GET /api/d → 200 (node, 5 ms)',
+        '',
+        'GET /api/a → 200 [node, 5 ms]',
+        '  backend/routes/a.js',
+        '    getA 5-9 ×1',
+        'GET /api/b → 200 [node, 5 ms]',
+        'GET /api/c → 200 [node, 5 ms]',
+        'GET /api/d → 200 [node, 5 ms]',
+        'in 3 or more requests [backend, shown once]',
+        '  backend/app.js (in 4 of 4 requests)',
+        '    logger 10-14 ×4 not run: 13',
+        '    auth 20-22 ×1 (in 1)',
+        'folded: 1 backend file that ran in 3 or more of the 4 requests is shown once under "in 3 or more requests", not under each request (78 chars saved). Call get_trace with traceId "t_fold00000001" and file "backend/app.js" to see one file\'s lines.',
+      ].join('\n'),
+    );
+    // Two requests are too few to fold: the file stays under each.
+    const two: Trace = {
+      ...many,
+      requests: many.requests.slice(0, 2),
+      phases: many.phases?.slice(0, 2),
+      functions: many.functions?.filter((f) => f.phase < 2),
+    };
+    expect(summarizeTrace(two)).not.toContain('folded:');
+    expect(summarizeTrace(two).match(/^ {2}backend\/app\.js$/gm)).toHaveLength(2);
+  });
+
+  it('keeps the files the unfolded text would keep, so a capped trace gets shorter', () => {
+    // 13 requests that each run the same 4 middleware files and one route file of their own,
+    // plus 300 browser files: over the cap before folding (the tududi Login trace's shape).
+    const n = 13;
+    const middleware = [
+      'app.js',
+      'middleware/queryLogger.js',
+      'middleware/rateLimiter.js',
+      'services/perms.js',
+    ];
+    const functions: FunctionHit[] = [];
+    const files: Trace['files'] = [];
+    for (const [k, m] of middleware.entries()) {
+      files.push({ path: `backend/${m}`, collector: 'node', lines: hits(1), firstSeenAt: k });
+      for (let i = 0; i < n; i++)
+        for (let f = 0; f < 6; f++)
+          functions.push(
+            node({
+              path: `backend/${m}`,
+              name: `mw${f}`,
+              startLine: 10 * f + 1,
+              endLine: 10 * f + 9,
+              phase: i,
+            }),
+          );
+    }
+    for (let i = 0; i < n; i++) {
+      files.push({ path: `backend/routes/r${i}.js`, collector: 'node', lines: hits(1), firstSeenAt: 10 + i });
+      functions.push(
+        node({ path: `backend/routes/r${i}.js`, name: `route${i}`, startLine: 1, endLine: 9, phase: i }),
+      );
+    }
+    for (let i = 0; i < 300; i++) {
+      const path = `frontend/c${String(i).padStart(3, '0')}.tsx`;
+      files.push({ path, collector: 'browser', lines: [{ line: 1, count: 1 }], firstSeenAt: 100 + i });
+      functions.push(
+        fn({ path, name: `Component${i}`, startLine: 1, endLine: 40, notRun: [5, 6], phase: n }),
+      );
+    }
+    const big: Trace = {
+      ...checkout,
+      id: 't_fold00000002',
+      files,
+      requests: Array.from({ length: n }, (_, i) => request(`/api/r${i}`)),
+      phases: [
+        ...Array.from({ length: n }, (_, i) => ({ kind: 'backend' as const, request: i })),
+        { kind: 'after-response' },
+      ],
+      functions,
+      dropped: [],
+    };
+    const text = summarizeTrace(big);
+    expect(text).toContain('folded: 4 backend files that ran in 3 or more of the 13 requests');
+    // Every route file is kept under its own request.
+    for (let i = 0; i < n; i++) expect(text).toContain(`  backend/routes/r${i}.js\n    route${i} 1-9 ×1`);
+    // The cut drops the same browser files as without folding, so the text is shorter than the cap.
+    const notShown = /not shown: (\d+) files/.exec(text);
+    expect(Number(notShown?.[1])).toBeGreaterThan(0);
+    expect(text.length).toBeLessThan(MAX_CHARS - 5000);
+  });
+});
+
 describe('sliceTrace (design section 6.3)', () => {
   const orders = [
     '',
