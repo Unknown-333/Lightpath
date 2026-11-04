@@ -176,6 +176,8 @@ Three rules, applied in order:
 - **Settle rule**: zero in-flight requests and 300 ms without new requests or long tasks, capped at 5 s.
 - **Navigations**: a full page load replaces the document and its scripts. Coverage keeps running because the session belongs to the target. The hook's `beforeunload` listener pauses so the collector can take the leaving page's coverage and sources while they exist (ADR 0003); the new page's startup code joins the same trace.
 - **Keyboard boundary**: the same hook pauses on Enter and Space when they activate something (ADR 0003).
+- **Phases** (D-116, D-128): as an action's first tagged fetch or XHR leaves the page, the `page.route` handler takes one more coverage read before `route.continue()` and sends it as a delta with `beforeRequest: { method, path }`. Later requests of the same action go out without a read (D-128: a read took 27.98 ms p50 on Actual). Not for navigations: a read inside a held navigation deadlocks (ADR 0003), and the `beforeunload` read already splits a page load.
+- **Problems** (D-121): during an action, `pageerror` (uncaught exceptions and rejections), `console.error`, responses with status 400 and up (fetch, XHR, document) and `requestfailed` (not `ERR_ABORTED` from the page's own navigation) each go to the daemon as a `problem` for the open trace. Chrome's own "Failed to load resource" console line is skipped: it repeats a failed request. Fill values are scrubbed from messages.
 
 ### 5.2 Node agent (`@lightpath-dev/node-agent`)
 
@@ -194,6 +196,8 @@ What it does at startup, in order:
 Per request: take at start (background), take at finish (the request), attach the trace ID from `x-lightpath-trace` if present, and queue the delta. The first time a script appears in a delta, the agent also queues its source (`Debugger.getScriptSource`), once per hash, filtered to workspace files so `node_modules` sources are never sent.
 
 **Cost (measured).** A take costs time in proportion to all compiled functions in the isolate, not just those that ran: about 0.75 ms with 1,000 functions, 5 ms with 10,000, and 28 ms with 50,000. So the agent takes only at request boundaries and never polls. A large Express app is likely in the 10,000 to 50,000 range, adding 10 to 60 ms per request in dev. Budgets are in section 8.
+
+- **Uncaught errors** (D-121): `process.on('uncaughtExceptionMonitor')` watches without changing whether the process exits. When exactly one tagged request is in flight, the agent sends one `uncaught` problem synchronously, from a child `node` (with `NODE_OPTIONS` cleared, 2 s at most), because the async transport can't finish once the process is ending.
 
 ### 5.3 Python agent (`lightpath-agent`)
 
@@ -233,6 +237,7 @@ A per-request fix would need V8 to attribute counts to async contexts. It doesn'
 
 - Accept agent connections (WebSocket `/v1/agent`) and Python ingest (`POST /v1/ingest`).
 - Accept client connections (WebSocket `/v1/client`) from the VS Code extension, the CLI, and the MCP server.
+- Run one action at a time for the MCP server (`POST /v1/action`, D-115): hand it to the browser collector `lightpath dev` registered with `setActionRunner()`, wait up to 1.5 s after the trace ends for the backend lines of the requests it tagged, and reply with the trace. With no collector registered, the outcome is `no_browser`.
 - Request script sources from agents on demand, run the `core` pipeline, store traces, and publish them.
 - Write a discovery file so clients can find it: `<workspace>/.lightpath/daemon.json` with `{ port, token, pid, protocolVersion, startedAt }`. The file is git-ignored via a generated `.lightpath/.gitignore`.
 
@@ -243,6 +248,7 @@ The daemon receives source code and can see request paths, so it must not be rea
 | Threat                                                                                   | Defense                                                                                                                                                                                                                                                     |
 | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Another machine connects                                                                 | Bind to `127.0.0.1` only, never `0.0.0.0`                                                                                                                                                                                                                   |
+| Another local process clicks in the app through `/v1/action`                             | Same token and `Origin` check as every route (D-115). The token already gave full read access to traces and sources; it now also allows actions on the page `lightpath dev` opened, and nothing beyond it                                                   |
 | A malicious web page sends requests to `http://127.0.0.1:<port>` from the user's browser | Require a 32-byte random token on every request and client connection (constant-time comparison); reject any request or WebSocket with an `Origin` header, since agents and the extension don't send one; no CORS headers, so browsers can't read responses |
 | Another local user reads the token                                                       | `daemon.json` is created with user-only permissions (mode 0600 on Unix; inherited user ACL in the workspace on Windows)                                                                                                                                     |
 | Oversized or malformed messages                                                          | Validate every batch with the zod schemas in `protocol`; cap request bodies at 8 MB; reply 400 on schema failure (ingest) or close with 4400 (client WebSocket)                                                                                             |
@@ -287,12 +293,20 @@ Benchmarks live in `bench/` and run in CI on every release. Numbers in the READM
 
 `lightpath mcp` runs an MCP server over stdio. It reads the discovery file and talks to the daemon as a client.
 
-| Tool                   | Input                        | Output                                       |
-| ---------------------- | ---------------------------- | -------------------------------------------- |
-| `list_traces`          | optional label filter, limit | id, label, time, file count                  |
-| `get_trace`            | trace id                     | files with line ranges and counts            |
-| `find_code_for_action` | text, e.g. "Checkout"        | best-matching trace by label, with its files |
-| `diff_traces`          | two trace ids                | lines only in each                           |
+| Tool                   | Input                                                                                 | Output                                                                                          |
+| ---------------------- | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `run_action`           | target, optional `within`, `action`, `key`, `timeoutMs`, `fill`                       | the action's summary, with action and page lines and warnings; or the outcome and candidates    |
+| `run_request`          | `method`, `url` (a path or loopback URL), optional `body`, `contentType`, `timeoutMs` | the request's status, size and time, then its backend summary; never the body, headers or query |
+| `list_traces`          | optional label filter, limit                                                          | id, label, time, file count                                                                     |
+| `get_trace`            | trace id, optional `file`, `function`, `page`                                         | the summary; with `file` or `function`, the executed lines, paged                               |
+| `find_code_for_action` | text, e.g. "Checkout"                                                                 | the summary of the latest trace whose label matches                                             |
+| `diff_traces`          | two trace ids                                                                         | requests whose status changed, functions in only one, changed branches and call counts          |
+
+Every tool result is at most 16,000 characters (D-109), through `fit()` in `packages/mcp/src/budget.ts`. The default text is a function summary by phase (D-116): the header (trace, action, page, requests), then "before <request>" (browser code until the first fetch left the page), "<request>" (its backend) and "after the response", each listing files and their functions with line range, calls and not-run lines. When it doesn't fit, whole files are dropped, background first, then by fewest hits, and a last line names the call that shows one. `get_trace` with `file` or `function` (D-117) reads the source from the workspace file, only for trace paths whose real path is inside a workspace root, and warns when the file changed after the trace started. `diff_traces` matches functions by file, name and order, not line numbers (D-118). The server sends `instructions` (D-119). `run_request` (D-125) sends from the MCP server's own process, only to `localhost`, `127.0.0.1` or `[::1]` (and `localhost` only when every address it resolves to is loopback), checked before any network call. It uses `node:http` with its own agent, so no proxy is used and no redirect is followed, and it connects to the address it checked. It adds `x-lightpath-trace` with a new trace id, and waits up to 1.5 s after the response for that backend trace on the client feed. A path is resolved against `url` in `lightpath.config.json`.
+
+Problems and secrets (build 4). The summary's header gains `errors: N (first: …)` and `failed requests: N (first: …)` when there are any, and `list_traces` shows the problem count. Every tool result goes through `redact()` in `packages/mcp/src/redact.ts` (D-123): query values and `key=value` / `key: value` pairs whose name holds `token`, `key`, `secret`, `pass`, `auth`, `session` or `sig`, `Bearer` tokens, and JWT-like strings become `[redacted]`. Source slices are not redacted. Bodies and headers are never collected. Auto-start (D-122): when a tool needs the daemon and none answers `GET /v1/health`, and `lightpath.config.json` in the server's folder has `command` and `autoStart: true`, `lightpath mcp` starts `lightpath dev --headless` as its child (output in `.lightpath/dev.log`), waits up to 60 s for it (and for run_action, its browser), and starts that result with the command it ran. The child's tree stops when the MCP server exits.
+
+`run_action` sends one `POST /v1/action` to the daemon in the discovery file, with the token ([ADR 0007](adr/0007-run-action.md)). The collector runs it on its own page, one action at a time, after any open trace has ended: `fill` entries first with `locator.fill` (no key events, so no trace opens), then a synced press (mouse down, wait until the boundary is taken and the page resumed, mouse up; at once on the release boundary) or `locator.press` for Enter and Space. Before a click it checks the target is visible, enabled, not moving and not covered at its center without sending any input: Playwright's `click({ trial: true })` sends a real press that the hook sees (measured, Playwright 1.64). No CDP port is opened. Fill values are scrubbed from labels and the collector's log, and from the tool's text (redaction rule 6, D-123).
 
 ## 10. Failure modes
 

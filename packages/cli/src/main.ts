@@ -1,9 +1,12 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { runMcpServer } from '@lightpath-dev/mcp';
 import { cac } from 'cac';
 import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
 import { dev } from './dev.js';
 import { doctor } from './doctor.js';
+import { AGENTS, type Agent, init } from './init.js';
+import { serverToolNames } from './mcp-probe.js';
 
 /** This package's version, read from package.json (one folder up from both src/ and dist/). */
 export const VERSION = (
@@ -76,9 +79,46 @@ export async function main(argv: string[]): Promise<number> {
       'Where to look for .lightpath/daemon.json, then in each parent (default: current directory)',
     )
     .action((options: Record<string, unknown>) => {
-      result = runMcpServer({ workspaceRoot: (options.root as string | undefined) ?? process.cwd() }).then(
-        () => new Promise<number>(() => {}), // stays alive until the client closes stdin
-      );
+      const workspaceRoot = (options.root as string | undefined) ?? process.cwd();
+      // Auto-start (D-122) reads the config only in the folder the server starts in, like `dev`.
+      result = loadConfig(workspaceRoot)
+        .catch(() => undefined)
+        .then((loaded) =>
+          runMcpServer({
+            workspaceRoot,
+            autoStart: {
+              bin: fileURLToPath(new URL('./bin.js', import.meta.url)),
+              command: loaded?.config.command,
+              autoStart: loaded?.config.autoStart,
+            },
+          }),
+        )
+        .then(
+          () => new Promise<number>(() => {}), // stays alive until the client closes stdin
+        );
+    });
+
+  cli
+    .command('init', 'Set up your coding agent: its MCP config and the AGENTS.md block')
+    .option('--agent <agent>', `One of: ${AGENTS.join(', ')}`)
+    .example('lightpath init --agent claude-code')
+    .example('lightpath init --agent kiro')
+    .action((options: Record<string, unknown>) => {
+      result = (async () => {
+        const agent = options.agent as string | undefined;
+        if (!agent || !(AGENTS as readonly string[]).includes(agent)) {
+          process.stderr.write(
+            `lightpath init: --agent must be one of ${AGENTS.join(', ')}${agent ? ` (got "${agent}")` : ''}\n`,
+          );
+          return 1;
+        }
+        return init({
+          cwd: process.cwd(),
+          agent: agent as Agent,
+          version: VERSION,
+          tools: await serverToolNames(VERSION),
+        });
+      })();
     });
 
   cli

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +14,11 @@ let daemon: RunningDaemon;
 beforeAll(async () => {
   root = await mkdtemp(join(tmpdir(), 'lightpath-mcp-'));
   daemon = await startDaemon({ workspaceRoots: [root] });
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(
+    join(root, 'src', 'Cart.tsx'),
+    Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n'),
+  );
   daemon.store.put({
     id: 't_abc123def456',
     label: 'button: Checkout',
@@ -54,6 +59,8 @@ describe('lightpath mcp over stdio', () => {
         'find_code_for_action',
         'get_trace',
         'list_traces',
+        'run_action', // build 1 (design section 6.5, D-116)
+        'run_request', // build 5 (D-125)
       ]);
 
       const result = await client.callTool({
@@ -63,6 +70,16 @@ describe('lightpath mcp over stdio', () => {
       const text = (result.content as { type: string; text: string }[])[0]?.text ?? '';
       expect(text).toContain('Trace t_abc123def456: button: Checkout');
       expect(text).toContain('src/Cart.tsx [browser] lines 21-22');
+
+      // Build 2 (design 6.5, D-116): the drill-down prints lines 21 and 22 from the workspace file.
+      const slice = await client.callTool({
+        name: 'get_trace',
+        arguments: { traceId: 't_abc123def456', file: 'Cart.tsx' },
+      });
+      const sliceText = (slice.content as { type: string; text: string }[])[0]?.text ?? '';
+      expect(sliceText).toContain('  21  line 21');
+      expect(sliceText).toContain('  22  line 22');
+      expect(sliceText).not.toContain('line 23');
     } finally {
       await client.close();
     }

@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/core",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Pure mapping pipeline: V8 coverage ranges to original source lines",
   "keywords": [
     "coverage",

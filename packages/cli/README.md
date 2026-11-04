@@ -1,67 +1,48 @@
 # @lightpath-dev/cli
 
 [![npm](https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837)](https://www.npmjs.com/package/@lightpath-dev/cli)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/lightpath-dev.lightpath-vscode?label=VS%20Code&color=007acc)](https://marketplace.visualstudio.com/items?itemName=lightpath-dev.lightpath-vscode)
 [![CI](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml/badge.svg)](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](https://github.com/Unknown-333/Lightpath/blob/main/LICENSE)
 
-**Click anything in your running app and see the exact code it ran, frontend and backend, line by line.**
+**Show your coding agent the exact lines one click ran.**
 
-No code changes, no test suite, no tracing setup.
+Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the code that click ran, in the browser and on the server, line by line. It reads V8's own coverage, so it shows what ran, not a guess from file names.
 
-![Clicking Add to cart and Checkout in the example shop lights up Cart.tsx and the order route in VS Code](https://raw.githubusercontent.com/Unknown-333/Lightpath/main/docs/media/demo.gif)
+![A user reports that Outstanding doesn't drop after "Mark as paid". The agent calls run_action, the trace shows getSummary returned early from a cache, and the agent adds the missing line](https://raw.githubusercontent.com/Unknown-333/Lightpath/main/docs/media/agent-demo.gif)
+
+A real kiro-cli run (claude-sonnet-5.5) on the example app, with one bug planted for the demo. Time is shortened. [How it was made](https://github.com/Unknown-333/Lightpath/tree/main/docs/media/demo-run).
 
 ## Quick start
 
-Requires Node.js 22.12+ and Chrome or Edge.
+In your app's folder (React in the browser, a Node server, a `dev` script in `package.json`):
 
 ```sh
-npx @lightpath-dev/cli dev -- npm run dev
+npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro
+npx @lightpath-dev/cli doctor                     # checks what init wrote
+# restart your agent, then tell it the bug: "I click Save and the list doesn't update"
 ```
 
-Lightpath starts your dev command, finds your app's URL, and opens the app in a browser. Click something, and the code path prints in your terminal:
+The first time the agent calls a Lightpath tool, Lightpath starts your dev server and its own browser by itself, and stops them when the agent closes. Needs Node.js 22.12+ and Chrome or Edge.
 
-```
-◆ button: Checkout 335 ms
-  → POST /api/orders 201
-  ├─ src/api.ts :25-32, 35-36
-  ├─ src/App.tsx :6-8, 10, 12, 24-41, 43 ×6
-  ├─ src/Cart.tsx :11-14, 16-19, 21-28, 30-33, 35-44, 46-48, 50 ×4
-  ├─ src/money.ts :3-5 ×9
-  ├─ server/db.ts :26-28, 30-38 ×3
-  ├─ server/routes/orders.ts :11-14, 19-21, 25, 29, 31-33, 38-40
-  ├─ server/services/payment.ts :6-7, 10-12
-  └─ server/services/pricing.ts :12-19, 21-22, 26-33
-```
-
-To see the lines light up in your editor, add the [VS Code extension](https://marketplace.visualstudio.com/items?itemName=lightpath-dev.lightpath-vscode):
-
-```sh
-code --install-extension lightpath-dev.lightpath-vscode
-```
-
-To let your coding agent ask "which code handles Checkout?", add the MCP server. For Claude Code:
-
-```sh
-claude mcp add lightpath -- npx -y @lightpath-dev/cli mcp
-```
-
-Setup for Cursor, VS Code and Kiro is in [the main README](https://github.com/Unknown-333/Lightpath#ask-your-coding-agent).
+Without an agent, `npx @lightpath-dev/cli dev -- npm run dev` opens your app and prints each click's code path in the terminal.
 
 ## Commands
 
-| Command            | What it does                                             |
-| ------------------ | -------------------------------------------------------- |
-| `lightpath dev`    | Runs your dev command with Lightpath and opens your app  |
-| `lightpath mcp`    | MCP server over stdio, so coding agents can ask what ran |
-| `lightpath doctor` | Checks Node, the browser, the agent and your config file |
+| Command                                                      | What it does                                                                                                          |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `lightpath init --agent <claude-code\|cursor\|vscode\|kiro>` | Writes that agent's MCP config, `lightpath.config.json` and the `AGENTS.md` block                                     |
+| `lightpath mcp`                                              | MCP server over stdio: `run_action`, `run_request`, `find_code_for_action`, `get_trace`, `diff_traces`, `list_traces` |
+| `lightpath dev`                                              | Runs your dev command with Lightpath and opens your app                                                               |
+| `lightpath doctor`                                           | Checks Node, the browser, the agent, your config file and what init wrote                                             |
 
-Everything stays on your machine: the daemon listens on `127.0.0.1` only and needs a token.
+Everything stays on your machine: the daemon listens on `127.0.0.1` only and needs a token, and secrets are redacted in every tool answer.
 
 ## More
 
-- [Config file](https://github.com/Unknown-333/Lightpath#config-file): save your flags and hide generated code.
-- [How it works](https://github.com/Unknown-333/Lightpath#how-it-works) and [performance](https://github.com/Unknown-333/Lightpath#performance).
-- [Known limits](https://github.com/Unknown-333/Lightpath#known-limits) and [real apps it was tested on](https://github.com/Unknown-333/Lightpath#tested-on-real-apps).
+- [What your agent gets](https://github.com/Unknown-333/Lightpath#what-your-agent-gets) and [the MCP tools](https://github.com/Unknown-333/Lightpath#mcp-tools).
+- [Set up per agent](https://github.com/Unknown-333/Lightpath#set-up-your-agent) and [how it works](https://github.com/Unknown-333/Lightpath#how-it-works).
+- [The benchmark](https://github.com/Unknown-333/Lightpath#benchmark): Lightpath didn't raise the fix rate, and the README says so.
+- [Limits](https://github.com/Unknown-333/Lightpath#limits) and [real apps it was tested on](https://github.com/Unknown-333/Lightpath#tested-on-real-apps).
 - [Issues](https://github.com/Unknown-333/Lightpath/issues) and the [changelog](https://github.com/Unknown-333/Lightpath/blob/main/CHANGELOG.md).
 
 MIT licensed.

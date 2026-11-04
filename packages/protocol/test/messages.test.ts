@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ActionRequest,
+  ActionResult,
   ClientMessage,
   IngestBatch,
   IngestMessage,
@@ -93,5 +95,62 @@ describe('ClientMessage', () => {
       type: 'listTraces',
       requestId: 'r1',
     });
+  });
+});
+
+describe('ActionRequest (D-115)', () => {
+  const base = { protocolVersion: 1, target: 'button "Checkout"' };
+  it('accepts the design forms', () => {
+    expect(ActionRequest.parse(base)).toEqual(base);
+    const full = {
+      ...base,
+      within: 'Cart',
+      action: 'press',
+      key: 'Space',
+      timeoutMs: 500,
+      fill: [{ target: 'textbox "Coupon"', within: 'Cart', value: 'WELCOME10' }],
+    };
+    expect(ActionRequest.parse(full)).toEqual(full);
+  });
+
+  it.each([
+    ['an empty target', { ...base, target: '' }],
+    ['a target over 500 chars', { ...base, target: 'x'.repeat(501) }],
+    ['within over 200 chars', { ...base, within: 'x'.repeat(201) }],
+    ['a key without press', { ...base, key: 'Enter' }],
+    ['another key', { ...base, action: 'press', key: 'Escape' }],
+    ['timeoutMs under 500', { ...base, timeoutMs: 499 }],
+    ['timeoutMs over 30000', { ...base, timeoutMs: 30_001 }],
+    ['21 fill entries', { ...base, fill: Array.from({ length: 21 }, () => ({ target: 'x', value: 'y' })) }],
+    ['a fill value over 10,000 chars', { ...base, fill: [{ target: 'x', value: 'y'.repeat(10_001) }] }],
+  ])('rejects %s', (_, request) => {
+    expect(ActionRequest.safeParse(request).success).toBe(false);
+  });
+});
+
+describe('ActionResult', () => {
+  it('accepts both outcomes', () => {
+    const trace = {
+      id: 't_abc123def456',
+      label: 'button: Checkout',
+      origin: 'browser',
+      startedAt: 1,
+      files: [],
+      requests: [],
+      dropped: [],
+    };
+    const ok = {
+      ok: true,
+      trace,
+      boundary: 'release',
+      settled: 'quiet',
+      backend: 'partial',
+      pageUrl: 'http://localhost:5173/',
+      warnings: [{ code: 'backend_partial', message: 'm' }],
+    };
+    expect(ActionResult.parse(ok)).toEqual(ok);
+    const fail = { ok: false, error: { code: 'not_actionable', message: 'disabled', fillIndex: 2 } };
+    expect(ActionResult.parse(fail)).toEqual(fail);
+    expect(ActionResult.safeParse({ ok: false, error: { code: 'nope', message: '' } }).success).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/browser",
-  "version": "0.0.2",
+  "version": "0.1.0",
   "description": "Lightpath browser collector: launches Chrome, marks click boundaries, and collects frontend coverage",
   "keywords": [
     "coverage",
@@ -44,5 +44,9 @@
     "@lightpath-dev/core": "workspace:*",
     "@lightpath-dev/protocol": "workspace:*",
     "playwright-core": "1.64.1"
+  },
+  "devDependencies": {
+    "@lightpath-dev/daemon": "workspace:*",
+    "@lightpath-dev/mcp": "workspace:*"
   }
 }

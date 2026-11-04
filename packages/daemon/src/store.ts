@@ -45,7 +45,14 @@ export class MemoryStore implements Store {
     const out: TraceSummary[] = [];
     for (const t of [...this.#traces.values()].reverse()) {
       if (needle && !t.label.toLowerCase().includes(needle)) continue;
-      out.push({ id: t.id, label: t.label, startedAt: t.startedAt, fileCount: t.files.length });
+      const problems = (t.problems?.length ?? 0) + (t.problemsDropped ?? 0);
+      out.push({
+        id: t.id,
+        label: t.label,
+        startedAt: t.startedAt,
+        fileCount: t.files.length,
+        ...(problems > 0 ? { problemCount: problems } : {}),
+      });
       if (query.limit && out.length >= query.limit) break;
     }
     return out;

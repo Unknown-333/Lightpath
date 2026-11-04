@@ -154,6 +154,10 @@ function tsc(cwd, project, outDir) {
 }
 
 const API = 'http://127.0.0.1:3001';
+const SECRET_TOKEN = 'e2e-secret-query-token';
+const requireMcp = createRequire(join(repo, 'packages', 'mcp', 'package.json'));
+const { Client } = requireMcp('@modelcontextprotocol/sdk/client/index.js');
+const { StdioClientTransport } = requireMcp('@modelcontextprotocol/sdk/client/stdio.js');
 const failures = [];
 const check = (ok, message) => {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${message}`);
@@ -223,6 +227,40 @@ async function traceOrder(run) {
       return undefined;
     });
     await sleep(300); // let the CLI print the trace
+
+    // Build 5 (D-125): the agent sends the same order itself with run_request through
+    // `lightpath mcp`, no browser. The body and a token in the query must never come back.
+    const agent = new Client({ name: 'e2e-api-agent', version: '0.0.0' });
+    await agent.connect(
+      new StdioClientTransport({ command: node, args: [cliBin, 'mcp', '--root', run.cwd] }),
+    );
+    try {
+      const body = JSON.stringify(run.order);
+      const answer = await agent.callTool({
+        name: 'run_request',
+        arguments: { method: 'POST', url: `${API}/api/orders?token=${SECRET_TOKEN}`, body },
+      });
+      const text = answer.content?.[0]?.text ?? '';
+      if (run.name === 'shop: strip') console.log(`\nrun_request(POST /api/orders) →\n${text}\n`);
+      check(
+        /^Trace t_[a-z0-9]{12}: POST \/api\/orders\nsent: POST \/api\/orders → 201 /.test(text),
+        `${run.name}: run_request sent POST /api/orders and got its trace (201)`,
+      );
+      check(
+        new RegExp(`^ {2}${route.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}( |$)`, 'm').test(text),
+        `${run.name}: run_request's trace has ${route}`,
+      );
+      check(
+        text.length <= 16_000,
+        `${run.name}: run_request's answer is at most 16,000 chars (${text.length})`,
+      );
+      check(
+        !text.includes(SECRET_TOKEN) && !text.includes(body),
+        `${run.name}: run_request echoes neither the body nor the query token`,
+      );
+    } finally {
+      await agent.close();
+    }
     return { trace, output };
   } catch (err) {
     console.log(output.slice(-3000));

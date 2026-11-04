@@ -43,6 +43,10 @@ const arg = (name, fallback) => {
 const ACTUAL = arg('actual', process.env.ACTUAL_DIR);
 const REQUESTS = Number(arg('requests', '600'));
 const ROUNDS = Number(arg('rounds', '50'));
+// Build 2 (D-116): the browser reads coverage once more as each tagged fetch or XHR leaves the
+// page. The demo budget sends none on its own, so after the sidebar rounds the bench presses a
+// link and has the page fetch `/` from the Vite server during that click, this many times.
+const REQUEST_READS = Number(arg('request-reads', '50'));
 const HEADED = process.argv.includes('--headed');
 const WARMUP = 30;
 const SERVER = 'http://localhost:5006';
@@ -314,6 +318,22 @@ daemon.store.subscribe((t) => traces.set(t.id, t));
     clickPhaseTakes = serverTakes(out)
       .slice(takesBefore)
       .map((t) => t.ms);
+
+    // The read before a tagged request: press a link (not recorded as a click above), then fetch
+    // from the page while that click's trace is open, so the collector tags and reads once more.
+    for (let i = 0; i < REQUEST_READS; i++) {
+      const link = LINKS[i % LINKS.length];
+      const target = page.locator(`a:visible:has-text("${link.text}")`).first();
+      const box = await target.boundingBox();
+      if (!box) throw new Error(`nothing to press: ${link.text}`);
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await sleep(80);
+      await page.mouse.up();
+      await page.evaluate((u) => fetch(`${u}/?lightpath-bench=request-read`).then((r) => r.text()), WEB);
+      await page.waitForURL(link.path, { timeout: 30_000 });
+      await settled(++n);
+    }
   } finally {
     await collector?.stop().catch(() => {});
     stopActual(child);
@@ -439,6 +459,13 @@ console.log(
 );
 console.log(
   `Clicks with an empty closing read or trace: ${steady.filter((c) => !c.closingRead?.returned || c.browserFiles === 0).length}`,
+);
+const requestReads = logs.flatMap((l) => {
+  const m = /^request read for (\S+) (\S+): ([\d.]+) ms/.exec(l);
+  return m ? [Number(m[3])] : [];
+});
+console.log(
+  `\nRead before an action's first tagged request (D-116, D-128): ${requestReads.length} reads (${REQUEST_READS} clicks, each with one fetch from the page); p50 ${ms(pct(requestReads, 50))} ms, p99 ${ms(pct(requestReads, 99))} ms, max ${ms(Math.max(...requestReads))} ms`,
 );
 for (const m of notices) console.log(`\nNOTICE: ${m}`);
 console.log(

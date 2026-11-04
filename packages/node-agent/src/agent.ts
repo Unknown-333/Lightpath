@@ -49,6 +49,15 @@ export class Agent {
     this.#ownUrlPrefix = ownUrl.slice(0, ownUrl.lastIndexOf('/') + 1);
   }
 
+  /**
+   * The trace an uncaught error belongs to (D-121): only when exactly one tagged request is in
+   * flight. With none or several, it can't be told apart, so it is dropped.
+   */
+  soleTraceId(): string | undefined {
+    const tagged = [...this.#inFlight.values()].filter((e) => e.traceId);
+    return tagged.length === 1 ? tagged[0]?.traceId : undefined;
+  }
+
   onRequestStart(req: ServerRequestLike): void {
     if (this.#inFlight.size === 0) this.#emit('background', this.#session.take(), Date.now());
     const now = Date.now();

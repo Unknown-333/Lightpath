@@ -20,6 +20,7 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm test:py",
     "e2e": "pnpm build && node scripts/e2e-shop.mjs",
     "e2e:api": "pnpm build && node scripts/e2e-api.mjs",
+    "e2e:invoices": "pnpm build && node scripts/e2e-invoices.mjs",
     "test:vscode": "pnpm build && pnpm bundle && pnpm --filter lightpath-vscode test:editor",
     "lightpath": "node packages/cli/dist/bin.js",
     "shop": "pnpm --filter shop dev"

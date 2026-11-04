@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/mcp",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "MCP server that lets coding agents ask which code ran for an action in your app",
   "keywords": [
     "mcp",
@@ -43,5 +43,8 @@
     "@lightpath-dev/protocol": "workspace:*",
     "@modelcontextprotocol/sdk": "1.32.2",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@lightpath-dev/daemon": "workspace:*"
   }
 }

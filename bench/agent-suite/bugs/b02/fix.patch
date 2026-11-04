@@ -1,0 +1,13 @@
+diff --git a/src/api.ts b/src/api.ts
+index 247e6e5..ff3c873 100644
+--- a/src/api.ts
++++ b/src/api.ts
+@@ -26,7 +26,7 @@ export async function placeOrder(lines: CartLine[], coupon?: string): Promise<Or
+   const res = await fetch('/api/orders', {
+     method: 'POST',
+     headers: { 'content-type': 'application/json' },
+-    body: JSON.stringify({ items: lines, coupon }),
++    body: JSON.stringify({ lines, coupon }),
+   });
+   const body = await res.json();
+   if (!res.ok) {

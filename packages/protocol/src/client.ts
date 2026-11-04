@@ -1,5 +1,29 @@
-import { type ClientMessage, DaemonToClientMessage } from './messages.js';
+import { type ActionRequest, ActionResult, type ClientMessage, DaemonToClientMessage } from './messages.js';
 import type { Trace, TraceId, TraceSummary } from './model.js';
+
+/**
+ * Asks the daemon to run one action in the app (`POST /v1/action`, D-115) and waits for its trace.
+ * Node's `fetch` sends no `Origin` header, so it passes the daemon's origin check. Throws on a
+ * transport error (HTTP status other than 200) or when `timeoutMs` passes.
+ */
+export async function postAction(
+  port: number,
+  token: string,
+  request: ActionRequest,
+  timeoutMs = 60_000,
+): Promise<ActionResult> {
+  const res = await fetch(`http://127.0.0.1:${port}/v1/action`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify(request),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body = await res.text();
+  if (res.status !== 200) {
+    throw new Error(`the Lightpath daemon refused the action (HTTP ${res.status}): ${body.slice(0, 300)}`);
+  }
+  return ActionResult.parse(JSON.parse(body));
+}
 
 type Pending = { resolve: (m: DaemonToClientMessage) => void; reject: (e: Error) => void };
 

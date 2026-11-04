@@ -87,6 +87,72 @@ export const TraceRequest = z.object({
 });
 export type TraceRequest = z.infer<typeof TraceRequest>;
 
+/** One phase of an action (D-116): browser code before a request left, that request's backend, the rest. */
+export const TracePhase = z.object({
+  /** `browser`: a browser action with no tagged request read. */
+  kind: z.enum(['before-request', 'backend', 'after-response', 'browser']),
+  /** Index into `Trace.requests`, for `before-request` and `backend`. */
+  request: z.number().int().nonnegative().optional(),
+});
+export type TracePhase = z.infer<typeof TracePhase>;
+
+/** A function that ran in one phase (D-116, design section 5.3). Lines are original and 1-based. */
+export const FunctionHit = z.object({
+  /** Workspace-relative, like `FileHits.path`. */
+  path: z.string(),
+  collector: CollectorKind,
+  /** '' when V8 has no name; printed "(anonymous)". */
+  name: z.string(),
+  startLine: z.number().int().positive(),
+  endLine: z.number().int().positive(),
+  /** Calls in this phase; 0 means the function resumed (after an await) without a new call. */
+  count: z.number().int().nonnegative(),
+  /** Lines inside the function known not to have run (count 0), sorted. */
+  notRun: z.array(z.number().int().positive()).optional(),
+  /** Untaken blocks inside a line that ran. `text` is at most 40 characters, '' when unknown. */
+  notRunSpans: z
+    .array(
+      z.object({
+        line: z.number().int().positive(),
+        startColumn: z.number().int().nonnegative(),
+        endColumn: z.number().int().nonnegative(),
+        text: z.string().max(40),
+      }),
+    )
+    .optional(),
+  /** Index into `Trace.phases`. */
+  phase: z.number().int().nonnegative(),
+});
+export type FunctionHit = z.infer<typeof FunctionHit>;
+
+export const ProblemKind = z.enum(['exception', 'console-error', 'request-failed', 'uncaught']);
+export type ProblemKind = z.infer<typeof ProblemKind>;
+
+export const ProblemRequest = z.object({
+  method: z.string(),
+  path: z.string(),
+  status: z.number().int().optional(),
+  failure: z.string().optional(),
+});
+export type ProblemRequest = z.infer<typeof ProblemRequest>;
+
+/** An error or failed request attached to a trace (D-121). Messages are stored as received. */
+export const TraceProblem = z.object({
+  collector: CollectorKind,
+  kind: ProblemKind,
+  /** Stored as received; redacted when printed (D-123). */
+  message: z.string(),
+  at: z.number(),
+  /** Workspace-relative, when the location maps into the workspace. */
+  path: z.string().optional(),
+  line: z.number().int().positive().optional(),
+  request: ProblemRequest.optional(),
+});
+export type TraceProblem = z.infer<typeof TraceProblem>;
+
+/** Most problems kept per trace; more are counted in `problemsDropped`. */
+export const MAX_TRACE_PROBLEMS = 50;
+
 export const Trace = z.object({
   id: TraceId,
   label: z.string(),
@@ -96,6 +162,12 @@ export const Trace = z.object({
   files: z.array(FileHits),
   requests: z.array(TraceRequest),
   dropped: z.array(z.object({ reason: DropReason, count: z.number().int().nonnegative() })),
+  phases: z.array(TracePhase).optional(),
+  /** Outermost and nested; a function that runs in two phases appears twice. */
+  functions: z.array(FunctionHit).optional(),
+  /** At most MAX_TRACE_PROBLEMS (D-121). */
+  problems: z.array(TraceProblem).optional(),
+  problemsDropped: z.number().int().nonnegative().optional(),
 });
 export type Trace = z.infer<typeof Trace>;
 
@@ -104,5 +176,6 @@ export const TraceSummary = z.object({
   label: z.string(),
   startedAt: z.number(),
   fileCount: z.number().int().nonnegative(),
+  problemCount: z.number().int().nonnegative().optional(),
 });
 export type TraceSummary = z.infer<typeof TraceSummary>;

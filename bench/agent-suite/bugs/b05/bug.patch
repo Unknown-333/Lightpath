@@ -1,0 +1,29 @@
+diff --git a/src/Cart.tsx b/src/Cart.tsx
+index 6ab47c1..27bfbde 100644
+--- a/src/Cart.tsx
++++ b/src/Cart.tsx
+@@ -36,14 +36,16 @@ export function Cart({ lines, products, onCheckedOut }: CartProps) {
+     <section>
+       <h2>Cart</h2>
+       {lines.length === 0 ? <p>Your cart is empty.</p> : <p>Subtotal: {formatCents(subtotal)}</p>}
+-      <input
+-        placeholder="Coupon (try WELCOME10)"
+-        value={coupon}
+-        onChange={(e) => setCoupon(e.target.value)}
+-      />{' '}
+-      <button type="button" className="primary" disabled={busy} onClick={checkout}>
+-        Checkout
+-      </button>
++      <form onSubmit={checkout}>
++        <input
++          placeholder="Coupon (try WELCOME10)"
++          value={coupon}
++          onChange={(e) => setCoupon(e.target.value)}
++        />{' '}
++        <button type="submit" className="primary" disabled={busy}>
++          Checkout
++        </button>
++      </form>
+       {status && <p className={`notice ${status.kind === 'error' ? 'error' : ''}`}>{status.text}</p>}
+     </section>
+   );
