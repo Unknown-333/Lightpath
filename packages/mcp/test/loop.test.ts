@@ -167,3 +167,21 @@ describe('run_action times (D-142)', () => {
     expect(received).toHaveLength(0);
   });
 });
+
+describe('find_code_for_action with nothing recorded (D-143)', () => {
+  it('answers with the run_action call that records it', async () => {
+    const { text } = await call('find_code_for_action', { action: 'Set in progress' });
+    expect(text).toBe(
+      [
+        'No recorded action matches "Set in progress" yet, so there is no trace to read. Record it now with:',
+        '  run_action {"target":"Set in progress"}',
+        'If it needs sign-in or setup steps first, do each with its own run_action call. Or ask the user to click it in the app opened by `lightpath dev`.',
+      ].join('\n'),
+    );
+    // The call is valid run_action input, and it records the action.
+    const args = JSON.parse(text.split('\n')[1]?.replace('  run_action ', '') ?? '{}');
+    const recorded = await call('run_action', args);
+    expect(recorded.isError).toBe(false);
+    expect(received.at(-1)?.target).toBe('Set in progress');
+  });
+});

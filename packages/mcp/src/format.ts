@@ -41,6 +41,18 @@ export function describeTrace(trace: Trace): string {
   return out.join('\n');
 }
 
+/**
+ * find_code_for_action's answer when no recorded action matches (D-143): the run_action call that
+ * records one, with the words as its target, instead of only "do it with run_action".
+ */
+export function noRecordedAction(action: string): string {
+  return [
+    `No recorded action matches "${action}" yet, so there is no trace to read. Record it now with:`,
+    `  run_action ${JSON.stringify({ target: action.trim() })}`,
+    'If it needs sign-in or setup steps first, do each with its own run_action call. Or ask the user to click it in the app opened by `lightpath dev`.',
+  ].join('\n');
+}
+
 export function describeSummaries(traces: readonly TraceSummary[]): string {
   if (traces.length === 0) return 'No traces yet. Click something in the app opened by `lightpath dev`.';
   return traces

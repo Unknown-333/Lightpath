@@ -11,6 +11,7 @@ Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps w
 - A `run_action` miss on a page with a password field says the page is a sign-in form and gives a ready `run_action` call built from its own fields, with `<placeholder>` values (D-139).
 - `run_action`'s schema is shorter: Kiro's `tool_load` text for it goes from 2,409 to 2,091 characters. The daemon checks the bounds the schema no longer repeats, and `press: "Enter" | "Space"` replaces `action: "press"` plus `key`; a call with the old keys now clicks (D-140).
 - A trace with 3 or more backend requests shows each backend file that ran in 3 or more of them once, with request counts, instead of under every request. On a tududi Login trace (13 requests) that is 14,810 → 11,441 characters, with the same files left out (D-141).
+- `find_code_for_action` with nothing recorded answers with the `run_action` call that records it, such as `run_action {"target":"Set in progress"}` (D-143).
 
 ### Added
 

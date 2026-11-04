@@ -1281,3 +1281,14 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Tests: new `packages/mcp/test/merge.test.ts` (matching, adding up, not-run only when no run ran it, inputs left alone) and three `times` tests in `loop.test.ts` (2 runs merged, stop at the first miss, 6 refused). All fail on main.
 - Alternatives: a `times` field in the daemon's `/v1/action` (one trace for all presses, but a protocol change, Tier 2, for the same answer); returning every run's trace in full (the cost `times` is meant to cut); a higher cap (5 covers every repeat in the audit).
 - Revert: drop `times`, `repeated`, `repeatedLine` and `MAX_TIMES` in `server.ts`, the `notes` parameter of `describeActionResult`, `merge.ts`, and the new tests.
+
+### D-143 find_code_for_action with nothing recorded answers with the run_action call to make (0.1.1, fix 5 of the steps audit)
+
+- Date: 2026-11-04 (written before the code)
+- Decision: When no recorded trace matches, `find_code_for_action` says so and gives the exact call that records it, with the agent's words as the target: `run_action {"target":"Set in progress"}`. A last line says to do sign-in or setup steps first, each with its own run_action call, or to ask the user to click it. Before, it said only "Do it with run_action, or ask the user to click it …, then try again."
+- Why: the steps audit (PR #59, section 3) found 4 find_code_for_action calls, all before any action, and 0 useful: each got "No recorded action matches …", and the next step was a text search every time. The tool was loaded in 16 runs.
+- Measured without a model: the miss text grows from 143 to 273 characters for "Upcoming" and from 150 to 287 for "Set in progress" (tududi), and from 149 to 285 for "shop page load" (`C:\Users\user\lightpath-trials\goal\fix011-raw\`). The target is text, so a word that isn't on the page gets run_action's own not_found answer with the closest targets (and, on a sign-in page, D-139's hint).
+- Format change agents see: this one message. No existing test asserted it. New test in `packages/mcp/test/loop.test.ts`: the exact text, and that sending its call to run_action records the action. It fails on main.
+- Not changed: the `lightpath init` block's line about find_code_for_action and the tool description. The audit also proposed listing find_code_for_action in AGENTS.md only for a click the user made; that changes a pinned init test for a text effect no run has measured, so it is left for a measured change.
+- Alternatives: running the action from find_code_for_action (it is the tool that does not act; run_action is); listing recent labels (labels like `button: login-submit` don't match the words a user reports).
+- Revert: restore the old message in `server.ts`, drop `noRecordedAction` in `format.ts` and the test.

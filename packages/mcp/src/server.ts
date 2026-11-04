@@ -22,6 +22,7 @@ import {
   describeRequestResult,
   describeSummaries,
   diffTraces,
+  noRecordedAction,
   redirectNote,
 } from './format.js';
 import { mergeTraces } from './merge.js';
@@ -318,11 +319,7 @@ export function createMcpServer(options: McpOptions): McpServer {
         const [match] = await c.listTraces({ label: action, limit: 1 });
         return match ? c.getTrace(match.id) : null;
       });
-      return reply(
-        trace
-          ? summarizeTrace(trace)
-          : `No recorded action matches "${action}". Do it with run_action, or ask the user to click it in the app opened by \`lightpath dev\`, then try again.`,
-      );
+      return reply(trace ? summarizeTrace(trace) : noRecordedAction(action));
     },
   );
 
