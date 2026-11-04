@@ -299,6 +299,50 @@ describe('diffFunctions (design section 6.4)', () => {
   });
 });
 
+/** Kiro CLI's `tool_load` answer for one tool, as it appears in a benchmark transcript (D-140). */
+function kiroToolLoad(tool: {
+  name: string;
+  description?: string | undefined;
+  inputSchema: unknown;
+}): string {
+  const strip = (s: unknown): unknown => {
+    if (Array.isArray(s)) return s.map(strip);
+    if (!s || typeof s !== 'object') return s;
+    return Object.fromEntries(
+      Object.entries(s)
+        .filter(([k]) => k !== '$schema' && k !== 'additionalProperties')
+        .map(([k, v]) => [k, strip(v)]),
+    );
+  };
+  const note =
+    'These tools are now loaded for the rest of this session. To RUN one, call tool_call with { "tool_id": "namespace::tool", "arguments": { ... } } (use the tool_id shown for each result, and arguments matching its input_schema). Do not call tool_load again for tools you have already loaded.';
+  const loaded = [
+    {
+      tool_id: `lightpath::${tool.name}`,
+      description: tool.description,
+      input_schema: strip(tool.inputSchema),
+    },
+  ];
+  return JSON.stringify({ loaded, not_found: [], note }, null, 2);
+}
+
+describe('run_action load size (D-140)', () => {
+  it("is shorter than 0.1.0's 2,409 characters in Kiro's tool_load step", async () => {
+    const [a, b] = InMemoryTransport.createLinkedPair();
+    const server = createMcpServer({ workspaceRoot: process.cwd() });
+    const client = new Client({ name: 'test', version: '0.0.0' });
+    await Promise.all([server.connect(a), client.connect(b)]);
+    try {
+      const tool = (await client.listTools()).tools.find((t) => t.name === 'run_action');
+      expect(tool).toBeDefined();
+      // 2,409: the tool_load text of 0.1.0's run_action in the benchmark run b04-with-1 (steps audit, PR #59).
+      if (tool) expect(kiroToolLoad(tool).length).toBeLessThan(2409);
+    } finally {
+      await client.close();
+    }
+  });
+});
+
 describe('server texts (design section 3, D-119)', () => {
   it('keeps instructions under 1,000, each description under 300, and tools/list at most 4,000', async () => {
     expect(INSTRUCTIONS.length).toBe(896); // 730 plus the bug-report trigger (D-134); the cap stays 1,000

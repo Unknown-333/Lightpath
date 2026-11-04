@@ -9,6 +9,7 @@ Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps w
 ### Changed
 
 - A `run_action` miss on a page with a password field says the page is a sign-in form and gives a ready `run_action` call built from its own fields, with `<placeholder>` values (D-139).
+- `run_action`'s schema is shorter: Kiro's `tool_load` text for it goes from 2,409 to 2,091 characters. The daemon checks the bounds the schema no longer repeats, and `press: "Enter" | "Space"` replaces `action: "press"` plus `key`; a call with the old keys now clicks (D-140).
 
 ## [0.1.0] - 2026-11-04
 

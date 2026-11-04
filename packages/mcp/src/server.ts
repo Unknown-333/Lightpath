@@ -42,15 +42,17 @@ import { DESCRIPTIONS, INSTRUCTIONS } from './texts.js';
 
 /**
  * The run_action description (docs/design/agent-loop.md section 3, D-119; bug-report trigger and
- * one step per call, D-134): under 300 characters.
+ * one step per call, D-134; shorter, D-140): under 300 characters.
  */
 export const RUN_ACTION_DESCRIPTION =
-  "Do one step in the user's running app (click a button or link, or press Enter or Space, after filling " +
-  'fields) and return the code it ran, browser and server. Page, sign-in and data stay between calls. ' +
+  "Do one step in the user's running app: click, or press Enter or Space, after filling fields. " +
+  'Returns the code it ran, browser and server. Page, sign-in and data stay between calls. ' +
   'Use it first to reproduce a reported bug step by step, and again after the fix.';
 
-const targetSchema = z.string().min(1).max(500).describe('button "Save", text, or css=<selector>');
-const withinSchema = z.string().min(1).max(200).describe('Text of its row or section');
+// No length bounds in the schema the agent loads (D-140): the daemon checks them and answers 400
+// (`ActionRequest` in @lightpath-dev/protocol), the same as D-129 did for `fill` items.
+const targetSchema = z.string().describe('button "Save", text, or css=<selector>');
+const withinSchema = z.string().describe('Text of its row or section');
 
 export interface McpOptions {
   workspaceRoot: string;
@@ -207,21 +209,22 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: {
         target: targetSchema,
         within: withinSchema.optional(),
-        action: z.enum(['click', 'press']).optional().describe('Default click'),
-        key: z.enum(['Enter', 'Space']).optional().describe('With press; default Enter'),
-        timeoutMs: z.number().int().min(500).max(30_000).optional().describe('Settle cap, default 5000'),
+        // One key instead of `action` plus `key` (D-140); the daemon still takes both.
+        press: z.enum(['Enter', 'Space']).optional().describe('Press this key instead of clicking'),
+        // 500 to 30,000, checked by the daemon (D-140).
+        timeoutMs: z.number().int().optional().describe('Settle cap, default 5000'),
         fill: z
           .array(
             // Same forms as target and within. Bounds and descriptions aren't repeated here, to keep
-            // tools/list under 4,000 characters (D-129); the daemon checks them (400).
+            // tools/list under 4,000 characters (D-129); the daemon checks them and the 20-item cap (400).
             z.object({ target: z.string(), within: z.string().optional(), value: z.string() }),
           )
-          .max(20)
           .optional()
           .describe('Filled first, in order; values never shown'),
       },
     },
-    async (input) => {
+    async ({ press, ...rest }) => {
+      const input = { ...rest, ...(press ? { action: 'press' as const, key: press } : {}) };
       const request: ActionRequest = { protocolVersion: PROTOCOL_VERSION, ...input };
       const values = (input.fill ?? []).map((f) => f.value);
       try {
