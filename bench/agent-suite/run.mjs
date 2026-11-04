@@ -14,7 +14,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { appendFile } from 'node:fs/promises';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import {
   AGENT_TIMEOUT_MS,
   agentConfig,
@@ -45,6 +45,7 @@ import {
   TRIALS_ROOT,
 } from './lib/common.mjs';
 import { initTrial, prepareLightpath, probeTools, startLightpathDev } from './lib/lightpath.mjs';
+import { outsidePaths } from './lib/outside.mjs';
 import * as shopApp from './lib/shop.mjs';
 import * as shopTrial from './lib/trial.mjs';
 import * as realapp from './realapp/lib/app.mjs';
@@ -142,46 +143,6 @@ function hashBugDir() {
       .sort()
       .map((f) => [f, sha256File(join(bugDir, f))]),
   );
-}
-
-const PATH_KEYS = /path|file|dir|cwd|target|source|pattern|glob/i;
-/**
- * Paths a tool call names that resolve outside the trial folder. Looks at ACP `locations`,
- * path-like input fields, and absolute paths or `..` escapes inside shell commands.
- * Conservative: a human can review every hit in `outsidePaths`.
- */
-function outsidePaths(toolCalls, trialDir) {
-  const root = trialDir.toLowerCase();
-  const isOutside = (p, base) => {
-    const full = resolve(base, p).toLowerCase();
-    return full !== root && !full.startsWith(`${root}\\`) && !full.startsWith(`${root}/`);
-  };
-  const hits = [];
-  for (const call of toolCalls) {
-    const base = typeof call.input?.cwd === 'string' ? call.input.cwd : trialDir;
-    const candidates = [];
-    for (const loc of call.locations ?? []) if (loc?.path) candidates.push(loc.path);
-    for (const [key, value] of Object.entries(call.input ?? {})) {
-      if (key === 'command' || typeof value !== 'string' || !PATH_KEYS.test(key)) continue;
-      if (/^[a-z]:[\\/]|^[\\/]|\.\.[\\/]|^\.\.$/i.test(value)) candidates.push(value);
-    }
-    if (typeof call.input?.command === 'string') {
-      const cmd = call.input.command;
-      // A drive path, not the "p://" inside "http://".
-      candidates.push(...(cmd.match(/(?<![a-z])[a-z]:[\\/][^\s"'`;|,)]*/gi) ?? []));
-      candidates.push(
-        ...(cmd.match(/(?:^|[\s"'])(\.\.(?:[\\/][^\s"'`;|,)]*)?)/g) ?? []).map((m) =>
-          m.trim().replace(/^["']/, ''),
-        ),
-      );
-    }
-    for (const p of candidates) {
-      if (isAbsolute(p) || p.startsWith('..')) {
-        if (isOutside(p, base)) hits.push({ tool: call.title ?? call.kind, path: p });
-      }
-    }
-  }
-  return hits;
 }
 
 async function main() {
@@ -308,7 +269,10 @@ async function main() {
     ];
   }
   record.shellFlags = auditShellCommands(parsed.toolCalls, trialDir);
-  record.outsidePaths = outsidePaths(parsed.toolCalls, trialDir);
+  // D-145: hits void the run; what the D-108 rule also flagged but D-145 drops is kept for review.
+  const outside = outsidePaths(parsed.toolCalls, trialDir);
+  record.outsidePaths = outside.hits;
+  record.ignoredOutsidePaths = outside.ignored;
   writeFileSync(join(outDir, 'tool-calls.json'), `${JSON.stringify(parsed.toolCalls, null, 2)}\n`);
   writeFileSync(join(outDir, 'final-text.md'), `${parsed.finalText ?? ''}\n`);
 
