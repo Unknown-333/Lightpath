@@ -1,77 +1,116 @@
-prove: 2026-11-04T15:05:12.584Z bugs=C:\Users\user\lightpath-trials\goal\suite2\bench\agent-suite-v2\bugs ids=v01,v04,v05,v06,v07,v08,v09 runs=2 node=v24.13.0
+prove: 2026-11-04T17:16:45.974Z bugs=C:\Users\user\lightpath-trials\goal\suite2\bench\agent-suite-v2\bugs ids=v01,v02,v03,v04,v05,v06,v07,v08,v09 runs=3 node=v24.13.0
 
 == v01 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
-  bug run 1: check FAIL (24727 ms) - the comment's author shows as "Unknown": "U\nUnknown\nJust now\nBooked the carpenter for Friday\nReply\nDelete comment"
-  bug run 2: check FAIL (16946 ms) - the comment's author shows as "Unknown": "U\nUnknown\nJust now\nBooked the carpenter for Friday\nReply\nDelete comment"
+  bug run 1: check FAIL (30153 ms) - the comment's author shows as "Unknown": "U\nUnknown\nJust now\nBooked the carpenter for Friday\nReply\nDelete comment"
+  bug run 2: check FAIL (20366 ms) - the comment's author shows as "Unknown": "U\nUnknown\nJust now\nBooked the carpenter for Friday\nReply\nDelete comment"
+  bug run 3: check FAIL (20053 ms) - the comment's author shows as "Unknown": "U\nUnknown\nJust now\nBooked the carpenter for Friday\nReply\nDelete comment"
   bug: typecheck ok
-  fix run 1: check PASS (23338 ms) - author shown as "dev"
-  fix run 2: check PASS (17284 ms) - author shown as "dev"
+  fix run 1: check PASS (28770 ms) - author shown as "dev"
+  fix run 2: check PASS (21452 ms) - author shown as "dev"
+  fix run 3: check PASS (20439 ms) - author shown as "dev"
   fix: typecheck ok
   => v01: PROVEN
 
-== v04 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
-  bug run 1: check FAIL (24410 ms) - the task is due 2026-11-05; the item was captured 2026-11-01 and said "tomorrow", so it should be due 2026-11-02
-  bug run 2: check FAIL (19915 ms) - the task is due 2026-11-05; the item was captured 2026-11-01 and said "tomorrow", so it should be due 2026-11-02
+== v02 (actual@502e61ef38bb1a4301239c2af10868dad439389f)
+  bug run 1: check FAIL (52775 ms) - the unchecked category Food is still listed in the report
+  bug run 2: check FAIL (32220 ms) - the unchecked category Food is still listed in the report
+  bug run 3: check FAIL (32585 ms) - the unchecked category Food is still listed in the report
   bug: typecheck ok
-  fix run 1: check PASS (24238 ms) - due 2026-11-02
-  fix run 2: check PASS (17856 ms) - due 2026-11-02
+  fix run 1: check PASS (51276 ms) - Food hidden, Savings shown
+  fix run 2: check PASS (31492 ms) - Food hidden, Savings shown
+  fix run 3: check PASS (30892 ms) - Food hidden, Savings shown
   fix: typecheck ok
-  fix2 run 1: check PASS (24711 ms) - due 2026-11-02
-  fix2 run 2: check PASS (19799 ms) - due 2026-11-02
+  => v02: PROVEN
+
+== v03 (actual@502e61ef38bb1a4301239c2af10868dad439389f)
+  bug run 1: check FAIL (49422 ms) - "Phone bills": next date 11/04/2026, skipped to 12/04/2026, then after editing the amount it shows 11/04/2026
+  bug run 2: check FAIL (27321 ms) - "Phone bills": next date 11/04/2026, skipped to 12/04/2026, then after editing the amount it shows 11/04/2026
+  bug run 3: check FAIL (28288 ms) - "Phone bills": next date 11/04/2026, skipped to 12/04/2026, then after editing the amount it shows 11/04/2026
+  bug: typecheck ok
+  fix run 1: check PASS (48724 ms) - "Phone bills" stays on 12/04/2026 after the edit
+  fix run 2: check PASS (27654 ms) - "Phone bills" stays on 12/04/2026 after the edit
+  fix run 3: check PASS (27144 ms) - "Phone bills" stays on 12/04/2026 after the edit
+  fix: typecheck ok
+  => v03: PROVEN
+
+== v04 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
+  bug run 1: check FAIL (30411 ms) - the task is due 2026-11-05; the item was captured 2026-11-01 and said "tomorrow", so it should be due 2026-11-02
+  bug run 2: check FAIL (20787 ms) - the task is due 2026-11-05; the item was captured 2026-11-01 and said "tomorrow", so it should be due 2026-11-02
+  bug run 3: check FAIL (20691 ms) - the task is due 2026-11-05; the item was captured 2026-11-01 and said "tomorrow", so it should be due 2026-11-02
+  bug: typecheck ok
+  fix run 1: check PASS (25466 ms) - due 2026-11-02
+  fix run 2: check PASS (25826 ms) - due 2026-11-02
+  fix run 3: check PASS (18727 ms) - due 2026-11-02
+  fix: typecheck ok
+  fix2 run 1: check PASS (24153 ms) - due 2026-11-02
+  fix2 run 2: check PASS (18009 ms) - due 2026-11-02
+  fix2 run 3: check PASS (16884 ms) - due 2026-11-02
   fix2: typecheck ok
   => v04: PROVEN
 
 == v05 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
-  bug run 1: check FAIL (28664 ms) - with "One item per line" on, two lines made 1 item(s): ["Buy milk\nBuy bread"]
-  bug run 2: check FAIL (22366 ms) - with "One item per line" on, two lines made 1 item(s): ["Buy milk\nBuy bread"]
+  bug run 1: check FAIL (29400 ms) - with "One item per line" on, two lines made 1 item(s): ["Buy milk\nBuy bread"]
+  bug run 2: check FAIL (22483 ms) - with "One item per line" on, two lines made 1 item(s): ["Buy milk\nBuy bread"]
+  bug run 3: check FAIL (21420 ms) - with "One item per line" on, two lines made 1 item(s): ["Buy milk\nBuy bread"]
   bug: typecheck ok
-  fix run 1: check PASS (24357 ms) - items ["Buy bread","Buy milk"]
-  fix run 2: check PASS (17744 ms) - items ["Buy bread","Buy milk"]
+  fix run 1: check PASS (24925 ms) - items ["Buy bread","Buy milk"]
+  fix run 2: check PASS (17290 ms) - items ["Buy bread","Buy milk"]
+  fix run 3: check PASS (16975 ms) - items ["Buy bread","Buy milk"]
   fix: typecheck ok
-  fix2 run 1: check PASS (28706 ms) - items ["Buy bread","Buy milk"]
-  fix2 run 2: check PASS (17581 ms) - items ["Buy bread","Buy milk"]
+  fix2 run 1: check PASS (23394 ms) - items ["Buy bread","Buy milk"]
+  fix2 run 2: check PASS (16751 ms) - items ["Buy bread","Buy milk"]
+  fix2 run 3: check PASS (16588 ms) - items ["Buy bread","Buy milk"]
   fix2: typecheck ok
   => v05: PROVEN
 
-== v06 (invoices@00d681a9dee5c59855fb36c773e276c11af75ba9)
-  bug run 1: check FAIL (3688 ms) - after paying on the Open tab, the All tab lists 3 invoices (INV-2042, INV-2043, INV-2045), expected 7
-  bug run 2: check FAIL (3204 ms) - after paying on the Open tab, the All tab lists 3 invoices (INV-2042, INV-2043, INV-2045), expected 7
+== v06 (invoices@371974c6e575d5144126b04b631f37dcab72a21a)
+  bug run 1: check FAIL (4987 ms) - after paying on the Open tab, the All tab lists 3 invoices (INV-2042, INV-2043, INV-2045), expected 7
+  bug run 2: check FAIL (4101 ms) - after paying on the Open tab, the All tab lists 3 invoices (INV-2042, INV-2043, INV-2045), expected 7
+  bug run 3: check FAIL (3581 ms) - after paying on the Open tab, the All tab lists 3 invoices (INV-2042, INV-2043, INV-2045), expected 7
   bug: typecheck ok
-  fix run 1: check PASS (3385 ms) - All lists 7; INV-2042 Paid
-  fix run 2: check PASS (3102 ms) - All lists 7; INV-2042 Paid
+  fix run 1: check PASS (4366 ms) - All lists 7; INV-2042 Paid
+  fix run 2: check PASS (4151 ms) - All lists 7; INV-2042 Paid
+  fix run 3: check PASS (3775 ms) - All lists 7; INV-2042 Paid
   fix: typecheck ok
-  fix2 run 1: check PASS (3278 ms) - All lists 7; INV-2042 Paid
-  fix2 run 2: check PASS (3645 ms) - All lists 7; INV-2042 Paid
+  fix2 run 1: check PASS (3892 ms) - All lists 7; INV-2042 Paid
+  fix2 run 2: check PASS (3644 ms) - All lists 7; INV-2042 Paid
+  fix2 run 3: check PASS (3697 ms) - All lists 7; INV-2042 Paid
   fix2: typecheck ok
   => v06: PROVEN
 
 == v07 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
-  bug run 1: check FAIL (22658 ms) - Today lists the plan as Team review > Write the report > Water the plants; expected 09:00 "Write the report", then 14:00 "Team review", then "Water the plants"
-  bug run 2: check FAIL (17342 ms) - Today lists the plan as Team review > Write the report > Water the plants; expected 09:00 "Write the report", then 14:00 "Team review", then "Water the plants"
+  bug run 1: check FAIL (21548 ms) - Today lists the plan as Team review > Write the report > Water the plants; expected 09:00 "Write the report", then 14:00 "Team review", then "Water the plants"
+  bug run 2: check FAIL (16298 ms) - Today lists the plan as Team review > Write the report > Water the plants; expected 09:00 "Write the report", then 14:00 "Team review", then "Water the plants"
+  bug run 3: check FAIL (15207 ms) - Today lists the plan as Team review > Write the report > Water the plants; expected 09:00 "Write the report", then 14:00 "Team review", then "Water the plants"
   bug: typecheck ok
-  fix run 1: check PASS (22314 ms) - Today lists 09:00, 14:00, then the untimed task
-  fix run 2: check PASS (16488 ms) - Today lists 09:00, 14:00, then the untimed task
+  fix run 1: check PASS (21959 ms) - Today lists 09:00, 14:00, then the untimed task
+  fix run 2: check PASS (16821 ms) - Today lists 09:00, 14:00, then the untimed task
+  fix run 3: check PASS (15705 ms) - Today lists 09:00, 14:00, then the untimed task
   fix: typecheck ok
   => v07: PROVEN
 
 == v08 (tududi@eda9aa60b16ce657a08b47d1894f5c27bf098586)
-  bug run 1: check FAIL (26756 ms) - the app says "Item updated" although the empty text was not saved
-  bug run 2: check FAIL (22576 ms) - the app says "Item updated" although the empty text was not saved
+  bug run 1: check FAIL (29326 ms) - the app says "Item updated" although the empty text was not saved
+  bug run 2: check FAIL (20426 ms) - the app says "Item updated" although the empty text was not saved
+  bug run 3: check FAIL (19256 ms) - the app says "Item updated" although the empty text was not saved
   bug: typecheck ok
-  fix run 1: check PASS (24048 ms) - no "Item updated" message; the text is kept
-  fix run 2: check PASS (32473 ms) - no "Item updated" message; the text is kept
+  fix run 1: check PASS (25799 ms) - no "Item updated" message; the text is kept
+  fix run 2: check PASS (19560 ms) - no "Item updated" message; the text is kept
+  fix run 3: check PASS (19322 ms) - no "Item updated" message; the text is kept
   fix: typecheck ok
   => v08: PROVEN
 
-== v09 (invoices@00d681a9dee5c59855fb36c773e276c11af75ba9)
-  bug run 1: check FAIL (3123 ms) - side menu 1072 px wide at x=0, invoices area 208 px at x=1072
-  bug run 2: check FAIL (2758 ms) - side menu 1072 px wide at x=0, invoices area 208 px at x=1072
+== v09 (invoices@371974c6e575d5144126b04b631f37dcab72a21a)
+  bug run 1: check FAIL (4172 ms) - side menu 1072 px wide at x=0, invoices area 208 px at x=1072
+  bug run 2: check FAIL (3638 ms) - side menu 1072 px wide at x=0, invoices area 208 px at x=1072
+  bug run 3: check FAIL (3142 ms) - side menu 1072 px wide at x=0, invoices area 208 px at x=1072
   bug: typecheck ok
-  fix run 1: check PASS (3533 ms) - side menu 208 px, invoices area 1072 px
-  fix run 2: check PASS (3186 ms) - side menu 208 px, invoices area 1072 px
+  fix run 1: check PASS (3940 ms) - side menu 208 px, invoices area 1072 px
+  fix run 2: check PASS (3683 ms) - side menu 208 px, invoices area 1072 px
+  fix run 3: check PASS (3269 ms) - side menu 208 px, invoices area 1072 px
   fix: typecheck ok
   => v09: PROVEN
 
-prove: 7/7 proven
+prove: 9/9 proven
 
 (held-out bugs h01-h03: proven 3/3; their lines are in the zip)

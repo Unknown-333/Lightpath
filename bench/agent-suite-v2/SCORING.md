@@ -63,7 +63,7 @@ A void run is rerun once. The number of void runs is reported per condition. A r
 ## Suite v2 (copied from v1 above, D-108 and D-147; these lines are the only differences)
 
 - Run with `run.mjs --suite v2`. "Still builds": tududi `tsc --noEmit`, invoices `tsc -p .`. Trials have no `.git`; the agent's diff is against a clean copy.
-- Behaviour checks are proven 2 times on the bug and 2 times after each fix (owner, 2026-11-04, for credits).
+- Behaviour checks are proven 3 times on the bug and 3 times after each fix (SPEC.md; the owner's answer of 2026-11-04). The Actual type check counts errors in the app's own source only.
 - Difficulty check (owner, 2026-11-04): one `without` run per bug, `--max-steps 6`. The harness stops kiro-cli when a 7th tool call starts. Not fixed within 6 steps = not correct; such a run is not void and is not rerun. Too easy = fixed correctly in 3 steps or fewer (SPEC.md).
 - Per run: turns (steps), tokens (D-111 estimate), correct, and hallucinated edits.
 

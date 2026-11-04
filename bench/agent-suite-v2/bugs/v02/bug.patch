@@ -1,0 +1,949 @@
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.test.ts a/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.test.ts
+index 2440c72c..12a04fdf 100644
+--- b/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.test.ts
++++ a/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.test.ts
+@@ -21,25 +21,6 @@ const categories = [
+ ] as CategoryEntity[];
+ 
+ describe('filterCategoriesByConditions', () => {
+-  describe.each(['category', 'category_group'] as const)(
+-    '%s regex length',
+-    field => {
+-      it.each([
+-        { length: 256, expected: [] },
+-        { length: 257, expected: categories },
+-      ])('handles a $length-character pattern', ({ length, expected }) => {
+-        const result = filterCategoriesByConditions(
+-          categories,
+-          categoryGroups,
+-          [{ field, op: 'matches', value: '^' + 'x'.repeat(length - 2) + '$' }],
+-          'and',
+-        );
+-
+-        expect(result).toEqual(expected);
+-      });
+-    },
+-  );
+-
+   it('filters budget categories by category group', () => {
+     const result = filterCategoriesByConditions(
+       categories,
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.ts a/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.ts
+index ee540966..9be6b136 100644
+--- b/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.ts
++++ a/packages/desktop-client/src/components/reports/spreadsheets/budgetDataQuery.ts
+@@ -1,7 +1,5 @@
+ import { send } from '@actual-app/core/platform/client/connection';
+ import * as monthUtils from '@actual-app/core/shared/months';
+-import { getNormalisedString } from '@actual-app/core/shared/normalisation';
+-import { unicodeLike } from '@actual-app/core/shared/unicodeLike';
+ import type { Handlers } from '@actual-app/core/types/handlers';
+ import type {
+   CategoryEntity,
+@@ -53,13 +51,13 @@ export function isSupportedCategoryCondition(
+   }
+ 
+   if (condition.op === 'is' || condition.op === 'isNot') {
+-    return condition.value === null || typeof condition.value === 'string';
++    return typeof condition.value === 'string';
+   }
+ 
+   if (condition.op === 'oneOf' || condition.op === 'notOneOf') {
+     return (
+       Array.isArray(condition.value) &&
+-      condition.value.every(id => id === null || typeof id === 'string')
++      condition.value.every(id => typeof id === 'string')
+     );
+   }
+ 
+@@ -74,10 +72,8 @@ export function isSupportedCategoryCondition(
+   return false;
+ }
+ 
+-export function filterCategoriesByConditions<
+-  TCategory extends { id: string | null; name: string; group: string | null },
+->(
+-  categories: TCategory[],
++export function filterCategoriesByConditions(
++  categories: CategoryEntity[],
+   categoryGroups: CategoryGroupEntity[],
+   conditions: RuleConditionEntity[] | undefined,
+   conditionsOp: BudgetDataConditionsOp | undefined,
+@@ -112,20 +108,20 @@ export function filterCategoriesByConditions<
+   }
+ 
+   const evaluateCondition = (
+-    category: TCategory,
++    category: CategoryEntity,
+     condition: Extract<
+       RuleConditionEntity,
+       { field: 'category' | 'category_group' }
+     >,
+   ): boolean => {
+     const key =
+-      condition.field === 'category_group' ? category.group : category.id;
++      condition.field === 'category_group'
++        ? (category.group ?? '')
++        : category.id;
+     const textValue =
+       condition.field === 'category_group'
+-        ? (categoryGroupNameById.get(key ?? '') ?? key)
+-        : category.id === null
+-          ? null
+-          : category.name;
++        ? (categoryGroupNameById.get(key) ?? key)
++        : category.name;
+ 
+     if (condition.op === 'is') {
+       return key === condition.value;
+@@ -136,39 +132,34 @@ export function filterCategoriesByConditions<
+     }
+ 
+     if (condition.op === 'oneOf') {
+-      return (
+-        Array.isArray(condition.value) && condition.value.some(id => id === key)
+-      );
++      return condition.value.includes(key);
+     }
+ 
+     if (condition.op === 'notOneOf') {
++      return !condition.value.includes(key);
++    }
++
++    if (condition.op === 'contains') {
+       return (
+-        Array.isArray(condition.value) &&
+-        condition.value.length > 0 &&
+-        !condition.value.some(id => id === key)
++        typeof condition.value === 'string' &&
++        textValue.toLowerCase().includes(condition.value.toLowerCase())
+       );
+     }
+ 
+-    if (
+-      (condition.op === 'contains' || condition.op === 'doesNotContain') &&
+-      typeof condition.value === 'string'
+-    ) {
+-      const matches = unicodeLike(
+-        '%' + getNormalisedString(condition.value) + '%',
+-        textValue === null ? null : getNormalisedString(textValue),
++    if (condition.op === 'doesNotContain') {
++      return (
++        typeof condition.value === 'string' &&
++        !textValue.toLowerCase().includes(condition.value.toLowerCase())
+       );
+-      return condition.op === 'contains'
+-        ? !!matches
+-        : textValue === null || !matches;
+     }
+ 
+-    if (condition.op === 'matches' && typeof condition.value === 'string') {
+-      // Skip long patterns without excluding possible transaction-query matches.
+-      if (condition.value.length > 256) {
+-        return true;
+-      }
++    if (
++      condition.op === 'matches' &&
++      typeof condition.value === 'string' &&
++      condition.value.length <= 256
++    ) {
+       try {
+-        return new RegExp(condition.value).test(textValue ?? '');
++        return new RegExp(condition.value, 'i').test(textValue);
+       } catch {
+         return false;
+       }
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/categoryRows.test.ts a/packages/desktop-client/src/components/reports/spreadsheets/categoryRows.test.ts
+deleted file mode 100644
+index 2df51dda..00000000
+--- b/packages/desktop-client/src/components/reports/spreadsheets/categoryRows.test.ts
++++ /dev/null
+@@ -1,493 +0,0 @@
+-import type {
+-  CategoryEntity,
+-  CategoryGroupEntity,
+-  DataEntity,
+-  GroupedEntity,
+-  RuleConditionEntity,
+-} from '@actual-app/core/types/models';
+-import { renderHook } from '@testing-library/react';
+-
+-import type { QueryDataEntity } from '#components/reports/ReportOptions';
+-import { SpreadsheetProvider, useSpreadsheet } from '#hooks/useSpreadsheet';
+-
+-import { createCustomSpreadsheet } from './custom-spreadsheet';
+-import type { createCustomSpreadsheetProps } from './custom-spreadsheet';
+-import { fetchSpreadsheetQueryData } from './fetchSpreadsheetQueryData';
+-import { createGroupedSpreadsheet } from './grouped-spreadsheet';
+-
+-vi.mock('@actual-app/core/platform/client/connection', () => ({
+-  send: vi.fn().mockResolvedValue({ filters: [] }),
+-  listen: vi.fn(() => vi.fn()),
+-}));
+-vi.mock('./fetchSpreadsheetQueryData');
+-
+-const list: CategoryEntity[] = [
+-  { id: 'rent', name: 'Rent', group: 'bills' },
+-  { id: 'utilities', name: 'Utilities', group: 'bills' },
+-  { id: 'food', name: 'Food', group: 'expenses' },
+-  { id: 'hidden', name: 'Hidden category', group: 'bills', hidden: true },
+-  {
+-    id: 'hidden-group-child',
+-    name: 'Hidden group child',
+-    group: 'hidden-group',
+-  },
+-];
+-const grouped: CategoryGroupEntity[] = [
+-  { id: 'bills', name: 'Bills' },
+-  { id: 'expenses', name: 'Expenses' },
+-  { id: 'hidden-group', name: 'Hidden group', hidden: true },
+-].map(group => ({
+-  ...group,
+-  categories: list.filter(category => category.group === group.id),
+-}));
+-const categories = { list, grouped };
+-const defaults: createCustomSpreadsheetProps = {
+-  startDate: '2026-01',
+-  endDate: '2026-02',
+-  interval: 'Monthly',
+-  categories,
+-  conditions: [],
+-  conditionsOp: 'and',
+-  showEmpty: true,
+-  showOffBudget: false,
+-  showHiddenCategories: false,
+-  showUncategorized: false,
+-  trimIntervals: false,
+-  balanceTypeOp: 'totalDebts',
+-  sortByOp: 'name',
+-};
+-const rent: QueryDataEntity = {
+-  date: '2026-01',
+-  category: 'rent',
+-  categoryHidden: false,
+-  categoryGroup: 'bills',
+-  categoryGroupHidden: false,
+-  account: 'account',
+-  accountOffBudget: false,
+-  payee: '',
+-  transferAccount: '',
+-  amount: -100,
+-};
+-
+-async function build(
+-  overrides: Partial<createCustomSpreadsheetProps> = {},
+-  expectedTotal = -100,
+-) {
+-  const props = { ...defaults, ...overrides };
+-  const original = structuredClone(categories);
+-  const { result, unmount } = renderHook(useSpreadsheet, {
+-    wrapper: SpreadsheetProvider,
+-  });
+-  const setGrouped = vi.fn<(data: GroupedEntity[]) => void>();
+-  await createGroupedSpreadsheet(props)(result.current, setGrouped);
+-  const groups = setGrouped.mock.calls[0][0];
+-  const custom: DataEntity[] = [];
+-  for (const groupBy of ['Category', 'Group', 'CategoryGroup']) {
+-    const setCustom = vi.fn<(data: DataEntity) => void>();
+-    await createCustomSpreadsheet({ ...props, groupBy })(
+-      result.current,
+-      setCustom,
+-    );
+-    custom.push(setCustom.mock.calls[0][0]);
+-  }
+-  unmount();
+-  expect(categories).toEqual(original);
+-  expect(custom[1].data?.map(row => row.name)).toEqual(
+-    groups.map(row => row.name),
+-  );
+-  expect(custom[2].data?.map(row => row.name)).toEqual(
+-    groups.map(row => row.name),
+-  );
+-  expect(custom[0].data?.map(row => row.name).sort()).toEqual(
+-    groups
+-      .flatMap(group => group.categories?.map(row => row.name) ?? [])
+-      .sort(),
+-  );
+-  expect(custom.map(data => data.totalDebts)).toEqual([
+-    expectedTotal,
+-    expectedTotal,
+-    expectedTotal,
+-  ]);
+-  expect(groups.reduce((total, group) => total + group.totalDebts, 0)).toBe(
+-    expectedTotal,
+-  );
+-  return { groups, rows: custom[0].data ?? [] };
+-}
+-
+-beforeEach(() => {
+-  // Query conditions already restrict transactions. Row eligibility must also
+-  // work for categories that have no transaction results at all.
+-  vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-    assets: [],
+-    debts: [rent],
+-  });
+-});
+-
+-it.each([true, false])(
+-  'keeps only selected Bills rows with showEmpty=%s',
+-  async showEmpty => {
+-    const { groups, rows } = await build({
+-      conditions: [
+-        { field: 'category', op: 'oneOf', value: ['rent', 'utilities'] },
+-      ],
+-      showEmpty,
+-    });
+-    expect(groups.map(row => row.name)).toEqual(['Bills']);
+-    expect(rows.map(row => row.name)).toEqual(
+-      showEmpty ? ['Rent', 'Utilities'] : ['Rent'],
+-    );
+-  },
+-);
+-
+-it('excludes hidden categories/groups and disabled special rows even when empty rows are shown', async () => {
+-  const { rows } = await build();
+-  expect(rows.map(row => row.name)).toEqual(['Food', 'Rent', 'Utilities']);
+-});
+-
+-it.each([
+-  { showOffBudget: true, names: ['Food', 'Off budget', 'Rent', 'Utilities'] },
+-  {
+-    showUncategorized: true,
+-    names: ['Food', 'Rent', 'Transfers', 'Uncategorized', 'Utilities'],
+-  },
+-  {
+-    showHiddenCategories: true,
+-    names: [
+-      'Food',
+-      'Hidden category',
+-      'Hidden group child',
+-      'Rent',
+-      'Utilities',
+-    ],
+-  },
+-])(
+-  'allows eligible empty rows when visibility is enabled: %j',
+-  async ({ names, ...options }) => {
+-    const { rows } = await build(options);
+-    expect(rows.map(row => row.name)).toEqual(names);
+-  },
+-);
+-
+-it('does not add uncategorized or transfer rows to a category selection', async () => {
+-  const { rows } = await build({
+-    conditions: [
+-      { field: 'category', op: 'oneOf', value: ['rent', 'utilities'] },
+-    ],
+-    showUncategorized: true,
+-  });
+-  expect(rows.map(row => row.name)).toEqual(['Rent', 'Utilities']);
+-});
+-
+-type ConditionCase = {
+-  conditions: RuleConditionEntity[];
+-  conditionsOp?: string;
+-  names: string[];
+-};
+-it.each<ConditionCase>([
+-  {
+-    conditions: [{ field: 'category', op: 'is', value: 'rent' }],
+-    names: ['Rent'],
+-  },
+-  {
+-    conditions: [{ field: 'category', op: 'isNot', value: 'food' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category', op: 'notOneOf', value: ['food'] }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category', op: 'contains', value: 'RE' }],
+-    names: ['Rent'],
+-  },
+-  {
+-    conditions: [{ field: 'category', op: 'doesNotContain', value: 'food' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category', op: 'matches', value: '^(Rent|Utilities)$' },
+-    ],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category_group', op: 'is', value: 'bills' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category_group', op: 'oneOf', value: ['bills'] }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category_group', op: 'notOneOf', value: ['expenses'] },
+-    ],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category_group', op: 'isNot', value: 'expenses' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category_group', op: 'contains', value: 'BILL' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category_group', op: 'doesNotContain', value: 'Expenses' },
+-    ],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [{ field: 'category_group', op: 'matches', value: '^Bills$' }],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category_group', op: 'is', value: 'bills' },
+-      { field: 'category', op: 'isNot', value: 'utilities' },
+-    ],
+-    names: ['Rent'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category', op: 'is', value: 'rent' },
+-      { field: 'category', op: 'is', value: 'utilities' },
+-    ],
+-    conditionsOp: 'or',
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category_group', op: 'is', value: 'bills' },
+-      { field: 'notes', op: 'contains', value: 'test' },
+-    ],
+-    conditionsOp: 'or',
+-    names: ['Food', 'Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      { field: 'category_group', op: 'is', value: 'bills' },
+-      { field: 'notes', op: 'contains', value: 'test' },
+-    ],
+-    names: ['Rent', 'Utilities'],
+-  },
+-  {
+-    conditions: [
+-      {
+-        field: 'category',
+-        op: 'is',
+-        value: 'food',
+-        customName: 'Saved filter',
+-      },
+-    ],
+-    names: ['Food', 'Rent', 'Utilities'],
+-  },
+-])(
+-  'respects category condition semantics: %j',
+-  async ({ names, ...options }) => {
+-    const { rows } = await build(options);
+-    expect(rows.map(row => row.name)).toEqual(names);
+-  },
+-);
+-
+-it.each([true, false])(
+-  'keeps synthetic activity and totals with showEmpty=%s',
+-  async showEmpty => {
+-    vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-      assets: [],
+-      debts: [
+-        rent,
+-        { ...rent, category: null, categoryGroup: '', amount: -25 },
+-        {
+-          ...rent,
+-          category: null,
+-          categoryGroup: '',
+-          transferAccount: 'other-account',
+-          amount: -20,
+-        },
+-        { ...rent, accountOffBudget: true, amount: -30 },
+-      ],
+-    });
+-    const { rows } = await build(
+-      { showEmpty, showUncategorized: true, showOffBudget: true },
+-      -175,
+-    );
+-    expect(
+-      rows.filter(row => row.totalDebts !== 0).map(row => row.name),
+-    ).toEqual(['Off budget', 'Rent', 'Transfers', 'Uncategorized']);
+-  },
+-);
+-
+-it('preserves transactions matching another branch of a mixed-field OR', async () => {
+-  vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-    assets: [],
+-    debts: [
+-      rent,
+-      { ...rent, category: 'food', categoryGroup: 'expenses', amount: -50 },
+-    ],
+-  });
+-  const { rows } = await build(
+-    {
+-      conditions: [
+-        { field: 'category_group', op: 'is', value: 'bills' },
+-        { field: 'notes', op: 'contains', value: 'test' },
+-      ],
+-      conditionsOp: 'or',
+-    },
+-    -150,
+-  );
+-  expect(rows.find(row => row.name === 'Food')?.totalDebts).toBe(-50);
+-});
+-
+-it.each<RuleConditionEntity[]>([
+-  [{ field: 'category', op: 'oneOf', value: [] }],
+-  [{ field: 'category', op: 'notOneOf', value: [] }],
+-  [{ field: 'category', op: 'matches', value: '^rent$' }],
+-  [
+-    { field: 'category', op: 'is', value: 'rent' },
+-    { field: 'category', op: 'is', value: 'utilities' },
+-  ],
+-])(
+-  'does not create rows for conditions that match no categories: %j',
+-  async (...conditions) => {
+-    vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-      assets: [],
+-      debts: [],
+-    });
+-    const { rows, groups } = await build({ conditions }, 0);
+-    expect(rows).toEqual([]);
+-    expect(groups).toEqual([]);
+-  },
+-);
+-
+-it('matches category names with the same wildcard semantics as queries', async () => {
+-  const { rows } = await build({
+-    conditions: [{ field: 'category', op: 'contains', value: 'R?N%' }],
+-  });
+-  expect(rows.map(row => row.name)).toEqual(['Rent']);
+-});
+-
+-it('preserves matching activity and other filters when skipping a long regex', async () => {
+-  const { groups, rows } = await build({
+-    conditions: [
+-      { field: 'category_group', op: 'is', value: 'bills' },
+-      {
+-        field: 'category',
+-        op: 'matches',
+-        value: '^' + '(?:)'.repeat(65) + 'Rent$',
+-      },
+-    ],
+-  });
+-  expect(groups.map(row => row.name)).toEqual(['Bills']);
+-  expect(rows.find(row => row.name === 'Rent')?.totalDebts).toBe(-100);
+-});
+-
+-it('retains off-budget rows for selected categorized transactions', async () => {
+-  vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-    assets: [],
+-    debts: [rent, { ...rent, accountOffBudget: true, amount: -30 }],
+-  });
+-  const { rows } = await build(
+-    {
+-      conditions: [{ field: 'category', op: 'is', value: 'rent' }],
+-      showOffBudget: true,
+-    },
+-    -130,
+-  );
+-  expect(rows.map(row => row.name)).toEqual(['Off budget', 'Rent']);
+-});
+-
+-it('keeps empty payee rows independent of category row selection', async () => {
+-  const { result, unmount } = renderHook(useSpreadsheet, {
+-    wrapper: SpreadsheetProvider,
+-  });
+-  const setData = vi.fn<(data: DataEntity) => void>();
+-  await createCustomSpreadsheet({
+-    ...defaults,
+-    groupBy: 'Payee',
+-    conditions: [{ field: 'category', op: 'is', value: 'rent' }],
+-    payees: [
+-      { id: '', name: 'Active payee' },
+-      { id: 'empty-payee', name: 'Empty payee' },
+-    ],
+-  })(result.current, setData);
+-  expect(setData.mock.calls[0][0].data?.map(row => row.name)).toEqual([
+-    'Active payee',
+-    'Empty payee',
+-  ]);
+-  expect(setData.mock.calls[0][0].totalDebts).toBe(-100);
+-  unmount();
+-});
+-
+-it('keeps selected empty categories when there are no matching transactions', async () => {
+-  vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-    assets: [],
+-    debts: [],
+-  });
+-  const { groups, rows } = await build(
+-    {
+-      conditions: [{ field: 'category', op: 'is', value: 'utilities' }],
+-    },
+-    0,
+-  );
+-  expect(groups.map(row => row.name)).toEqual(['Bills']);
+-  expect(rows.map(row => row.name)).toEqual(['Utilities']);
+-});
+-
+-it('respects the transfer exclusion in a saved category-is-null condition', async () => {
+-  // Persisted filters can contain null even though RuleConditionEntity models
+-  // category IDs as strings.
+-  const conditions: RuleConditionEntity[] = JSON.parse(
+-    '[{"field":"category","op":"is","value":null}]',
+-  );
+-  vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-    assets: [],
+-    debts: [],
+-  });
+-  const { rows } = await build(
+-    { conditions, showUncategorized: true, showOffBudget: true },
+-    0,
+-  );
+-  expect(rows.map(row => row.name)).toEqual(['Off budget', 'Uncategorized']);
+-});
+-
+-it.each(['oneOf', 'notOneOf'] as const)(
+-  'does not restore synthetic rows for an empty %s selection',
+-  async op => {
+-    vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-      assets: [],
+-      debts: [],
+-    });
+-    const { rows } = await build(
+-      {
+-        conditions: [{ field: 'category', op, value: [] }],
+-        showUncategorized: true,
+-        showOffBudget: true,
+-      },
+-      0,
+-    );
+-    expect(rows).toEqual([]);
+-  },
+-);
+-
+-it.each([
+-  { op: 'oneOf', names: ['Off budget', 'Transfers', 'Uncategorized'] },
+-  { op: 'notOneOf', names: ['Food', 'Off budget', 'Rent', 'Utilities'] },
+-])(
+-  'handles saved $op conditions containing a null category',
+-  async ({ op, names }) => {
+-    const conditions: RuleConditionEntity[] = JSON.parse(
+-      `[{"field":"category","op":"${op}","value":[null]}]`,
+-    );
+-    vi.mocked(fetchSpreadsheetQueryData).mockResolvedValue({
+-      assets: [],
+-      debts: [],
+-    });
+-    const { rows } = await build(
+-      { conditions, showUncategorized: true, showOffBudget: true },
+-      0,
+-    );
+-    expect(rows.map(row => row.name)).toEqual(names);
+-  },
+-);
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/custom-spreadsheet.ts a/packages/desktop-client/src/components/reports/spreadsheets/custom-spreadsheet.ts
+index 2a681863..c70ad55b 100644
+--- b/packages/desktop-client/src/components/reports/spreadsheets/custom-spreadsheet.ts
++++ a/packages/desktop-client/src/components/reports/spreadsheets/custom-spreadsheet.ts
+@@ -18,6 +18,7 @@ import type { SyncedPrefs } from '@actual-app/core/types/prefs';
+ import * as d from 'date-fns';
+ 
+ import {
++  categoryLists,
+   getIntervalFormat,
+   groupBySelections,
+   ReportOptions,
+@@ -34,7 +35,6 @@ import {
+   filterReportTransactions,
+ } from './filterHiddenItems';
+ import { recalculate } from './recalculate';
+-import { reportCategoryLists } from './reportCategoryLists';
+ import { sortData } from './sortData';
+ import { groupQueryDataByTags } from './tagGroups';
+ import {
+@@ -92,14 +92,7 @@ export function createCustomSpreadsheet({
+   firstDayOfWeekIdx,
+   dateFormat,
+ }: createCustomSpreadsheetProps) {
+-  const [categoryList, categoryGroup] = reportCategoryLists({
+-    categories,
+-    conditions,
+-    conditionsOp,
+-    showOffBudget,
+-    showHiddenCategories,
+-    showUncategorized,
+-  });
++  const [categoryList, categoryGroup] = categoryLists(categories);
+   const [initialGroups, groupByLabel] = groupBySelections(
+     groupBy,
+     categoryList,
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/grouped-spreadsheet.ts a/packages/desktop-client/src/components/reports/spreadsheets/grouped-spreadsheet.ts
+index 034a3b1d..3125afb5 100644
+--- b/packages/desktop-client/src/components/reports/spreadsheets/grouped-spreadsheet.ts
++++ a/packages/desktop-client/src/components/reports/spreadsheets/grouped-spreadsheet.ts
+@@ -2,7 +2,10 @@ import { send } from '@actual-app/core/platform/client/connection';
+ import * as monthUtils from '@actual-app/core/shared/months';
+ import type { GroupedEntity } from '@actual-app/core/types/models';
+ 
+-import { ReportOptions } from '#components/reports/ReportOptions';
++import {
++  categoryLists,
++  ReportOptions,
++} from '#components/reports/ReportOptions';
+ import type { QueryDataEntity } from '#components/reports/ReportOptions';
+ import type { useSpreadsheet } from '#hooks/useSpreadsheet';
+ 
+@@ -10,7 +13,6 @@ import type { createCustomSpreadsheetProps } from './custom-spreadsheet';
+ import { fetchSpreadsheetQueryData } from './fetchSpreadsheetQueryData';
+ import { filterEmptyRows } from './filterEmptyRows';
+ import { recalculate } from './recalculate';
+-import { reportCategoryLists } from './reportCategoryLists';
+ import { sortData } from './sortData';
+ import {
+   determineIntervalRange,
+@@ -34,14 +36,7 @@ export function createGroupedSpreadsheet({
+   sortByOp,
+   firstDayOfWeekIdx,
+ }: createCustomSpreadsheetProps) {
+-  const [categoryList, categoryGroup] = reportCategoryLists({
+-    categories,
+-    conditions,
+-    conditionsOp,
+-    showOffBudget,
+-    showHiddenCategories,
+-    showUncategorized,
+-  });
++  const [categoryList, categoryGroup] = categoryLists(categories);
+ 
+   return async (
+     spreadsheet: ReturnType<typeof useSpreadsheet>,
+diff --git b/packages/desktop-client/src/components/reports/spreadsheets/reportCategoryLists.ts a/packages/desktop-client/src/components/reports/spreadsheets/reportCategoryLists.ts
+deleted file mode 100644
+index 12589834..00000000
+--- b/packages/desktop-client/src/components/reports/spreadsheets/reportCategoryLists.ts
++++ /dev/null
+@@ -1,95 +0,0 @@
+-import { categoryLists } from '#components/reports/ReportOptions';
+-import type { UncategorizedEntity } from '#components/reports/ReportOptions';
+-
+-import { filterCategoriesByConditions } from './budgetDataQuery';
+-import type { createCustomSpreadsheetProps } from './custom-spreadsheet';
+-
+-// Row eligibility is independent of activity: selected categories can be empty,
+-// while excluded categories must never be restored by "Show empty rows".
+-export function reportCategoryLists({
+-  categories,
+-  conditions,
+-  conditionsOp,
+-  showOffBudget,
+-  showHiddenCategories,
+-  showUncategorized,
+-}: Pick<
+-  createCustomSpreadsheetProps,
+-  | 'categories'
+-  | 'conditions'
+-  | 'conditionsOp'
+-  | 'showOffBudget'
+-  | 'showHiddenCategories'
+-  | 'showUncategorized'
+->) {
+-  const plainConditions = conditions.filter(condition => !condition.customName);
+-  // With OR, another field can match transactions in any category. Category
+-  // conditions alone cannot rule out a row in that case.
+-  const rowConditions =
+-    conditionsOp === 'or' &&
+-    plainConditions.some(
+-      condition =>
+-        condition.field !== 'category' && condition.field !== 'category_group',
+-    )
+-      ? []
+-      : plainConditions;
+-  const op = conditionsOp === 'or' ? 'or' : 'and';
+-  const hiddenGroupIds = new Set(
+-    categories.grouped.filter(group => group.hidden).map(group => group.id),
+-  );
+-  const visibleCategories = categories.list.filter(
+-    category =>
+-      showHiddenCategories ||
+-      (!category.hidden && !hiddenGroupIds.has(category.group)),
+-  );
+-  const eligibleCategories = filterCategoriesByConditions(
+-    visibleCategories,
+-    categories.grouped,
+-    rowConditions,
+-    op,
+-  );
+-  const eligibleIds = new Set(eligibleCategories.map(category => category.id));
+-  const allowsUncategorized =
+-    filterCategoriesByConditions(
+-      [{ id: null, name: '', group: null }],
+-      categories.grouped,
+-      rowConditions,
+-      op,
+-    ).length > 0;
+-  // `category is null` is expanded by conditionsToAQL to exclude transfers.
+-  const allowsTransfers =
+-    filterCategoriesByConditions(
+-      [{ id: null, name: '', group: null }],
+-      categories.grouped,
+-      rowConditions.map(condition =>
+-        condition.field === 'category' &&
+-        condition.op === 'is' &&
+-        condition.value === null
+-          ? { field: 'category', op: 'oneOf', value: [] }
+-          : condition,
+-      ),
+-      op,
+-    ).length > 0;
+-  const isEligible = (item: UncategorizedEntity) => {
+-    switch (item.uncategorized_id) {
+-      case 'other':
+-        return showUncategorized && allowsUncategorized;
+-      case 'transfer':
+-        return showUncategorized && allowsTransfers;
+-      case 'off_budget':
+-        // Off-budget transactions may have a selected category, or no category.
+-        return showOffBudget && (eligibleIds.size > 0 || allowsUncategorized);
+-      default:
+-        return eligibleIds.has(item.id);
+-    }
+-  };
+-  const [categoryList, categoryGroups] = categoryLists(categories);
+-  const eligibleGroups = categoryGroups
+-    .map(group => ({
+-      ...group,
+-      categories: group.categories?.filter(isEligible),
+-    }))
+-    .filter(group => (group.categories?.length ?? 0) > 0);
+-
+-  return [categoryList.filter(isEligible), eligibleGroups] as const;
+-}
+diff --git b/packages/loot-core/src/platform/server/sqlite/unicodeLike.ts a/packages/loot-core/src/platform/server/sqlite/unicodeLike.ts
+index c58153f6..1e7051d9 100644
+--- b/packages/loot-core/src/platform/server/sqlite/unicodeLike.ts
++++ a/packages/loot-core/src/platform/server/sqlite/unicodeLike.ts
+@@ -1 +1,47 @@
+-export { unicodeLike } from '#shared/unicodeLike';
++import { LRUCache } from 'lru-cache';
++
++const likePatternCache = new LRUCache<string, RegExp>({ max: 500 });
++
++const REGEX_SPECIAL = /[.*+^${}()|[\]\\?]/g;
++
++function likePatternToRegex(pattern: string): RegExp {
++  let regexStr = '';
++  let i = 0;
++  while (i < pattern.length) {
++    const ch = pattern[i];
++    if (ch === '\\' && i + 1 < pattern.length) {
++      const next = pattern[i + 1];
++      if (next === '%' || next === '?' || next === '\\') {
++        // escaped wildcard — treat as literal character
++        regexStr += next.replace(REGEX_SPECIAL, '\\$&'); // ? added here
++        i += 2;
++        continue;
++      }
++    }
++    if (ch === '%') {
++      regexStr += '.*';
++    } else if (ch === '?') {
++      regexStr += '.';
++    } else {
++      regexStr += ch.replace(REGEX_SPECIAL, '\\$&');
++    }
++    i++;
++  }
++  return new RegExp(regexStr, 'i');
++}
++
++export function unicodeLike(
++  pattern: string | null,
++  value: string | null,
++): number {
++  if (!pattern) return 0;
++  if (!value) value = '';
++
++  let cachedRegExp = likePatternCache.get(pattern);
++  if (!cachedRegExp) {
++    cachedRegExp = likePatternToRegex(pattern);
++    likePatternCache.set(pattern, cachedRegExp);
++  }
++
++  return cachedRegExp.test(value) ? 1 : 0;
++}
+diff --git b/packages/loot-core/src/shared/unicodeLike.ts a/packages/loot-core/src/shared/unicodeLike.ts
+deleted file mode 100644
+index 1e7051d9..00000000
+--- b/packages/loot-core/src/shared/unicodeLike.ts
++++ /dev/null
+@@ -1,47 +0,0 @@
+-import { LRUCache } from 'lru-cache';
+-
+-const likePatternCache = new LRUCache<string, RegExp>({ max: 500 });
+-
+-const REGEX_SPECIAL = /[.*+^${}()|[\]\\?]/g;
+-
+-function likePatternToRegex(pattern: string): RegExp {
+-  let regexStr = '';
+-  let i = 0;
+-  while (i < pattern.length) {
+-    const ch = pattern[i];
+-    if (ch === '\\' && i + 1 < pattern.length) {
+-      const next = pattern[i + 1];
+-      if (next === '%' || next === '?' || next === '\\') {
+-        // escaped wildcard — treat as literal character
+-        regexStr += next.replace(REGEX_SPECIAL, '\\$&'); // ? added here
+-        i += 2;
+-        continue;
+-      }
+-    }
+-    if (ch === '%') {
+-      regexStr += '.*';
+-    } else if (ch === '?') {
+-      regexStr += '.';
+-    } else {
+-      regexStr += ch.replace(REGEX_SPECIAL, '\\$&');
+-    }
+-    i++;
+-  }
+-  return new RegExp(regexStr, 'i');
+-}
+-
+-export function unicodeLike(
+-  pattern: string | null,
+-  value: string | null,
+-): number {
+-  if (!pattern) return 0;
+-  if (!value) value = '';
+-
+-  let cachedRegExp = likePatternCache.get(pattern);
+-  if (!cachedRegExp) {
+-    cachedRegExp = likePatternToRegex(pattern);
+-    likePatternCache.set(pattern, cachedRegExp);
+-  }
+-
+-  return cachedRegExp.test(value) ? 1 : 0;
+-}
+diff --git b/upcoming-release-notes/fix-report-empty-category-rows.md a/upcoming-release-notes/fix-report-empty-category-rows.md
+deleted file mode 100644
+index 08c4f597..00000000
+--- b/upcoming-release-notes/fix-report-empty-category-rows.md
++++ /dev/null
+@@ -1,6 +0,0 @@
+----
+-category: Bugfix
+-authors: [sraylanka]
+----
+-
+-Fix custom reports showing unchecked or hidden categories when “Show empty rows” is enabled.

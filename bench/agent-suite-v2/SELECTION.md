@@ -84,4 +84,6 @@ These change the rule above after the walk had started. Each is a forced change,
    - If fewer than 2 pass, or the setup needs more than one try (brief: report blocked), the rest come from tududi: the same walk continued past the first 300 commits from the pin, same rules, until R3 and R4 are filled or 300 more commits are read.
    - The held-out positions (R2, S1, S4) and every bug already picked stay as they are. Total: 12.
 
+9. **Actual result.** Set up on the first try (`yarn install`, browser mode, port 8613). The walk kept #4 (`821bcc2a`, R3, visible v02) and #17 (`8e6eb272`, R4, visible v03); three keeps between them were dropped when their checks were built (CANDIDATES.md, Actual #5, #12, #14). No tududi backfill was needed. Final list: 12 bugs, 4 real, 3 held out (R2, S1, S4). Actual's type check leaves out errors inside `node_modules` (a copied trial's workspace links become plain folders).
+
 Picked bugs that this suite does not use are kept, with their patches, in `lightpath-trials/goal/suite2-raw/dropped/`, outside the repo.

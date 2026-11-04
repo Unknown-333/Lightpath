@@ -157,3 +157,27 @@ Places are listed in the order step 3 of the seeded rule gives (main navigation 
 | X4   | control (static)      | invoices | page grid columns                                          | **take**  | v09                                                                                                               |
 
 Rows for S1 and S4 (held out) are in `CANDIDATES-full.md` in the zip.
+
+## Actual Budget (SELECTION.md amendment 8)
+
+Pin `502e61ef` (master, 2026-11-04). 136 candidates in 300 first-parent commits (raw list: `lightpath-trials/goal/suite2-raw/actual-candidates.txt`; an `[AI] ` prefix in a subject is read past). The walk stopped at the 2nd keep, #17.
+
+| #   | Commit     | Date       | Subject (shortened)                         | Result   | Step | Reason                                                                                                  |
+| --- | ---------- | ---------- | ------------------------------------------- | -------- | ---- | ------------------------------------------------------------------------------------------------------- |
+| 1   | `502e61ef` | 2026-11-04 | OpenID login in the iOS and Android apps    | drop     | b    | mobile apps and an outside login provider                                                               |
+| 2   | `a3a1c7fc` | 2026-11-03 | Monte Carlo minimum spending                | drop     | b    | experimental feature, off by default                                                                    |
+| 3   | `479db608` | 2026-11-03 | retry incomplete schedule advancement       | drop     | e    | needs a failing rule write                                                                              |
+| 4   | `821bcc2a` | 2026-11-03 | custom reports showing excluded empty rows  | **take** |      | kept #1 -> visible **v02**                                                                              |
+| 5   | `51880c71` | 2026-11-03 | import modal re-parses the original file    | drop     | e    | the check could not reach "Select new file..." headless in 4 tries (it shows only on some parse errors) |
+| 6   | `767068b6` | 2026-11-03 | dashboard widgets on some devices           | drop     | b    | device-specific layout                                                                                  |
+| 7   | `0b1eec8c` | 2026-11-03 | reject sync messages far in the future      | drop     | b    | sync server                                                                                             |
+| 8   | `ab0b5c40` | 2026-11-02 | mobile transaction search on back           | drop     | b    | mobile only                                                                                             |
+| 9   | `f2cc8977` | 2026-10-31 | API out-of-sync local budget error          | drop     | a    | API only                                                                                                |
+| 10  | `5897cfa6` | 2026-10-31 | reject invalid category group updates       | drop     | a    | API only                                                                                                |
+| 11  | `c5428ce2` | 2026-10-31 | Linux StartupWMClass                        | drop     | a    | Electron only                                                                                           |
+| 12  | `945fce10` | 2026-10-30 | non-finite arithmetic results               | drop     | e    | at the pin the desktop table already keeps the old amount for 1/0, so the check saw no difference       |
+| 13  | `e82ea4dc` | 2026-10-30 | schedule service shutdown race              | drop     | b    | shutdown timing                                                                                         |
+| 14  | `a6a98982` | 2026-10-30 | search treats digits in a word as an amount | drop     | d    | the reverted app doesn't build (later mobile code uses the fix's parameter)                             |
+| 15  | `fa10ddb9` | 2026-10-30 | IPv4 fallback for IPv6 binding              | drop     | a    | sync server                                                                                             |
+| 16  | `15a2e4db` | 2026-10-30 | Date inputs in current period checks        | drop     | a    | API input types                                                                                         |
+| 17  | `8e6eb272` | 2026-10-30 | keep skipped schedule dates when editing    | **take** |      | kept #2 -> visible **v03**                                                                              |
