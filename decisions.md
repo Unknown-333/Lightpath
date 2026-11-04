@@ -1203,3 +1203,12 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
   - The run's prompt, transcript, timings, kiro-cli version, model, credits and steps are committed in `docs/media/demo-run/`.
 - Rejected: (b) a real open-source app, for the reasons above; filming VS Code (the extension is low priority, owner 2026-11-01); a staged terminal typed by a script (the owner asked for a real run).
 - Revert: delete `examples/invoices`, `scripts/e2e-invoices.mjs`, its CI step and `docs/media/demo-run/`, and point the README at the old `docs/media/demo.gif`.
+
+### D-137 0.1.0 leaves the VS Code extension at 0.0.1, and the release notes carry the benchmark as measured (amends D-133)
+
+- Date: 2026-11-04 (release prep 0.1.0, part 2)
+- Decision: The VS Code extension `lightpath-dev.lightpath-vscode` stays at 0.0.1 in 0.1.0: its `package.json` version goes back from 0.1.0 to 0.0.1, and `docs/RELEASE.md` drops its publish step. The 7 npm packages still move to 0.1.0 as D-133 says. The CHANGELOG's 0.1.0 entry gets the full benchmark result in place of its placeholder.
+- Why: the owner, 2026-11-01 15:25 UTC: "the main focus should be mcp right now that will be used by ai agents autonomously; extension is not on the priority list". D-133 already found that republishing brings no new behaviour in the editor: the 0.0.1 extension reads 0.1.0 traces, because its zod schemas drop unknown keys and every new field is optional. D-107's rule (a new version when a packaged file changes) is about what gets published; a package that isn't published this time keeps its old number.
+- Benchmark text: copied from `bench/agent-suite/results/2026-11-03-full-benchmark.md`. It says plainly that Lightpath did not raise the fix rate and that runs with it cost more, and it gives both numbers where the void-check flaw applies.
+- Alternatives: republish the extension at 0.1.0 (rejected: owner's priority, and no behaviour change); leave its version at 0.1.0 unpublished (rejected: the repo would name a version the Marketplace never had).
+- Revert: set `extensions/vscode/package.json` back to 0.1.0 and restore step 5 of the 0.1.0 section in `docs/RELEASE.md` from D-133's commit.

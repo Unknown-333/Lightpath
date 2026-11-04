@@ -4,9 +4,22 @@ All notable changes to Lightpath are listed here. Versions follow [Semantic Vers
 
 ## [0.1.0] - TBD (not published yet)
 
-Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages and the VS Code extension move to 0.1.0, because every one of them ships changed files (D-133). Needs Node.js 22.12 or newer, as before.
+Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages move to 0.1.0, because every one of them ships changed files (D-133). The VS Code extension stays at 0.0.1, which still reads 0.1.0 traces (D-137). Needs Node.js 22.12 or newer, as before.
 
-> **Benchmark results: placeholder.** The numbers from the seeded-bug suites (shop and tududi), with and without Lightpath, go here in release prep part 2. Nothing here claims a result yet.
+### Benchmark
+
+Lightpath did not raise the fix rate, and runs with it cost more. Kiro CLI 2.37.0 with `claude-sonnet-5.5` fixed seeded bugs in two suites, with and without Lightpath, scored by rules committed before any run ([full write-up](bench/agent-suite/results/2026-11-03-full-benchmark.md)):
+
+| Set                     | Fixed without | Fixed with                     | Steps per run, without → with | Credits per run, without → with |
+| ----------------------- | ------------- | ------------------------------ | ----------------------------- | ------------------------------- |
+| Shop, 7 visible bugs    | 21 of 21      | 20 of 21 (21 without the flaw) | 5.00 → 7.10                   | 0.317 → 0.493                   |
+| tududi, 3 visible bugs  | 15 of 15      | 15 of 15                       | 9.87 → 13.47                  | 0.980 → 1.329                   |
+| Shop, 3 held-out bugs   | 9 of 9        | 9 of 9                         | 5.67 → 6.56                   | 0.339 → 0.434                   |
+| tududi, 2 held-out bugs | 9 of 10       | 6 of 10 (7 without the flaw)   | 12.50 → 13.44                 | 1.116 → 1.333                   |
+- "The flaw": the scoring's void check wrongly flagged 5 runs on paths inside the trial. By the rules as written, 2 of them count as not fixed. The rules weren't changed after results came in; both numbers are given.
+- With Lightpath, the agent called it by itself in 31 of 53 valid runs (D-134).
+- tududi has only 3 visible bugs, and all 5 of its fixes are public on GitHub, so the model may have seen them in training. One held-out bug, h01, accounts for the tududi held-out drop.
+- One agent and one model were run. Token counts are estimates (D-111).
 
 ### Added
 
