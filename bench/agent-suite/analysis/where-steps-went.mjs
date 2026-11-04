@@ -903,6 +903,9 @@ for (const r of W) {
   out();
   out('### Q3 tududi Login traces: what fills them');
   // full outputs are needed here, so re-read them
+  let loginChars = 0;
+  let loginRepeated = 0;
+  let loginReq = 0;
   for (const c of tud) {
     const { calls } = readCalls(c.r.transcript);
     const o = String(calls[c.i].output ?? '');
@@ -912,10 +915,35 @@ for (const r of W) {
     const files = ls.filter((l) => /^\s{2}\S+\.(?:[cm]?[jt]sx?)\s*$/.test(l));
     const uniq = new Set(files.map((l) => l.trim()));
     const notShown = ls.filter((l) => /not shown/i.test(l)).map((l) => l.trim().slice(0, 160));
+    // blocks: a file line (2-space indent) and the function lines under it (4+ spaces)
+    const blocks = [];
+    for (const l of ls) {
+      if (/^\s{2}\S+\.(?:[cm]?[jt]sx?)\s*$/.test(l)) blocks.push({ file: l.trim(), chars: l.length + 1 });
+      else if (/^\s{4,}\S/.test(l) && blocks.length) blocks[blocks.length - 1].chars += l.length + 1;
+      else blocks.push({ file: null, chars: l.length + 1 });
+    }
+    const groupsPerFile = {};
+    for (const b of blocks) if (b.file) groupsPerFile[b.file] = (groupsPerFile[b.file] ?? 0) + 1;
+    const repeated = Object.entries(groupsPerFile)
+      .filter(([, n]) => n >= 3)
+      .map(([f]) => f);
+    const repChars = blocks
+      .filter((b) => b.file && repeated.includes(b.file))
+      .reduce((a, b) => a + b.chars, 0);
+    const reqChars = ls.filter((l) => /^request: /.test(l.trim())).reduce((a, l) => a + l.length + 1, 0);
+    loginChars += o.length;
+    loginRepeated += repChars;
+    loginReq += reqChars;
+    out(
+      `${c.r.trial}: files shown under 3 or more request/phase groups: ${repeated.join(', ')}; their blocks ${repChars} chars (${pct(repChars, o.length)}); request lines ${reqChars} chars (${pct(reqChars, o.length)})`,
+    );
     out(
       `${c.r.trial}: ${o.length} chars, ${ls.length} lines, ${reqs} request lines, ${groups} request/phase groups, ${files.length} file lines (${uniq.size} distinct files: ${[...uniq].slice(0, 12).join(', ')}${uniq.size > 12 ? ', ...' : ''}); not-shown lines: ${notShown.join(' || ') || 'none'}`,
     );
   }
+  out(
+    `Login traces total: ${tud.length} traces, ${loginChars} chars = ${Math.round(loginChars / 4)} tokens est.; blocks of files repeated under 3+ groups ${loginRepeated} chars (${pct(loginRepeated, loginChars)}); request lines ${loginReq} chars (${pct(loginReq, loginChars)})`,
+  );
   out();
 }
 
@@ -1105,6 +1133,10 @@ out(
     ],
     rows,
   );
+  out(
+    `Q5 totals over ${W.length} with runs: all text ${Math.round(all)} tok; Lightpath calls ${Math.round(lp)} tok; tool_load ${Math.round(ld)} tok; tool_load in runs that never called Lightpath ${Math.round(W.filter((r) => !calledLp(r)).reduce((a, r) => a + r.tokChars.lpLoadOut + r.tokChars.lpLoadIn, 0) / 4)} tok`,
+  );
+  out();
 }
 out('### Q5 per with run');
 table(
