@@ -4,9 +4,9 @@ import { mapFunctions } from '../src/functions.js';
 import { mapScript } from '../src/pipeline.js';
 import { captureCoverage } from './helpers/capture.js';
 
-// Regression tests for the Phase A accuracy audit (scripts/accuracy, D-150, D-151): the four ways a
+// Regression tests for the Phase A accuracy audit (scripts/accuracy, D-149, D-153): the four ways a
 // line that did not run was shown as run. Real V8 coverage of one call each; every expectation is
-// the truth by hand. Each test fails before D-150/D-151 and passes after.
+// the truth by hand. Each test fails before D-149/D-153 and passes after.
 
 const ctx = { workspaceRoots: ['/repo'] };
 const URL = 'file:///repo/accuracy.js';
@@ -30,7 +30,7 @@ function trace(source: string, name: string, ...args: unknown[]) {
 const lineOf = (source: string, text: string) => source.split('\n').findIndex((l) => l.includes(text)) + 1;
 
 describe('accuracy: a line that did not run is never shown as run', () => {
-  it('an else-if never reached is not run (D-150)', () => {
+  it('an else-if never reached is not run (D-149)', () => {
     const src = [
       'exports.grade = function grade(kind) {',
       "  if (kind === 'a') {",
@@ -50,7 +50,7 @@ describe('accuracy: a line that did not run is never shown as run', () => {
     expect(lines.get(lineOf(src, 'return 3'))).toBe(0);
   });
 
-  it("an untaken case's break and an untaken default with a trailing comment are not run (D-150)", () => {
+  it("an untaken case's break and an untaken default with a trailing comment are not run (D-149)", () => {
     const src = [
       'exports.price = function price(fruit) {',
       '  let cents = 0;',
@@ -77,7 +77,7 @@ describe('accuracy: a line that did not run is never shown as run', () => {
     expect(lines.get(lineOf(src, 'return cents'))).toBe(1);
   });
 
-  it('the untaken arm of a multi-line ternary and of && is not run, and a comment line has no count (D-150)', () => {
+  it('the untaken arm of a multi-line ternary and of && is not run, and a comment line has no count (D-149)', () => {
     const src = [
       'exports.label = function label(vip, user) {',
       '  const text = vip',
@@ -98,7 +98,7 @@ describe('accuracy: a line that did not run is never shown as run', () => {
     expect(lines.get(lineOf(src, "|| 'nobody'"))).toBe(1);
   });
 
-  it('lines after a call that threw are unknown, not run, and say where (D-151)', () => {
+  it('lines after a call that threw are unknown, not run, and say where (D-153)', () => {
     const src = [
       'function mustBePositive(n) {',
       "  if (n <= 0) throw new RangeError('not positive');",
@@ -129,7 +129,7 @@ describe('accuracy: a line that did not run is never shown as run', () => {
     expect(fn?.notRun).not.toContain(after[0]);
   });
 
-  it('a try whose catch did not run keeps every count (D-151)', () => {
+  it('a try whose catch did not run keeps every count (D-153)', () => {
     const src = [
       'exports.parse = function parse(text) {',
       '  try {',
@@ -146,7 +146,7 @@ describe('accuracy: a line that did not run is never shown as run', () => {
     expect(unknown.size).toBe(0);
   });
 
-  it('source-mapped: unknown lines and their line map back to the original file (D-151)', () => {
+  it('source-mapped: unknown lines and their line map back to the original file (D-153)', () => {
     // The generated script is the original shifted down by two lines, with an identity-per-line map.
     const original = [
       'exports.checkQty = function checkQty(n) {',

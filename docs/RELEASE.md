@@ -356,14 +356,14 @@ What the 0.1.1 checks found: see "Install test" in the release prep PR. The 7 ta
 
 ## Releasing 0.1.2
 
-0.1.2 publishes 5 npm packages: `@lightpath-dev/protocol`, `core`, `daemon`, `mcp` and `cli`. `browser` stays at 0.1.1 and `node-agent` at 0.1.0: packed before the bump, their tarballs were identical to what npm serves (D-107, D-152).
+0.1.2 publishes 5 npm packages: `@lightpath-dev/protocol`, `core`, `daemon`, `mcp` and `cli`. `browser` stays at 0.1.1 and `node-agent` at 0.1.0: packed before the bump, their tarballs were identical to what npm serves (D-107, D-154).
 
 | Moves to 0.1.2            | Why                                                             |
 | ------------------------- | --------------------------------------------------------------- |
-| `@lightpath-dev/protocol` | `FunctionHit.unknown` (D-151)                                   |
-| `@lightpath-dev/core`     | The line rule (D-150) and lines after a call that threw (D-151) |
-| `@lightpath-dev/daemon`   | Passes `unknown` into traces (D-151)                            |
-| `@lightpath-dev/mcp`      | Prints `unknown: … (a call threw on or after line N)` (D-151)   |
+| `@lightpath-dev/protocol` | `FunctionHit.unknown` (D-153)                                   |
+| `@lightpath-dev/core`     | The line rule (D-149) and lines after a call that threw (D-153) |
+| `@lightpath-dev/daemon`   | Passes `unknown` into traces (D-153)                            |
+| `@lightpath-dev/mcp`      | Prints `unknown: … (a call threw on or after line N)` (D-153)   |
 | `@lightpath-dev/cli`      | Its `package.json` names daemon, mcp and protocol 0.1.2         |
 
 Publish from a real interactive terminal, as for 0.1.1: npm asks for the security key on every publish.

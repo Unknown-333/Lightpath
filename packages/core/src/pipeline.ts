@@ -17,14 +17,14 @@ export interface ScriptInput {
   sourceMapUrl?: string;
 }
 
-/** Workspace-relative path → line → the line it threw on or after (D-151). */
+/** Workspace-relative path → line → the line it threw on or after (D-153). */
 export type UnknownLines = Map<string, Map<number, number>>;
 
 export interface ScriptResult {
   /** Workspace-relative path → line counts (including zero counts). */
   files: Map<string, LineCounts>;
   dropped: Map<DropReason, number>;
-  /** Lines with no count because a call threw before them in a try whose catch ran (D-151). */
+  /** Lines with no count because a call threw before them in a try whose catch ran (D-153). */
   unknown: UnknownLines;
 }
 
