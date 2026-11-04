@@ -106,7 +106,11 @@ export function functionLine(f: FunctionHit): string {
   const range = f.startLine === f.endLine ? `${f.startLine}` : `${f.startLine}-${f.endLine}`;
   const calls = f.count > 0 ? `×${f.count}` : 'resumed';
   const notRun = f.notRun?.length ? ` not run: ${numberRanges(f.notRun)}` : '';
-  return `${functionName(f)} ${range} ${calls}${notRun}`;
+  // D-150: lines with no count, because a call threw before them.
+  const unknown = (f.unknown ?? [])
+    .map((u) => ` unknown: ${numberRanges(u.lines)} (a call threw on or after line ${u.threwAfter})`)
+    .join('');
+  return `${functionName(f)} ${range} ${calls}${notRun}${unknown}`;
 }
 
 const litRanges = (f: FileHits) => numberRanges(f.lines.map((l) => l.line));

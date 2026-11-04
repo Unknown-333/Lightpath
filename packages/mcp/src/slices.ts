@@ -201,6 +201,11 @@ function outermost(path: string, fns: readonly FunctionHit[], trace: Trace): Uni
 /** The printed lines of one unit. */
 function unitLines(u: Unit, src: readonly string[], lit: ReadonlySet<number>): string[] {
   const notRun = new Set(u.fns.flatMap((f) => f.notRun ?? []));
+  // Lines with no count: a call threw before them (D-150). A line another phase ran shows as run.
+  const unknown = new Map<number, number>();
+  for (const f of u.fns)
+    for (const x of f.unknown ?? []) for (const l of x.lines) if (!lit.has(l)) unknown.set(l, x.threwAfter);
+  let unknownRun: { from: number; to: number; at: number } | undefined;
   // A block is untaken only if every phase that ran its function left it untaken.
   const spansByFn = new Map<string, Map<string, NonNullable<FunctionHit['notRunSpans']>[number]>[]>();
   for (const f of u.fns) {
@@ -241,10 +246,27 @@ function unitLines(u: Unit, src: readonly string[], lit: ReadonlySet<number>): s
         `${String(l).padStart(4)}  ${text}${marks?.length ? `  // not run: ${[...new Set(marks)].join(', ')}` : ''}`,
       );
     } else if (notRun.has(l)) gap.push(l);
+    else if (unknown.has(l)) {
+      flush();
+      const at = unknown.get(l) as number;
+      const last = out.at(-1);
+      const run = last && unknownRun?.at === at && unknownRun.to === l - 1 ? unknownRun : undefined;
+      if (run) {
+        run.to = l;
+        out[out.length - 1] = unknownMarker(run.from, l, at);
+      } else {
+        unknownRun = { from: l, to: l, at };
+        out.push(unknownMarker(l, l, at));
+      }
+    }
   }
   flush();
   return out;
 }
+
+/** `// unknown: lines 55-56 (a call threw on or after line 54)` (D-150). */
+const unknownMarker = (from: number, to: number, at: number) =>
+  `      // unknown: ${from === to ? `line ${from}` : `lines ${from}-${to}`} (a call threw on or after line ${at})`;
 
 /** Pages under `room` characters: break between units, and inside a unit only when it alone is too long. */
 function paginate(blocks: readonly string[][], room: number): string[][] {

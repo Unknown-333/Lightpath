@@ -41,10 +41,25 @@ export function compareScenario(trace, scenario, all, options = {}) {
           const around = (trace.functions ?? []).filter(
             (f) => f.path === path && f.startLine <= m.line && m.line <= f.endLine,
           );
-          if (around.length > 0 && !around.some((f) => (f.notRun ?? []).includes(m.line)))
+          // Shown as unknown (a call threw before it, D-150) is not shown as run: that is allowed.
+          const unknown = around.some((f) => (f.unknown ?? []).some((u) => u.lines.includes(m.line)));
+          if (around.length > 0 && !unknown && !around.some((f) => (f.notRun ?? []).includes(m.line)))
             add(path, m.line, 'not-run-unmarked', 'listed as not run', 'not listed', m.text);
         }
-      } else if (got !== m.expect) add(path, m.line, 'line', m.expect, got, m.text);
+      } else if (got !== m.expect) {
+        // Unknown (D-150) is no claim: it loses a count but never says ran or not run.
+        const unknown = (trace.functions ?? []).some(
+          (f) => f.path === path && (f.unknown ?? []).some((u) => u.lines.includes(m.line)),
+        );
+        add(
+          path,
+          m.line,
+          got === 0 && unknown ? 'unknown' : 'line',
+          m.expect,
+          got === 0 && unknown ? 'unknown' : got,
+          m.text,
+        );
+      }
 
       if (typeof m.expect === 'number' && m.expect > 0) {
         const spans = spansOn(trace, path, m.line);
@@ -53,7 +68,14 @@ export function compareScenario(trace, scenario, all, options = {}) {
           const right = named.some((t) => t.includes(m.span));
           const wrong = named.filter((t) => !t.includes(m.span));
           if (!right && !(options.cheapMaps && spans.length === 0))
-            add(path, m.line, 'span', `not run: ${m.span}`, named.length ? named.join(' | ') : 'none', m.text);
+            add(
+              path,
+              m.line,
+              'span',
+              `not run: ${m.span}`,
+              named.length ? named.join(' | ') : 'none',
+              m.text,
+            );
           else if (wrong.length > 0 && options.cheapMaps)
             add(path, m.line, 'span', `not run: ${m.span}`, wrong.join(' | '), m.text);
         } else if (spans.length > 0) {

@@ -1,4 +1,5 @@
 import { eachMapping, originalPositionFor, type SourceMapInput, TraceMap } from '@jridgewell/trace-mapping';
+import { CODE, isJumpOnly, PUNCT, previousCode } from './code-mask.js';
 import { countAt, type Segment } from './flatten.js';
 import type { LineIndex } from './line-index.js';
 import type { LineCounts } from './lines.js';
@@ -25,21 +26,45 @@ export function mapToOriginal(
   mapUrl?: string,
 ): OriginalCounts {
   const tracer = newTraceMap(map, mapUrl);
-  const out: OriginalCounts = new Map();
+  const mask = generated.mask;
+  const text = generated.source;
+  /** Counts from mappings that start with code, and from mappings with only punctuation (D-149). */
+  const code: OriginalCounts = new Map();
+  const punct: OriginalCounts = new Map();
+  const keep = (into: OriginalCounts, source: string, line: number, count: number) => {
+    let lines = into.get(source);
+    if (!lines) {
+      lines = new Map();
+      into.set(source, lines);
+    }
+    const prev = lines.get(line);
+    if (prev === undefined || count > prev) lines.set(line, count);
+  };
 
   /** Credits one mapping whose generated span is `[span.offset, end)`. */
   const credit = (span: OpenSpan, end: number) => {
-    const at = generated.codeStart(span.offset, end);
-    if (at === undefined) return; // only whitespace: nothing ran here
-    const count = countAt(segments, at);
-    if (count === undefined) return;
-    let lines = out.get(span.source);
-    if (!lines) {
-      lines = new Map();
-      out.set(span.source, lines);
+    const stop = Math.min(end, text.length);
+    let codeAt: number | undefined;
+    let punctAt: number | undefined;
+    for (let i = Math.max(0, span.offset); i < stop; i++) {
+      const kind = mask[i];
+      if (kind === CODE) {
+        codeAt = i;
+        break;
+      }
+      if (kind === PUNCT && punctAt === undefined) punctAt = i;
     }
-    const prev = lines.get(span.originalLine);
-    if (prev === undefined || count > prev) lines.set(span.originalLine, count);
+    const at = codeAt ?? punctAt;
+    if (at === undefined) return; // only whitespace or comments: nothing ran here
+    let count = countAt(segments, at);
+    if (count === undefined || count < 0) return; // no data, or unknown (D-150)
+    if (codeAt !== undefined && isJumpOnly(text, mask, codeAt, stop)) {
+      // V8 ends a `case` clause's range where its `break` starts (D-149).
+      const before = previousCode(mask, codeAt);
+      const prior = before === undefined ? undefined : countAt(segments, before);
+      if (prior !== undefined && prior >= 0 && prior < count) count = prior;
+    }
+    keep(codeAt !== undefined ? code : punct, span.source, span.originalLine, count);
   };
 
   // eachMapping visits mappings in generated order, so each span ends where the next mapping
@@ -54,6 +79,14 @@ export function mapToOriginal(
         : undefined;
   });
   if (open) credit(open, lineEnd(generated, open.line));
+  // A line with code takes its code's count; a line of only punctuation keeps the punctuation's.
+  const out: OriginalCounts = new Map();
+  for (const [source, lines] of punct) out.set(source, new Map(lines));
+  for (const [source, lines] of code) {
+    const merged = out.get(source) ?? new Map();
+    for (const [line, count] of lines) merged.set(line, count);
+    out.set(source, merged);
+  }
   return out;
 }
 

@@ -210,6 +210,7 @@ interface FunctionHit {
   count: number; // calls in this phase; 0: it resumed after an await without a new call
   notRun?: number[]; // lines inside it with count 0 in this phase, sorted
   notRunSpans?: { line: number; startColumn: number; endColumn: number; text: string }[]; // untaken blocks inside a line that ran; text at most 40 chars, '' when unknown
+  unknown?: { lines: number[]; threwAfter: number }[]; // lines with no count: a call threw on or after line threwAfter, in a try whose catch ran (D-150)
   phase: number; // index into Trace.phases
 }
 ```

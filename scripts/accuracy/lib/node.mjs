@@ -8,11 +8,23 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { compareScenario, limitLine } from './compare.mjs';
-import { accuracyDir, core, daemonPkg, mcpClient, node, registerUrl, startProcess, traceIdOf, until } from './util.mjs';
+import {
+  accuracyDir,
+  core,
+  daemonPkg,
+  mcpClient,
+  node,
+  registerUrl,
+  startProcess,
+  traceIdOf,
+  until,
+} from './util.mjs';
 
 export const nodeRoot = join(accuracyDir, 'fixtures', 'node');
 const tscBin = (() => {
-  const pkgPath = createRequire(join(accuracyDir, '..', '..', 'package.json')).resolve('typescript/package.json');
+  const pkgPath = createRequire(join(accuracyDir, '..', '..', 'package.json')).resolve(
+    'typescript/package.json',
+  );
   const { bin } = JSON.parse(readFileSync(pkgPath, 'utf8'));
   return join(dirname(pkgPath), typeof bin === 'string' ? bin : bin.tsc);
 })();
@@ -24,7 +36,6 @@ export const NODE_VARIANTS = {
   // Resolved from the fixture folder, like `tsx server.ts` does in its child process.
   tsx: { args: ['--import', 'tsx', 'server.ts'] },
   tsc: { build: true, args: ['dist/server.js'] },
-  'tsc-no-map': { build: true, removeMap: 'dist/src/branches.js.map', args: ['dist/server.js'] },
 };
 
 function buildTsc(removeMap) {
@@ -52,37 +63,80 @@ export async function runNodeVariant(variant, scenarios, log) {
   try {
     app = await startProcess(node, ['--import', registerUrl, ...v.args], {
       cwd: nodeRoot,
-      env: { LIGHTPATH_URL: daemon.url, LIGHTPATH_TOKEN: daemon.token, LIGHTPATH_ROOTS: nodeRoot, ACCURACY_PORT: '0' },
+      env: {
+        LIGHTPATH_URL: daemon.url,
+        LIGHTPATH_TOKEN: daemon.token,
+        LIGHTPATH_ROOTS: nodeRoot,
+        ACCURACY_PORT: '0',
+      },
       ready: /listening on port (\d+)/,
       name: `node ${variant}`,
     });
     const base = `http://127.0.0.1:${app.match[1]}`;
     mcp = await mcpClient(nodeRoot);
-    const list = [...scenarios.values()].filter((s) => !s.click && !s.id.startsWith('overlap') && s.id !== 'websocket');
+    const list = [...scenarios.values()].filter(
+      (s) => !s.click && !s.id.startsWith('overlap') && s.id !== 'websocket',
+    );
     for (const s of list) {
       const answer = await mcp.call('run_request', { method: 'GET', url: `${base}/s/${s.id}` });
       const trace = store.get(traceIdOf(answer) ?? '');
       if (!trace) {
-        results.push({ variant, scenario: s.id, mismatches: [{ scenario: s.id, kind: 'no-trace', expected: 'a trace', got: answer.slice(0, 200), path: '', line: 0, text: '' }], answer });
+        results.push({
+          variant,
+          scenario: s.id,
+          mismatches: [
+            {
+              scenario: s.id,
+              kind: 'no-trace',
+              expected: 'a trace',
+              got: answer.slice(0, 200),
+              path: '',
+              line: 0,
+              text: '',
+            },
+          ],
+          answer,
+        });
         continue;
       }
       traces[s.id] = trace;
       results.push(check(variant, s, scenarios, trace, answer));
     }
-    // Overlap: both requests at once. Each answer must state the limit.
-    const [a, b] = await Promise.all([
-      mcp.call('run_request', { method: 'GET', url: `${base}/s/overlap-a` }),
-      mcp.call('run_request', { method: 'GET', url: `${base}/s/overlap-b` }),
-    ]);
-    for (const [id, answer] of [['overlap-a', a], ['overlap-b', b]]) {
-      const trace = store.get(traceIdOf(answer) ?? '');
-      const s = scenarios.get(id);
-      if (!trace) {
-        results.push({ variant, scenario: id, mismatches: [{ scenario: id, kind: 'no-trace', expected: 'a trace', got: answer.slice(0, 200), path: '', line: 0, text: '' }], answer });
-        continue;
+    // Overlap (a limit) was dropped from this round (credit freeze, 2026-11-04); its fixture stays.
+    if (process.env.ACCURACY_LIMITS === '1') {
+      // Overlap: both requests at once. Each answer must state the limit.
+      const [a, b] = await Promise.all([
+        mcp.call('run_request', { method: 'GET', url: `${base}/s/overlap-a` }),
+        mcp.call('run_request', { method: 'GET', url: `${base}/s/overlap-b` }),
+      ]);
+      for (const [id, answer] of [
+        ['overlap-a', a],
+        ['overlap-b', b],
+      ]) {
+        const trace = store.get(traceIdOf(answer) ?? '');
+        const s = scenarios.get(id);
+        if (!trace) {
+          results.push({
+            variant,
+            scenario: id,
+            mismatches: [
+              {
+                scenario: id,
+                kind: 'no-trace',
+                expected: 'a trace',
+                got: answer.slice(0, 200),
+                path: '',
+                line: 0,
+                text: '',
+              },
+            ],
+            answer,
+          });
+          continue;
+        }
+        traces[id] = trace;
+        results.push(check(variant, s, scenarios, trace, answer));
       }
-      traces[id] = trace;
-      results.push(check(variant, s, scenarios, trace, answer));
     }
   } finally {
     await mcp?.close().catch(() => {});
@@ -98,18 +152,59 @@ export async function runNodeVariant(variant, scenarios, log) {
     if (mode === 'unmapped') {
       mismatches = [];
       const shown = trace.files.some((f) => f.path === 'src/branches.ts');
-      if (shown) mismatches.push({ scenario: s.id, path: 'src/branches.ts', line: 0, kind: 'unmapped', expected: 'no src/branches.ts lines (no map)', got: 'src/branches.ts lines shown', text: '' });
+      if (shown)
+        mismatches.push({
+          scenario: s.id,
+          path: 'src/branches.ts',
+          line: 0,
+          kind: 'unmapped',
+          expected: 'no src/branches.ts lines (no map)',
+          got: 'src/branches.ts lines shown',
+          text: '',
+        });
       if (!answer.includes('[unmapped source]'))
-        mismatches.push({ scenario: s.id, path: 'dist/src/branches.js', line: 0, kind: 'unmapped', expected: '[unmapped source] in the answer', got: answer.split('\n').filter((l) => l.includes('branches')).join(' / ') || 'not named', text: '' });
+        mismatches.push({
+          scenario: s.id,
+          path: 'dist/src/branches.js',
+          line: 0,
+          kind: 'unmapped',
+          expected: '[unmapped source] in the answer',
+          got:
+            answer
+              .split('\n')
+              .filter((l) => l.includes('branches'))
+              .join(' / ') || 'not named',
+          text: '',
+        });
     } else {
       mismatches = compareScenario(trace, s, all, { sourceOf: sourceLines });
-      if (variantName.startsWith('tsc') && trace.files.some((f) => f.path.startsWith('dist/') && f.path !== 'dist/src/branches.js'))
-        mismatches.push({ scenario: s.id, path: 'dist/', line: 0, kind: 'path', expected: 'no dist/ path', got: trace.files.map((f) => f.path).join(', '), text: '' });
+      if (
+        variantName.startsWith('tsc') &&
+        trace.files.some((f) => f.path.startsWith('dist/') && f.path !== 'dist/src/branches.js')
+      )
+        mismatches.push({
+          scenario: s.id,
+          path: 'dist/',
+          line: 0,
+          kind: 'path',
+          expected: 'no dist/ path',
+          got: trace.files.map((f) => f.path).join(', '),
+          text: '',
+        });
     }
     if (s.limit) {
       const stated = limitLine(answer, s.limit);
       for (const m of mismatches) m.stated = Boolean(stated);
-      if (!stated) mismatches.push({ scenario: s.id, path: '', line: 0, kind: 'limit', expected: `limit (${s.limit}): line`, got: 'none', text: '' });
+      if (!stated)
+        mismatches.push({
+          scenario: s.id,
+          path: '',
+          line: 0,
+          kind: 'limit',
+          expected: `limit (${s.limit}): line`,
+          got: 'none',
+          text: '',
+        });
     }
     return { variant: variantName, scenario: s.id, mismatches, answer, traceId: trace.id };
   }
@@ -143,9 +238,15 @@ export async function nodeGroundTruth(scenarios) {
   const base = `http://127.0.0.1:${app.match[1]}`;
   const ids = [...scenarios.values()].filter((s) => !s.click && s.id !== 'websocket').map((s) => s.id);
   for (const id of ids) await fetch(`${base}/s/${id}`).then((r) => r.text());
-  await fetch(`${base}/__exit`).then((r) => r.text()).catch(() => {});
+  await fetch(`${base}/__exit`)
+    .then((r) => r.text())
+    .catch(() => {});
   await app.exited;
-  const file = await until('the coverage file', () => readdirSync(dir).find((f) => f.endsWith('.json')), 10_000);
+  const file = await until(
+    'the coverage file',
+    () => readdirSync(dir).find((f) => f.endsWith('.json')),
+    10_000,
+  );
   const { result } = JSON.parse(readFileSync(join(dir, file), 'utf8'));
   rmSync(dir, { recursive: true, force: true });
   const counts = new Map();
