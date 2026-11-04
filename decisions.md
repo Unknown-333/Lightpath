@@ -1360,3 +1360,12 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Why: the Phase B brief asks for a clean merge that never overwrites third-party entries and keeps comments where the format allows. A rewrite that changes every line of a teammate's config is a noisy diff in a shared file, and a skip on VS Code's normal format sends the user to a hand edit in the first minute.
 - Alternatives: `jsonc-parser` (Microsoft's, what VS Code uses; a new runtime dependency in a published package for one edit); keep the rewrite but detect indentation (still loses comments and inline arrays).
 - Revert: restore the `JSON.stringify` branch in `init.ts` and the old test.
+
+### D-152 Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (Phase B)
+
+- Date: 2026-11-04
+- Decision: `loadConfig` turns `\` into `/` in `webRoot` and each `roots` entry before resolving them, so `"webRoot": "packages\\web"` written on Windows names the same folder on macOS and Linux. (`ignore` globs already did this, in `compileIgnore`.) When the file isn't JSON and a string in it has a backslash that isn't a JSON escape, like `"C:\Users\me\web"`, the error adds: backslashes in JSON must be doubled, so write it as `"C:/Users/me/web"`.
+- Evidence (published 0.1.1, `C:\Users\user\lightpath-trials\goal\firstrun-raw\finding-config-backslash-0.1.1.txt`): with `"webRoot": "C:\Users\me\web"`, `doctor` and `dev` say only `isn't valid JSON: Bad escaped character in JSON at position 43 (line 1 column 44)`. On POSIX, 0.1.1 resolves `packages\\web` with `path.resolve` to `/home/jane/app/packages\web`, one folder whose name has a backslash in it (shown with `path.posix.resolve`; no Mac or Linux machine here). The new `config.test.ts` case fails on the ubuntu and macos `check` jobs without the change.
+- Why: the Phase B brief asks for correct paths in `lightpath.config.json` with backslashes and spaces. A committed config is shared between a team's OSes. Spaces in paths already worked: a Windows run with the app in `lp b\my invoices` and npm's cache in `lp npm cache …` returned its trace (`win-invoices-spaces.log`).
+- Alternatives: reject backslashes with an error (breaks configs that work on Windows today); leave it to docs.
+- Revert: drop the two `replace` calls and the hint in `config.ts`.

@@ -72,7 +72,7 @@ export async function loadConfig(dir: string, file?: string): Promise<LoadedConf
   try {
     json = JSON.parse(raw.replace(/^\uFEFF/, ''));
   } catch (err) {
-    throw new ConfigError(`${path} isn't valid JSON: ${(err as Error).message}`);
+    throw new ConfigError(`${path} isn't valid JSON: ${(err as Error).message}${backslashHint(raw)}`);
   }
   const parsed = LightpathConfig.safeParse(json);
   if (!parsed.success) {
@@ -84,11 +84,27 @@ export async function loadConfig(dir: string, file?: string): Promise<LoadedConf
   }
   const base = dirname(path);
   const config = { ...parsed.data };
-  if (config.webRoot) config.webRoot = resolve(base, config.webRoot);
-  if (config.roots) config.roots = config.roots.map((r) => resolve(base, r));
+  // `\` or `/`, so a config written on Windows names the same folders on macOS and Linux (D-152).
+  const local = (p: string) => resolve(base, p.replace(/\\/g, '/'));
+  if (config.webRoot) config.webRoot = local(config.webRoot);
+  if (config.roots) config.roots = config.roots.map(local);
   if (config.backend) config.backend = config.backend.map((b) => new URL(b).origin);
   if (config.url) config.url = new URL(config.url).href;
   return { path, config };
+}
+
+/**
+ * For a file that isn't JSON: when a string has a backslash that isn't a JSON escape, like a
+ * Windows path `"C:\Users\me"`, the same path with forward slashes (D-152). Empty otherwise.
+ */
+function backslashHint(raw: string): string {
+  for (const m of raw.matchAll(/"((?:[^"\\\n]|\\.)*)"/g)) {
+    const s = m[1] as string;
+    if (/\\[^"\\/bfnrtu]/.test(s)) {
+      return `. Backslashes in JSON strings must be doubled; write "${s}" as "${s.replace(/\\+/g, '/')}"`;
+    }
+  }
+  return '';
 }
 
 /** JSON Schema for editors, from the same definition. A test keeps lightpath.config.schema.json equal to it. */

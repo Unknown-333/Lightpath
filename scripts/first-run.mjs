@@ -13,7 +13,7 @@
 //   node scripts/first-run.mjs --app <dir> [--copy <src>] [--install "npm install"]
 //     [--spec @lightpath-dev/cli@0.1.1] [--agent claude-code] [--cold]
 //     --target 'button "Mark as paid"' [--within "Kestrel Labs"] [--fill '[{...}]']
-//     [--ports 3002,5174] [--log <file.json>]
+//     [--ports 3002,5174] [--log <file.json>] [--space]
 //
 // --copy copies <src> to --app first (no node_modules, no .lightpath). --cold gives npm a fresh,
 // empty cache in the temp folder, so the CLI and the app's packages download as on a new machine.
@@ -56,7 +56,8 @@ function fail(message) {
 
 const env = { ...process.env };
 if (flag('cold')) {
-  env.npm_config_cache = mkdtempSync(join(tmpdir(), 'lp-npm-cache-'));
+  // --space puts a space in the cache path, like a home folder "C:\Users\Jane Doe".
+  env.npm_config_cache = mkdtempSync(join(tmpdir(), flag('space') ? 'lp npm cache ' : 'lp-npm-cache-'));
   console.log(`cold start: empty npm cache ${env.npm_config_cache}`);
 }
 
