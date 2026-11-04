@@ -10,7 +10,7 @@ Lightpath is an MCP server for React + Node apps. Your agent clicks a button in 
 
 ![In tududi, a user reports that "Plan your day" lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison](https://raw.githubusercontent.com/Unknown-333/Lightpath/main/docs/media/tududi-demo.gif)
 
-A real kiro-cli 2.37.0 run (claude-sonnet-5.5, 6 tool calls, 0.68 credits) on [tududi](https://github.com/chrisvel/tududi), an open-source task manager (MIT, © Tududi Developers), run locally. The bug was planted for the demo; tududi doesn't have it. Time is shortened. [How it was made](https://github.com/Unknown-333/Lightpath/tree/main/docs/media/tududi-run).
+A real kiro-cli 2.37.0 run (claude-sonnet-5.5, 6 tool calls, 0.68 credits) on [tududi](https://github.com/chrisvel/tududi), an open-source task manager, run locally. Screens from tududi (MIT, © Tududi Developers), recoloured to Lightpath's palette. The bug was planted for the demo; tududi doesn't have it. Time is shortened. [How it was made](https://github.com/Unknown-333/Lightpath/tree/main/docs/media/tududi-run).
 
 ## Quick start
 

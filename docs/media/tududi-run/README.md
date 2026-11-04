@@ -47,11 +47,17 @@ The server runs under plain `node`, so it doesn't reload on a file change. To ge
 | `init.out`                | what `lightpath init --agent kiro` printed in the copy                                                            |
 | `gif-text.json`           | every line of text the GIF shows, as `render-gif.mjs` cut it from the transcript                                  |
 
+## How the GIF is drawn
+
+`render-gif.mjs` prints the GIF as a two-ink risograph in the brand palette: marshmallow paper, deep indigo and bubblegum pink, each at full strength or as a tint (`scripts/demo-gif/riso-palette.mjs`, copied from the brand art). Text is set in the brand's own bitmap font (`scripts/demo-gif/pixel-font.mjs`). The frame has no blur, gradients, glows or soft shadows. Shadows are hard offsets, and the pink tags sit 2 px off their indigo knockout. Grain is single-pixel dots from a fixed seed, only in large flat areas, never near text or the app.
+
+tududi's screens are recoloured, not redrawn: each pixel's brightness picks one of six indigo-on-paper steps. Nothing is added to or removed from them. Pink marks only what ran and what was clicked: the trace lines, and the "Plan your day" button while the click runs (its own pixels, found as the largest button-sized indigo shape; the box is in `gif-text.json` as `litButton`). The whole GIF uses at most 12 colours; the renderer fails if a pixel is outside them.
+
 ## What the GIF leaves out or shortens
 
 - Time: the run took 31.5 s; the GIF is 19.7 s, with a fixed length per scene.
 - The two failed `run_action` calls and the Tool Load step. The caption's "6 tool calls" counts them.
-- The trace: the GIF shows the request, 3 of the 16 functions listed for `ranking.js` (the first two and the one the agent edited, highlighted), the widest function of the next server file, and the first two browser files after the response. It gives counts for the rest. The highlight marks the function that holds the edited line; the trace itself shows that function ran, not where its bug is. The full answer is in `transcript.jsonl`.
+- The trace: the GIF shows the request, 3 of the 16 functions listed for `ranking.js` (the first two and the one the agent edited, highlighted), the widest function of the next server file, and the first two browser files after the response. It gives counts for the rest. A function's "not run" lines are shown as the trace gave them, in indigo tint; lines that ran are pink. The highlight marks the function that holds the edited line; the trace itself shows that function ran, not where its bug is. The full answer is in `transcript.jsonl`.
 - The agent's words: the first sentence of its note after the trace, of its "cause" paragraph and of its answer.
 
 ## Redo it

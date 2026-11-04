@@ -1,12 +1,23 @@
-// Turns one recorded tududi run (record-tududi.mjs) into the README GIF (D-138). Five scenes, one
-// idea each, in text big enough to read at README width: the user's bug report over the real app,
-// the agent's run_action click (frames of Lightpath's own browser from the run's screencast), the
-// trace lines that matter, the agent's edit, and the list before and after.
+// Turns one recorded tududi run (record-tududi.mjs) into the README GIF (D-138), drawn as a two-ink
+// risograph print in the brand's palette. Five scenes, one idea each: the user's bug report
+// over the real app, the agent's run_action click (frames of Lightpath's own browser from the run's
+// screencast), the trace lines that matter, the agent's edit, and the list before and after.
 //
 // Every tool call, argument, trace line and agent sentence shown is cut from the run's stream-json
 // transcript by the rules below; nothing is typed in by hand. Time is shortened: each scene has a
-// fixed length. The "after" picture is from `record-tududi.mjs --after` (server restarted, one
-// scripted click), and the GIF says so.
+// fixed length, and every frame says so. The "after" picture is from `record-tududi.mjs --after`
+// (server restarted, one scripted click), and the GIF says so.
+//
+// How it is drawn: everything around the app is set pixel by pixel on two ink layers (indigo and
+// pink, levels 0-2) and printed with the 9-colour palette in riso-palette.mjs. Text uses the
+// "Lightpath Pixel" bitmap font (pixel-font.mjs) at whole-number scales. There is no blur, gradient,
+// glow, soft shadow or anti-aliasing in the frame; shadows are hard offsets. Grain is single-pixel
+// dots from a fixed seed, only in large flat fills, never near text or the app.
+//
+// tududi's screenshots are scaled by Chrome and then recoloured, pixel by pixel, from their
+// brightness to six indigo-on-paper steps (APP_RAMP below; the owner allowed this on 2026-11-04).
+// Nothing in them is redrawn, added or removed, and no app pixel becomes pink: pink stays for what
+// ran and for the click. The whole GIF uses 12 colours.
 //
 // Usage: node scripts/demo-gif/render-gif.mjs --run <folder> [--gif docs/media/tududi-demo.gif]
 //        [--frames <folder>] (also saves each scene as a PNG, to check them)
@@ -15,13 +26,15 @@ import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
+import { GLYPHS, measure } from './pixel-font.mjs';
+import { INDIGO_TINT, PAPER as PAPER_HEX, RGB } from './riso-palette.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..', '..');
-// The GIF encoder and PNG reader are the invoices demo's dev dependencies (D-136); playwright-core
-// is the browser package's.
+// The GIF encoder and PNG codec are the invoices demo's dev dependencies (D-136); playwright-core
+// is the browser package's. Chrome only scales tududi's screenshots.
 const fromInvoices = createRequire(join(repo, 'examples', 'invoices', 'package.json'));
-const { applyPalette, GIFEncoder, quantize } = fromInvoices('gifenc');
+const { GIFEncoder } = fromInvoices('gifenc');
 const { PNG } = fromInvoices('pngjs');
 const { chromium } = createRequire(join(repo, 'packages', 'browser', 'package.json'))('playwright-core');
 
@@ -32,7 +45,7 @@ if (!values.run) throw new Error('--run <folder> is required');
 const runDir = resolve(values.run);
 const gifPath = resolve(values.gif ?? join(repo, 'docs', 'media', 'tududi-demo.gif'));
 const W = 1000;
-const H = 600;
+const H = 640;
 
 // ---- The story, from the transcript -------------------------------------------------------------
 const run = JSON.parse(readFileSync(join(runDir, 'run.json'), 'utf8'));
@@ -105,6 +118,7 @@ const editLine =
 // named function whose lines hold the edit (highlighted); for the next server file, its widest
 // named function; then how many other server files the answer listed. For the browser: the first
 // two source files that ran after the response, then how many other browser files were listed.
+// A function's "not run: ..." note (lines inside it that did not run) is shown as the trace gave it.
 const trace = action.output.split('\n');
 const actionLine = trace.find((l) => /^action: /.test(l)) ?? '';
 const firstRequest = (trace.find((l) => /^request: /.test(l)) ?? '').replace(/^request: /, '');
@@ -127,14 +141,19 @@ for (const l of trace) {
     section.files.push(file);
     continue;
   }
-  const fn = /^ {4}(\S+) (\d+)(?:-(\d+))? ×(\d+)/.exec(l);
-  if (fn && file) file.fns.push({ name: fn[1], from: +fn[2], to: +(fn[3] ?? fn[2]), calls: +fn[4] });
+  const fn = /^ {4}(\S+) (\d+)(?:-(\d+))? ×(\d+)(?: (not run: .+))?$/.exec(l);
+  if (fn && file)
+    file.fns.push({ name: fn[1], from: +fn[2], to: +(fn[3] ?? fn[2]), calls: +fn[4], notRun: fn[5] ?? '' });
 }
 const serverFiles = sections.filter((s) => s.side === 'server').flatMap((s) => s.files);
 const browserFiles = sections.filter((s) => s.side === 'browser').flatMap((s) => s.files);
 // First occurrence of each file (the click's own request comes first).
 const uniq = (fs) => fs.filter((f, i) => fs.findIndex((g) => g.path === f.path) === i);
 const named = (f) => f.fns.filter((x) => !x.name.startsWith('('));
+const fnLine = (x, cls) => {
+  const range = x.from === x.to ? `${x.from}` : `${x.from}-${x.to}`;
+  return { cls, text: `${x.name}  ${range}  ×${x.calls}`, ...(x.notRun ? { notRun: x.notRun } : {}) };
+};
 const edited = serverFiles.find((f) => f.path === editPath);
 const traceLines = [];
 traceLines.push({ cls: 'req', text: firstRequest.replace(/\(node, (\d+ ms)\)/, '· node · $1') });
@@ -149,8 +168,7 @@ if (edited) {
     .filter((x) => x !== holder)
     .slice(0, 2);
   for (const x of [...pick, holder].filter(Boolean).sort((a, b) => a.from - b.from)) {
-    const range = x.from === x.to ? `${x.from}` : `${x.from}-${x.to}`;
-    traceLines.push({ cls: x === holder ? 'fn hit' : 'fn', text: `${x.name}  ${range}  ×${x.calls}` });
+    traceLines.push(fnLine(x, x === holder ? 'fn hit' : 'fn'));
   }
 }
 const nextServer = uniq(serverFiles).find((f) => !shownServer.includes(f.path) && named(f).length);
@@ -158,7 +176,7 @@ if (nextServer) {
   shownServer.push(nextServer.path);
   traceLines.push({ cls: 'file', text: nextServer.path });
   const wide = [...named(nextServer)].sort((a, b) => b.to - b.from - (a.to - a.from))[0];
-  traceLines.push({ cls: 'fn', text: `${wide.name}  ${wide.from}-${wide.to}  ×${wide.calls}` });
+  traceLines.push(fnLine(wide, 'fn'));
 }
 const moreServer = uniq(serverFiles).length - shownServer.length;
 if (moreServer > 0) traceLines.push({ cls: 'dim', text: `+ ${moreServer} more server files` });
@@ -235,182 +253,472 @@ scenes.push({ kind: 'end', chip: 0, ms: 1500 });
 const total = scenes.reduce((a, s) => a + s.ms, 0);
 console.log(`${scenes.length} scenes, ${(total / 1000).toFixed(1)} s`);
 
-// ---- Render ---------------------------------------------------------------------------------------
-const esc = (s) =>
-  String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-const img = (path) => `data:image/jpeg;base64,${readFileSync(path).toString('base64')}`;
-const frameSrc = (f) => img(join(runDir, 'frames', f.file));
-const lastBefore = frameSrc(landed);
-const afterSrc = afterShot ? img(afterShot) : '';
 const kiro = String(run.kiroCli ?? '').replace(/^kiro-cli\s*/, '');
 const credits = typeof run.credits === 'number' ? run.credits.toFixed(2) : '?';
-const caption = `Real kiro-cli ${kiro} run, ${run.model} · ${run.steps} tool calls, ${credits} credits, ${Math.round(run.wallMs / 1000)} s · bug planted for the demo · time shortened`;
+const caption = `Real kiro-cli ${kiro} run · ${run.model} · ${run.steps} steps · ${credits} credits · ${Math.round(run.wallMs / 1000)} s`;
+const stamp = 'bug planted · time shortened';
 
-// The browser window shows the 1280×800 page. Zoom 0: the whole page width. Zoom 1: the middle
-// of the page at 95%, where Today's card and the plan list are.
-const WIN = { x: 30, y: 58, w: 940, h: 490 };
-const VIEW_H = WIN.h - 30;
-const zoomTransform = (z) => {
-  const s0 = WIN.w / 1280;
-  const s1 = 0.96;
-  const s = s0 + (s1 - s0) * z;
-  const x = -300 * z * s;
-  const y = -75 * z * s;
-  return `translate(${x}px, ${y}px) scale(${s})`;
+// ---- The press: two ink layers, printed with the 9-colour palette ---------------------------------
+// Ink levels per pixel: i = indigo, p = pink (0 none, 1 tint, 2 full). Palette index = i * 3 + p.
+const PAPER = { i: 0, p: 0 };
+const INDIGO = { i: 2, p: 0 };
+const TINT = { i: 1, p: 0 };
+const LIT = { i: 0, p: 2 }; // pink on bare paper: indigo knocked out under it
+const LIT_TINT = { i: 0, p: 1 };
+const S = 3; // body text scale: capitals 21 px
+const LH = 11 * S; // line height: 9 glyph rows + 2
+const GRAIN_SEED = 0x11d7;
+const GRAIN_DENSITY = 0.02;
+
+const hash = (x, y) => {
+  let h = Math.imul(x, 374761393) + Math.imul(y, 668265263) + Math.imul(GRAIN_SEED, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
 };
-const CHIPS = ['Bug report', 'Agent clicks', 'Trace', 'Fix'];
-const css = `
-* { box-sizing: border-box; margin: 0; }
-body { width: ${W}px; height: ${H}px; overflow: hidden; color: #e2e8f0;
-  font-family: "Segoe UI", system-ui, sans-serif;
-  background: radial-gradient(1200px 600px at 20% 0%, #1e1b4b 0%, #0b1020 55%, #070a14 100%); }
-.top { height: 56px; display: flex; align-items: center; padding: 0 30px; }
-.logo { font-weight: 700; font-size: 22px; letter-spacing: -.02em; color: #fff; display: flex; align-items: center; gap: 10px; }
-.logo i { width: 22px; height: 22px; border-radius: 7px; background: linear-gradient(135deg, #818cf8, #4f46e5); display: inline-block; box-shadow: 0 0 18px rgba(129,140,248,.6); }
-.logo b { color: #a5b4fc; font-weight: 700; }
-.chips { display: flex; gap: 8px; margin-left: auto; }
-.chip { padding: 6px 13px; border-radius: 999px; font-size: 14px; color: #64748b; border: 1px solid #1e293b; }
-.chip.done { color: #a5b4fc; border-color: #3730a3; }
-.chip.on { color: #fff; background: #4f46e5; border-color: #4f46e5; }
-.cap { position: absolute; left: 30px; right: 30px; bottom: 12px; font-size: 13px; color: #7c8aa5; text-align: center; }
-.win { position: absolute; left: ${WIN.x}px; top: ${WIN.y}px; width: ${WIN.w}px; height: ${WIN.h}px; border-radius: 12px; overflow: hidden;
-  background: #fff; box-shadow: 0 20px 50px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.06); }
-.bar { height: 30px; background: #eef0f4; display: flex; align-items: center; gap: 7px; padding: 0 12px; border-bottom: 1px solid #dfe3ea; }
-.dot { width: 11px; height: 11px; border-radius: 50%; background: #d4d8e0; }
-.url { margin-left: 12px; font-size: 12.5px; color: #475569; background: #fff; border-radius: 7px; padding: 3px 12px; }
-.view { position: relative; height: ${VIEW_H}px; overflow: hidden; background: #f2f3f5; }
-.view img { position: absolute; left: 0; top: 0; width: 1280px; height: 800px; transform-origin: 0 0; }
-.prompt { position: absolute; left: 56px; right: 56px; bottom: 76px; background: rgba(15,23,42,.94); border: 1px solid #334155;
-  border-radius: 14px; padding: 18px 22px; font-size: 19px; line-height: 1.45; color: #f8fafc; box-shadow: 0 16px 40px rgba(0,0,0,.45); }
-.who { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: #fbbf24; margin-bottom: 6px; font-weight: 600; }
-.pill { position: absolute; right: 60px; top: 150px; background: rgba(15,23,42,.95); color: #e2e8f0;
-  border: 1px solid #4338ca; border-radius: 12px; padding: 12px 20px; font: 17px/1.3 "Cascadia Mono", Consolas, monospace; white-space: nowrap;
-  box-shadow: 0 12px 30px rgba(0,0,0,.4); }
-.pill .k { color: #a5b4fc; } .pill .ok { color: #34d399; } .pill .s { color: #cbd5e1; }
-.panel { position: absolute; top: 66px; bottom: 44px; border-radius: 14px; background: #0f172a; border: 1px solid #1e293b; padding: 20px 24px;
-  font: 17px/1.62 "Cascadia Mono", Consolas, monospace; box-shadow: 0 20px 50px rgba(0,0,0,.4); overflow: hidden; }
-.panel .l { white-space: pre; overflow: hidden; text-overflow: ellipsis; }
-.call { color: #a5b4fc; } .call span { color: #e2e8f0; }
-.req { color: #34d399; font-weight: 600; }
-.side { color: #64748b; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; margin-top: 8px; }
-.file { color: #7dd3fc; }
-.fn { color: #cbd5e1; padding-left: 2ch; }
-.fn.hit { color: #fff; background: rgba(250,204,21,.16); border-left: 3px solid #facc15; margin-left: -3px; border-radius: 3px; }
-.dim { color: #64748b; }
-.note { margin-top: 14px; color: #f8fafc; font-family: "Segoe UI", system-ui, sans-serif; font-size: 18px; white-space: normal; }
-.note b { color: #a5b4fc; font-weight: 600; }
-.thumb { position: absolute; top: 66px; right: 30px; width: 330px; }
-.thumb .t { font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: #fca5a5; margin-bottom: 8px; font-weight: 600; }
-.thumb .t.good { color: #86efac; }
-.crop { position: relative; width: 330px; height: 262px; border-radius: 12px; overflow: hidden; background: #fff; box-shadow: 0 14px 34px rgba(0,0,0,.45); }
-.crop img { position: absolute; width: 1280px; height: 800px; transform-origin: 0 0; transform: translate(${-352 * 0.81}px, ${-128 * 0.81}px) scale(0.81); }
-.del { color: #fca5a5; background: rgba(239,68,68,.12); } .add { color: #86efac; background: rgba(34,197,94,.12); }
-.where { color: #94a3b8; font-size: 15px; margin: 2px 0 10px; }
-.say { margin-top: 18px; font: 19px/1.5 "Segoe UI", system-ui, sans-serif; color: #f1f5f9; white-space: normal; }
-.say + .say { margin-top: 10px; }
-.say b { color: #a5b4fc; font-weight: 600; }
-.cmp { position: absolute; top: 74px; left: 0; right: 0; display: flex; justify-content: center; gap: 36px; }
-.cmp .crop { width: 420px; height: 334px; }
-.cmp .crop img { transform: translate(${-352 * 1.03}px, ${-128 * 1.03}px) scale(1.03); }
-.cmp .t { font-size: 15px; }
-.cmpcap { position: absolute; top: 470px; left: 60px; right: 60px; text-align: center; font-size: 15px; color: #94a3b8; }
-.end { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; text-align: center; }
-.end .big { font-size: 46px; font-weight: 700; letter-spacing: -.03em; color: #fff; }
-.end .big b { color: #a5b4fc; }
-.end .tag { font-size: 24px; color: #e2e8f0; max-width: 760px; line-height: 1.35; }
-.end code { font: 18px "Cascadia Mono", Consolas, monospace; color: #c7d2fe; background: #111a33; border: 1px solid #312e81; padding: 10px 18px; border-radius: 10px; }
-`;
+// tududi's pixels: brightness (Rec. 601 luma, 0-255) to one of six steps from paper to indigo.
+// Steps 1, 2 and 4 are extra tints of the indigo ink (palette indices 9-11), so small grey text and
+// the white cards on the light grey page stay apart. Thresholds: luma >= the step's floor.
+const hexRGB = (hex) => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16));
+const mix = (a, b, t) => a.map((v, ch) => Math.round(v + (b[ch] - v) * t));
+const EXTRA = [
+  mix(hexRGB(PAPER_HEX), hexRGB(INDIGO_TINT), 0.22),
+  mix(hexRGB(PAPER_HEX), hexRGB(INDIGO_TINT), 0.5),
+  mix(hexRGB(INDIGO_TINT), RGB[6], 0.5),
+];
+const APP_RAMP = [
+  { floor: 247, index: 0 }, // paper
+  { floor: 225, index: 9 }, // 22% of the way to indigo tint
+  { floor: 190, index: 10 }, // 50% of the way to indigo tint
+  { floor: 150, index: 3 }, // indigo tint
+  { floor: 95, index: 11 }, // halfway from indigo tint to indigo
+  { floor: 0, index: 6 }, // indigo
+];
+const appIndex = (r, g, b) => {
+  const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+  return APP_RAMP.find((s) => luma >= s.floor).index;
+};
+const GRAIN = new Uint8Array(W * H);
+for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) GRAIN[y * W + x] = hash(x, y) < GRAIN_DENSITY ? 1 : 0;
 
-function chips(on) {
-  if (!on) return '';
-  return CHIPS.map(
-    (c, i) => `<span class="chip ${i + 1 === on ? 'on' : i + 1 < on ? 'done' : ''}">${i + 1} ${c}</span>`,
-  ).join('');
+class Sheet {
+  constructor() {
+    this.ink = new Uint8Array(W * H);
+    this.pk = new Uint8Array(W * H);
+    this.flat = new Uint8Array(W * H); // a large flat fill: grain may fall here
+    this.keep = new Uint8Array(W * H); // text, the app and their margins: no grain
+    this.isApp = new Uint8Array(W * H);
+    this.app = new Uint8Array(W * H); // palette index of each recoloured app pixel
+  }
+  each(x, y, w, h, fn) {
+    const x0 = Math.max(0, x);
+    const y0 = Math.max(0, y);
+    const x1 = Math.min(W, x + w);
+    const y1 = Math.min(H, y + h);
+    for (let yy = y0; yy < y1; yy++) for (let xx = x0; xx < x1; xx++) fn(yy * W + xx);
+  }
+  fill(x, y, w, h, ink, flat = false) {
+    this.each(x, y, w, h, (k) => {
+      if (ink.i !== undefined) this.ink[k] = ink.i;
+      if (ink.p !== undefined) this.pk[k] = ink.p;
+      this.flat[k] = flat ? 1 : 0;
+      this.isApp[k] = 0;
+    });
+  }
+  keepOut(x, y, w, h, pad = 6) {
+    this.each(x - pad, y - pad, w + 2 * pad, h + 2 * pad, (k) => {
+      this.keep[k] = 1;
+    });
+  }
+  // A box with a border and a hard shadow (offset, one ink, no blur).
+  box(x, y, w, h, { fill = PAPER, border = INDIGO, bw = 3, shadow = INDIGO, sh = 6 } = {}) {
+    if (shadow) this.fill(x + sh, y + sh, w, h, shadow);
+    if (border) this.fill(x, y, w, h, border);
+    this.fill(x + bw, y + bw, w - 2 * bw, h - 2 * bw, fill, w * h > 40000);
+  }
+  // A pink block printed 2 px off its indigo knockout: the riso misregistration.
+  misreg(x, y, w, h, d = 2) {
+    this.fill(x, y, w, h, { i: 0 });
+    this.fill(x + d, y + d, w, h, { p: 2 });
+  }
+  text(str, x, y, s, ink) {
+    let cx = x;
+    for (const ch of str) {
+      const g = GLYPHS[ch];
+      if (!g) throw new Error(`font has no glyph for ${JSON.stringify(ch)}`);
+      g.forEach((row, ry) => {
+        for (let rx = 0; rx < row.length; rx++)
+          if (row[rx] === '#') this.fill(cx + rx * s, y + ry * s, s, s, ink);
+      });
+      cx += (g[0].length + 1) * s;
+    }
+    const w = width(str, s);
+    this.keepOut(x, y, w, 9 * s);
+    return w;
+  }
+  paste(img, x, y) {
+    for (let yy = 0; yy < img.height; yy++) {
+      for (let xx = 0; xx < img.width; xx++) {
+        const X = x + xx;
+        const Y = y + yy;
+        if (X < 0 || Y < 0 || X >= W || Y >= H) continue;
+        const k = Y * W + X;
+        const s = (yy * img.width + xx) * 4;
+        this.app[k] = appIndex(img.data[s], img.data[s + 1], img.data[s + 2]);
+        this.isApp[k] = 1;
+        this.flat[k] = 0;
+      }
+    }
+    this.keepOut(x, y, img.width, img.height, 8);
+  }
+  // Grain: one ink step at seeded dots in flat fills away from text, the app and pink ink.
+  grain() {
+    for (let k = 0; k < W * H; k++) {
+      if (!GRAIN[k] || !this.flat[k] || this.keep[k] || this.isApp[k] || this.pk[k]) continue;
+      this.ink[k] = this.ink[k] === 1 ? 0 : 1;
+    }
+  }
 }
-function body(scene) {
-  const top = `<div class="top"><div class="logo"><i></i><span>Light<b>path</b></span></div><div class="chips">${chips(scene.chip)}</div></div>`;
-  const cap = scene.kind === 'end' ? '' : `<div class="cap">${esc(caption)}</div>`;
+const width = (str, s) => measure(str) * s;
+const wrap = (str, s, maxW) => {
+  const lines = [];
+  let cur = '';
+  for (const word of str.split(' ')) {
+    const t = cur ? `${cur} ${word}` : word;
+    if (cur && width(t, s) > maxW) {
+      lines.push(cur);
+      cur = word;
+    } else cur = t;
+  }
+  if (cur) lines.push(cur);
+  return lines;
+};
+const fits = (str, maxW, scales = [3, 2]) => scales.find((s) => width(str, s) <= maxW) ?? scales.at(-1);
+
+// ---- Layout ---------------------------------------------------------------------------------------
+const M = 30; // outer margin
+const TOP = 66; // content starts under the top bar
+const BOTTOM = H - 46; // and ends above the caption band
+const CW = W - 2 * M - 6; // content width, leaving room for a 6 px shadow
+const WIN = { x: M, y: TOP, w: CW, h: BOTTOM - TOP };
+const BAR = 30;
+const VIEW = { x: WIN.x + 3, y: WIN.y + 3 + BAR, w: WIN.w - 6, h: WIN.h - 6 - BAR };
+const CHIPS = ['Bug report', 'Agent clicks', 'Trace', 'Fix'];
+
+function wordmark(sh, x, y, s) {
+  sh.text('Lightpath', x, y, s, INDIGO);
+  // The dot of the "i" is lit: "L" is 5 wide plus 1 space, and the dot is the i's top row.
+  sh.fill(x + 6 * s, y, s, s, LIT);
+}
+function frameChrome(sh, scene) {
+  sh.fill(0, 0, W, H, PAPER, true);
+  if (scene.kind !== 'end') wordmark(sh, M, 18, 3);
+  if (scene.chip) {
+    let x = W - M;
+    const boxes = CHIPS.map((c, i) => `${i + 1} ${c}`).map((t) => ({ t, w: width(t, 2) + 22 }));
+    for (let i = boxes.length - 1; i >= 0; i--) {
+      x -= boxes[i].w;
+      boxes[i].x = x;
+      x -= 10;
+    }
+    boxes.forEach((b, i) => {
+      const n = i + 1;
+      const on = n === scene.chip;
+      const done = n < scene.chip;
+      if (on) sh.box(b.x, 14, b.w, 30, { fill: INDIGO, border: INDIGO, shadow: TINT, sh: 3 });
+      else sh.box(b.x, 14, b.w, 30, { fill: PAPER, border: done ? INDIGO : TINT, bw: 2, shadow: null });
+      sh.text(b.t, b.x + 11, 22, 2, on ? PAPER : done ? INDIGO : TINT);
+    });
+  }
+  if (scene.kind !== 'end') {
+    const y = H - 30;
+    sh.text(caption, M, y, 2, INDIGO);
+    const sw = width(stamp, 2) + 20;
+    sh.box(W - M - sw, y - 8, sw, 30, { fill: INDIGO, border: INDIGO, shadow: null });
+    sh.text(stamp, W - M - sw + 10, y, 2, PAPER);
+    if (width(caption, 2) + sw + 20 > W - 2 * M) throw new Error('caption and stamp do not fit');
+  }
+}
+
+// ---- tududi's own pixels, scaled by Chrome ---------------------------------------------------------
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const page = await browser.newPage({ viewport: { width: VIEW.w, height: VIEW.h } });
+const cache = new Map();
+const jpeg = (path) => `data:image/jpeg;base64,${readFileSync(path).toString('base64')}`;
+async function view(path, w, h, transform) {
+  const key = `${path}|${w}|${h}|${transform}`;
+  if (cache.has(key)) return cache.get(key);
+  await page.setViewportSize({ width: w, height: h });
+  await page.setContent(
+    `<!doctype html><html><body style="margin:0;overflow:hidden;background:#fff"><img src="${jpeg(path)}" style="position:absolute;left:0;top:0;width:1280px;height:800px;transform-origin:0 0;transform:${transform}"></body></html>`,
+  );
+  await page.waitForFunction(() => [...document.images].every((i) => i.complete));
+  const img = PNG.sync.read(await page.screenshot({ type: 'png' }));
+  cache.set(key, img);
+  return img;
+}
+const frameFile = (f) => join(runDir, 'frames', f.file);
+// Zoom 0: the whole page width. Zoom 1: the middle of the page at 96%, where Today's card and the
+// plan list are.
+const zoomTransform = (z) => {
+  const s0 = VIEW.w / 1280;
+  const s = s0 + (0.96 - s0) * z;
+  return `translate(${-300 * z * s}px, ${-75 * z * s}px) scale(${s})`;
+};
+const CROP = { w: 420, h: 334, t: `translate(${-352 * 1.03}px, ${-128 * 1.03}px) scale(1.03)` };
+
+const litBoxes = [];
+function litButton(sh) {
+  const seen = new Uint8Array(W * H);
+  let best = null;
+  for (let y = VIEW.y; y < VIEW.y + VIEW.h; y++) {
+    for (let x = VIEW.x; x < VIEW.x + VIEW.w; x++) {
+      const k0 = y * W + x;
+      if (seen[k0] || !sh.isApp[k0] || sh.app[k0] !== 6) continue;
+      const stack = [k0];
+      const px = [];
+      seen[k0] = 1;
+      while (stack.length) {
+        const k = stack.pop();
+        px.push(k);
+        for (const n of [k - 1, k + 1, k - W, k + W]) {
+          if (n < 0 || n >= W * H || seen[n] || !sh.isApp[n] || sh.app[n] !== 6) continue;
+          seen[n] = 1;
+          stack.push(n);
+        }
+      }
+      const xs = px.map((k) => k % W);
+      const ys = px.map((k) => Math.floor(k / W));
+      const box = { x: Math.min(...xs), y: Math.min(...ys), w: 0, h: 0, n: px.length };
+      box.w = Math.max(...xs) - box.x + 1;
+      box.h = Math.max(...ys) - box.y + 1;
+      const buttonish =
+        box.w >= 60 && box.w <= 300 && box.h >= 20 && box.h <= 70 && px.length > 0.6 * box.w * box.h;
+      if (buttonish && (!best || px.length > best.px.length)) best = { px, box };
+    }
+  }
+  // Once the page has moved on, the button is gone and nothing is lit.
+  if (!best) return;
+  // The label inside the button (pixels enclosed by it on all four sides) goes indigo, so it reads
+  // as indigo over pink.
+  const inButton = new Uint8Array(W * H);
+  for (const k of best.px) inButton[k] = 1;
+  const { x: bx, y: by, w: bw, h: bh } = best.box;
+  const enclosed = (x, y) => {
+    const hit = (dx, dy) => {
+      for (
+        let xx = x + dx, yy = y + dy;
+        xx >= bx && xx < bx + bw && yy >= by && yy < by + bh;
+        xx += dx, yy += dy
+      )
+        if (inButton[yy * W + xx]) return true;
+      return false;
+    };
+    return hit(-1, 0) && hit(1, 0) && hit(0, -1) && hit(0, 1);
+  };
+  const label = [];
+  for (let y = by; y < by + bh; y++)
+    for (let x = bx; x < bx + bw; x++) if (!inButton[y * W + x] && enclosed(x, y)) label.push(y * W + x);
+  for (const k of best.px) sh.app[k] = 2;
+  for (const k of label) sh.app[k] = 6;
+  litBoxes.push(best.box);
+}
+
+// ---- Scenes, drawn ---------------------------------------------------------------------------------
+async function draw(scene) {
+  const sh = new Sheet();
+  frameChrome(sh, scene);
   if (scene.kind === 'app') {
-    let over = '';
-    if (scene.prompt !== undefined)
-      over = `<div class="prompt"><div class="who">The user reports</div>${esc(scene.prompt)}</div>`;
-    if (scene.pill === 'call')
-      over = `<div class="pill"><span class="k">● lightpath run_action</span>  <span class="s">${esc(target)}</span></div>`;
-    if (scene.pill === 'done')
-      over = `<div class="pill"><span class="ok">✓ trace</span>  <span class="s">${esc(firstRequest.replace(/ \(node.*$/, ''))}</span></div>`;
-    return `${top}<div class="win"><div class="bar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="url">tududi · localhost:8412 · Lightpath's browser</span></div><div class="view"><img src="${frameSrc(scene.frame)}" style="transform:${zoomTransform(scene.zoom)}"></div></div>${over}${cap}`;
+    sh.box(WIN.x, WIN.y, WIN.w, WIN.h, { fill: INDIGO });
+    for (let d = 0; d < 3; d++) sh.fill(WIN.x + 14 + d * 20, WIN.y + 12, 10, 10, d === 0 ? PAPER : TINT);
+    sh.text("tududi · localhost:8412 · Lightpath's browser", WIN.x + 90, WIN.y + 11, 2, PAPER);
+    sh.paste(await view(frameFile(scene.frame), VIEW.w, VIEW.h, zoomTransform(scene.zoom)), VIEW.x, VIEW.y);
+    if (scene.prompt !== undefined) {
+      const bx = WIN.x + 30;
+      const bw = WIN.w - 60;
+      const lines = wrap(prompt, S, bw - 48);
+      const bh = 24 + 28 + 10 + lines.length * LH + 10;
+      const by = WIN.y + WIN.h - 26 - bh;
+      sh.box(bx, by, bw, bh);
+      sh.fill(bx + 3, by + 3, width('THE USER REPORTS', 2) + 24, 30, INDIGO);
+      sh.text('THE USER REPORTS', bx + 15, by + 11, 2, PAPER);
+      // Type the prompt out: the same wrapped lines, cut at this scene's length.
+      let left = scene.prompt.length;
+      lines.forEach((l, i) => {
+        const part = l.slice(0, Math.max(0, left));
+        left -= l.length + 1;
+        if (part) sh.text(part, bx + 24, by + 24 + 28 + 10 + i * LH, S, INDIGO);
+      });
+    }
+    // The clicked element is lit: while the click runs on the page it was clicked on, the button's
+    // own pixels (the largest solid indigo shape that is button-sized) are printed pink instead.
+    if (scene.pill === 'call') litButton(sh);
+    if (scene.pill) {
+      const call = scene.pill === 'call';
+      const mark = call ? '●' : '✓';
+      const rest = call
+        ? `  lightpath run_action  ${target}`
+        : `  trace  ${firstRequest.replace(/ \(node.*$/, '')}`;
+      const pw = width(mark + rest, S) + 40;
+      const px = WIN.x + WIN.w - 40 - pw;
+      const py = WIN.y + 120;
+      sh.fill(px + 6, py + 6, pw, 52, LIT); // the click is lit: its shadow is pink
+      sh.fill(px, py, pw, 52, INDIGO);
+      sh.text(mark, px + 20, py + 13, S, LIT);
+      sh.text(rest, px + 20 + width(mark, S), py + 13, S, PAPER);
+    }
   }
   if (scene.kind === 'trace') {
-    const lines = scene.lines.map((l) => `<div class="l ${l.cls}">${esc(l.text)}</div>`).join('');
-    const note = scene.note ? `<div class="note"><b>Agent:</b> ${esc(scene.note)}</div>` : '';
-    return `${top}<div class="panel" style="left:30px;width:590px"><div class="l call">● run_action <span>${esc(target)}</span></div>${lines}${note}</div>
-      <div class="thumb"><div class="t">What the user sees</div><div class="crop"><img src="${lastBefore}"></div></div>${cap}`;
+    sh.box(WIN.x, WIN.y, WIN.w, WIN.h, { fill: INDIGO, border: INDIGO, shadow: TINT });
+    let y = WIN.y + 14;
+    const x = WIN.x + 26;
+    const dot = sh.text('●', x, y, S, LIT);
+    sh.text(` run_action  ${target}`, x + dot, y, S, PAPER);
+    y += LH;
+    for (const l of scene.lines) {
+      if (l.cls === 'side') {
+        y += 6;
+        sh.text(l.text.toUpperCase(), x, y, 2, TINT);
+        y += 26;
+        continue;
+      }
+      const ink = { req: LIT, file: LIT, fn: LIT, 'fn hit': INDIGO, dim: LIT_TINT }[l.cls];
+      const ix = l.cls.startsWith('fn') ? x + 30 : x;
+      if (l.cls === 'fn hit') sh.misreg(ix - 10, y - 6, width(l.text, S) + 20, LH - 2);
+      const w = sh.text(l.text, ix, y, S, ink);
+      if (l.notRun) sh.text(l.notRun, ix + w + 24, y, S, TINT);
+      y += LH;
+    }
+    if (scene.note) {
+      y += 10;
+      const lead = sh.text('Agent: ', x, y, S, TINT);
+      for (const [i, l] of wrap(scene.note, S, WIN.w - 52 - lead).entries())
+        sh.text(l, x + lead, y + i * LH, S, PAPER);
+      y += LH;
+    }
+    if (y > WIN.y + WIN.h - 8) throw new Error(`trace panel overflows by ${y - (WIN.y + WIN.h - 8)} px`);
   }
   if (scene.kind === 'fix') {
     const a = argsOf(edit);
     const oldL = String(a.oldStr ?? '').split('\n');
     const newL = String(a.newStr ?? '').split('\n');
-    const del = oldL
-      .filter((l) => !newL.includes(l))
-      .map((l) => `<div class="l del">- ${esc(l.trim())}</div>`);
-    const add = newL
-      .filter((l) => !oldL.includes(l))
-      .map((l) => `<div class="l add">+ ${esc(l.trim())}</div>`);
+    const del = oldL.filter((l) => !newL.includes(l)).map((l) => `- ${l.trim()}`);
+    const add = newL.filter((l) => !oldL.includes(l)).map((l) => `+ ${l.trim()}`);
     const where = [editLine > 0 ? `line ${editLine}` : '', fnName ? `in ${fnName}` : '']
       .filter(Boolean)
       .join(', ');
-    const say =
-      scene.step === 2
-        ? `<div class="say"><b>Agent:</b> ${esc(answer.cause)}</div><div class="say"><b>Agent:</b> ${esc(answer.status)}</div>`
-        : '';
-    return `${top}<div class="panel" style="left:30px;right:30px;top:140px;bottom:auto;padding:26px 30px"><div class="l call">● edit <span>${esc(editPath)}</span></div><div class="where">${esc(where)}</div>${del.join('')}${add.join('')}${say}</div>${cap}`;
+    const inner = WIN.w - 52;
+    const cs = Math.min(...[...del, ...add].map((l) => fits(l, inner)));
+    const ph = 20 + LH + 30 + (del.length + add.length) * (11 * cs + 4) + 14;
+    sh.box(WIN.x, WIN.y, WIN.w, ph, { fill: INDIGO, border: INDIGO, shadow: TINT });
+    let y = WIN.y + 20;
+    const x = WIN.x + 26;
+    sh.text(`edit  ${editPath}`, x, y, S, PAPER);
+    y += LH;
+    sh.text(where, x, y, 2, TINT);
+    y += 30;
+    for (const l of del) {
+      sh.text(l, x, y, cs, TINT);
+      y += 11 * cs + 4;
+    }
+    for (const l of add) {
+      sh.text(l, x, y, cs, LIT);
+      y += 11 * cs + 4;
+    }
+    if (scene.step === 2) {
+      const bx = WIN.x;
+      const by = WIN.y + ph + 26;
+      const paras = [answer.cause, answer.status].map((p) => wrap(p, S, WIN.w - 48));
+      const bh = 24 + 28 + 10 + paras.flat().length * LH + (paras.length - 1) * 12 + 10;
+      sh.box(bx, by, WIN.w, bh);
+      sh.fill(bx + 3, by + 3, width('THE AGENT SAYS', 2) + 24, 30, INDIGO);
+      sh.text('THE AGENT SAYS', bx + 15, by + 11, 2, PAPER);
+      let ty = by + 24 + 28 + 10;
+      for (const p of paras) {
+        for (const l of p) {
+          sh.text(l, bx + 24, ty, S, INDIGO);
+          ty += LH;
+        }
+        ty += 12;
+      }
+      if (by + bh > BOTTOM) throw new Error('the agent box overflows');
+    }
   }
   if (scene.kind === 'compare') {
-    return `${top}<div class="cmp"><div><div class="t" style="color:#fca5a5;letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-bottom:8px">Before</div><div class="crop"><img src="${lastBefore}"></div></div>
-      <div><div class="t" style="color:#86efac;letter-spacing:.1em;text-transform:uppercase;font-weight:600;margin-bottom:8px">After the fix</div><div class="crop"><img src="${afterSrc}"></div></div></div>
-      <div class="cmpcap">After: server restarted and "Plan your day" clicked again by the recording script, not by the agent.</div>${cap}`;
+    const gap = 40;
+    const x0 = Math.round((W - (2 * CROP.w + gap)) / 2);
+    const y0 = TOP + 44;
+    const shots = [
+      ['BEFORE', frameFile(landed), false],
+      ['AFTER THE FIX', afterShot, true],
+    ];
+    for (const [i, [label, path, lit]] of shots.entries()) {
+      const x = x0 + i * (CROP.w + gap);
+      const lw = width(label, 2) + 24;
+      if (lit) sh.misreg(x, y0 - 40, lw, 30);
+      else sh.fill(x, y0 - 40, lw, 30, INDIGO);
+      sh.text(label, x + 12, y0 - 32, 2, lit ? INDIGO : PAPER);
+      sh.box(x - 3, y0 - 3, CROP.w + 6, CROP.h + 6, { fill: INDIGO });
+      sh.paste(await view(path, CROP.w, CROP.h, CROP.t), x, y0);
+    }
+    const note =
+      'After: server restarted and "Plan your day" clicked again by the recording script, not by the agent.';
+    const lines = wrap(note, 2, W - 2 * M);
+    lines.forEach((l, i) => {
+      sh.text(l, Math.round((W - width(l, 2)) / 2), y0 + CROP.h + 28 + i * 24, 2, INDIGO);
+    });
   }
-  return `<div class="end"><div class="big">Light<b>path</b></div><div class="tag">See the exact lines one click ran, browser and server, for your agent.</div><code>npx @lightpath-dev/cli init --agent kiro</code></div>`;
+  if (scene.kind === 'end') {
+    const big = 10;
+    const ww = width('Lightpath', big);
+    const wx = Math.round((W - ww) / 2);
+    const wy = 150;
+    sh.text('Lightpath', wx + 6, wy + 6, big, TINT); // hard shadow
+    wordmark(sh, wx, wy, big);
+    const tag = 'See the exact lines one click ran, browser and server, for your agent.';
+    const lines = wrap(tag, S, 760);
+    lines.forEach((l, i) => {
+      sh.text(l, Math.round((W - width(l, S)) / 2), wy + 120 + i * LH, S, INDIGO);
+    });
+    const cmd = 'npx @lightpath-dev/cli init --agent kiro';
+    const cw = width(cmd, S) + 48;
+    const cx = Math.round((W - cw) / 2);
+    const cy = wy + 120 + lines.length * LH + 40;
+    sh.box(cx, cy, cw, 60, { fill: INDIGO, border: INDIGO, shadow: TINT });
+    sh.text(cmd, cx + 24, cy + 18, S, PAPER);
+  }
+  sh.grain();
+  return sh;
 }
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
-const page = await browser.newPage({ viewport: { width: W, height: H } });
-await page.setContent(`<!doctype html><html><head><style>${css}</style></head><body></body></html>`);
-const shots = [];
-for (const scene of scenes) {
-  await page.evaluate((h) => {
-    document.body.innerHTML = h;
-  }, body(scene));
-  await page.waitForFunction(() => [...document.images].every((i) => i.complete));
-  shots.push({ png: await page.screenshot({ type: 'png' }), ms: scene.ms });
-}
+const sheets = [];
+for (const scene of scenes) sheets.push({ sheet: await draw(scene), ms: scene.ms });
 await browser.close();
+if (!litBoxes.length) throw new Error('no button-shaped indigo element in the clicked frames');
 
 // ---- Encode ---------------------------------------------------------------------------------------
-const rgba = shots.map((s) => PNG.sync.read(s.png).data);
-// One palette for the whole GIF, from a sample of every frame; index 255 is "same as before".
-const sampleStep = 5;
-const sample = new Uint8Array(rgba.length * Math.ceil((W * H) / sampleStep) * 4);
-let n = 0;
-for (const data of rgba) {
-  for (let p = 0; p < W * H; p += sampleStep) {
-    sample.set(data.subarray(p * 4, p * 4 + 4), n);
-    n += 4;
-  }
-}
-const palette = quantize(sample.subarray(0, n), 255, { format: 'rgb565' });
-while (palette.length < 256) palette.push([0, 0, 0]);
+// One 16-entry table: the 9 riso colours (0-8), the 3 extra indigo tints for tududi's screens
+// (9-11), unused 12-14, and 15 for "same as the frame before".
+const SAME = 15;
+const palette = [...RGB, ...EXTRA, [0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+const indexed = sheets.map(({ sheet }) => {
+  const index = new Uint8Array(W * H);
+  for (let k = 0; k < W * H; k++) index[k] = sheet.isApp[k] ? sheet.app[k] : sheet.ink[k] * 3 + sheet.pk[k];
+  return index;
+});
+const used = new Set();
+for (const index of indexed) for (const v of index) used.add(v);
+if ([...used].some((v) => v > 11)) throw new Error('a pixel is outside the 12 colours');
 const gif = GIFEncoder();
 let prev = null;
-rgba.forEach((data, i) => {
-  const index = applyPalette(data, palette.slice(0, 255), 'rgb565');
+indexed.forEach((index, i) => {
   const frame = new Uint8Array(index);
-  if (prev) for (let p = 0; p < frame.length; p++) if (index[p] === prev[p]) frame[p] = 255;
+  if (prev) for (let p = 0; p < frame.length; p++) if (index[p] === prev[p]) frame[p] = SAME;
   gif.writeFrame(frame, W, H, {
     palette: i === 0 ? palette : undefined,
-    delay: shots[i].ms,
+    delay: sheets[i].ms,
     transparent: i > 0,
-    transparentIndex: 255,
+    transparentIndex: SAME,
     dispose: 1,
     repeat: 0,
   });
@@ -421,12 +729,28 @@ mkdirSync(dirname(gifPath), { recursive: true });
 writeFileSync(gifPath, gif.bytes());
 if (values.frames) {
   mkdirSync(values.frames, { recursive: true });
-  shots.forEach((s, i) => {
-    writeFileSync(join(values.frames, `scene${String(i).padStart(3, '0')}.png`), s.png);
+  indexed.forEach((index, i) => {
+    const png = new PNG({ width: W, height: H });
+    for (let k = 0; k < W * H; k++) {
+      png.data.set(palette[index[k]], k * 4);
+      png.data[k * 4 + 3] = 255;
+    }
+    writeFileSync(join(values.frames, `scene${String(i).padStart(3, '0')}.png`), PNG.sync.write(png));
   });
 }
-const shown = { action: actionLine, editLine, fnName, traceLines, answer, readNote, after: afterInfo };
+const shown = {
+  action: actionLine,
+  editLine,
+  fnName,
+  traceLines,
+  answer,
+  readNote,
+  caption,
+  stamp,
+  litButton: litBoxes,
+  after: afterInfo,
+};
 writeFileSync(join(runDir, 'gif-text.json'), `${JSON.stringify(shown, null, 2)}\n`);
 console.log(
-  `${gifPath}: ${shots.length} frames, ${(total / 1000).toFixed(1)} s, ${(statSync(gifPath).size / 1e6).toFixed(2)} MB`,
+  `${gifPath}: ${sheets.length} frames, ${W}x${H}, ${(total / 1000).toFixed(1)} s, ${used.size} colours, ${(statSync(gifPath).size / 1e6).toFixed(2)} MB`,
 );

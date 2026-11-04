@@ -17,7 +17,8 @@
     },
     {
       "cls": "fn",
-      "text": "priorityRank  33-42  ×40"
+      "text": "priorityRank  33-42  ×40",
+      "notRun": "not run: 39-40"
     },
     {
       "cls": "fn",
@@ -33,7 +34,8 @@
     },
     {
       "cls": "fn",
-      "text": "getCandidates  364-482  ×1"
+      "text": "getCandidates  364-482  ×1",
+      "notRun": "not run: 431, 474-477"
     },
     {
       "cls": "dim",
@@ -61,6 +63,31 @@
     "cause": "In orderCandidates in backend/modules/daily-plan/ranking.js, the sort compared priority in ascending order (a - b), so low-priority tasks came first."
   },
   "readNote": "Ordering happens in ranking.js.",
+  "caption": "Real kiro-cli 2.37.0 run · claude-sonnet-5.5 · 6 steps · 0.68 credits · 31 s",
+  "stamp": "bug planted · time shortened",
+  "litButton": [
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4827
+    },
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4827
+    },
+    {
+      "x": 260,
+      "y": 519,
+      "w": 136,
+      "h": 42,
+      "n": 4823
+    }
+  ],
   "after": {
     "at": "2026-11-04T04:11:42.433Z",
     "by": "record-tududi.mjs --after (scripted click, no agent)",
