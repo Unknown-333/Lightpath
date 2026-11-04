@@ -1,5 +1,11 @@
 # Trace accuracy audit
 
+> Scope in this round (credit freeze, 2026-11-04): `pnpm accuracy` runs the Node scenarios in the
+> `strip`, `tsx` and `tsc` variants. The web fixtures (Vite, webpack), the `tsc-no-map` variant, the
+> ground-truth runs and the limit scenarios below are written and committed but not run yet.
+> Mismatches this round doesn't fix are listed in `run.mjs` (`KNOWN`) with their reason and don't
+> fail the run; any other mismatch does.
+
 `pnpm accuracy` runs small apps through Lightpath and compares every trace with an expected result
 written by hand. The expected results were committed before the comparison code existed, so they
 were not fitted to Lightpath's output. Fixtures live in `fixtures/`; line numbers are part of the
