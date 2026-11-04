@@ -1,0 +1,124 @@
+{
+  "ok": true,
+  "fails": [],
+  "palette": [
+    {
+      "name": "paper",
+      "hex": "#fcf5ec",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink tint",
+      "hex": "#ffb3d2",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink",
+      "hex": "#ff4f9f",
+      "multiplyCheck": true
+    },
+    {
+      "name": "indigo tint",
+      "hex": "#a19dd9",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink tint over indigo tint",
+      "hex": "#a16eb3",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink over indigo tint",
+      "hex": "#a13187",
+      "multiplyCheck": true
+    },
+    {
+      "name": "indigo",
+      "hex": "#2b2684",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink tint over indigo",
+      "hex": "#2b1b6d",
+      "multiplyCheck": true
+    },
+    {
+      "name": "pink over indigo",
+      "hex": "#2b0c52",
+      "multiplyCheck": true
+    }
+  ],
+  "files": {
+    "out/og.png": {
+      "bytes": 14094,
+      "w": 1200,
+      "h": 630,
+      "uniqueColours": 9,
+      "outsidePalette": 0
+    },
+    "out/poster.png": {
+      "bytes": 10445,
+      "w": 1440,
+      "h": 756,
+      "uniqueColours": 9,
+      "outsidePalette": 0
+    },
+    "review/concept-a.png": {
+      "bytes": 14094,
+      "w": 1200,
+      "h": 630,
+      "uniqueColours": 9,
+      "outsidePalette": 0
+    },
+    "review/concept-b.png": {
+      "bytes": 12581,
+      "w": 1200,
+      "h": 630,
+      "uniqueColours": 7,
+      "outsidePalette": 0
+    },
+    "review/concept-c.png": {
+      "bytes": 13329,
+      "w": 1200,
+      "h": 630,
+      "uniqueColours": 7,
+      "outsidePalette": 0
+    },
+    "out/loop.gif": {
+      "bytes": 59828,
+      "w": 960,
+      "h": 504,
+      "frames": 100,
+      "seconds": 10,
+      "tableEntriesOutsidePalette": 0,
+      "distinctTableColours": 9,
+      "localColourTables": 0
+    },
+    "out/loop.mp4": {
+      "bytes": 172027,
+      "frame": 72,
+      "maxChannelError": 7,
+      "meanChannelError": 2.384,
+      "pixelsNearestToAnotherPaletteColour": 0,
+      "crop2x": "review/video-2x-mp4.png"
+    },
+    "out/loop.webm": {
+      "bytes": 121901,
+      "frame": 72,
+      "maxChannelError": 4,
+      "meanChannelError": 2.383,
+      "pixelsNearestToAnotherPaletteColour": 0,
+      "crop2x": "review/video-2x-webm.png"
+    }
+  },
+  "summary": {
+    "out/og.png": "14094 bytes, 9 colours, 0 outside",
+    "out/poster.png": "10445 bytes, 9 colours, 0 outside",
+    "review/concept-a.png": "14094 bytes, 9 colours, 0 outside",
+    "review/concept-b.png": "12581 bytes, 7 colours, 0 outside",
+    "review/concept-c.png": "13329 bytes, 7 colours, 0 outside",
+    "out/loop.gif": "59828 bytes, table 9 colours, 0 outside",
+    "out/loop.mp4": "172027 bytes, max err 7, mean 2.384, off-palette px 0",
+    "out/loop.webm": "121901 bytes, max err 4, mean 2.383, off-palette px 0"
+  }
+}

@@ -23,7 +23,8 @@
     "e2e:invoices": "pnpm build && node scripts/e2e-invoices.mjs",
     "test:vscode": "pnpm build && pnpm bundle && pnpm --filter lightpath-vscode test:editor",
     "lightpath": "node packages/cli/dist/bin.js",
-    "shop": "pnpm --filter shop dev"
+    "shop": "pnpm --filter shop dev",
+    "brand:build": "node brand/build.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.3",
