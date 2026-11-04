@@ -9,7 +9,6 @@
     const sync = () => {
       const on = root.classList.contains('fx');
       toggle.setAttribute('aria-pressed', String(on));
-      toggle.setAttribute('aria-label', `Print effects: ${on ? 'on' : 'off'}`);
     };
     sync();
     toggle.addEventListener('click', () => {

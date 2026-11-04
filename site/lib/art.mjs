@@ -208,7 +208,7 @@ function spotCoverage() {
   for (const ox of [3, 34]) {
     bars.forEach(([indent, len, ran], k) => {
       const y = 13 + k * 4;
-      r.rect(ox + 3 + indent, y, len, 2, ran ? PK : I);
+      r.rect(ox + 3 + indent, y, len, 2, ran ? PK : P0);
     });
   }
   return r;

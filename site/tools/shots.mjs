@@ -2,7 +2,7 @@
 // Uses the system Chrome through playwright-core. Effects on and off, and reduced motion.
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { chromium } from 'playwright-core';
+import { chromium, firefox } from 'playwright-core';
 import { serve } from './serve.mjs';
 
 const outDir = process.argv[2];
@@ -13,10 +13,14 @@ const widths = (
   .split(',')
   .map(Number);
 const sections = process.argv.includes('--sections');
+// --jpeg: also first-screen and full-page JPEGs (quality 80), small enough to commit for review.
+const jpeg = process.argv.includes('--jpeg');
 mkdirSync(outDir, { recursive: true });
 
 const site = await serve();
-const browser = await chromium.launch({ channel: 'chrome' });
+// LP_ENGINE=firefox uses Playwright's Firefox build (npx playwright-core install firefox).
+const engine = process.env.LP_ENGINE ?? 'chrome';
+const browser = engine === 'firefox' ? await firefox.launch() : await chromium.launch({ channel: 'chrome' });
 const modes = [
   { name: 'fx-on', fx: 'on', motion: 'no-preference' },
   { name: 'fx-off', fx: 'off', motion: 'no-preference' },
@@ -28,7 +32,7 @@ try {
     for (const m of modes) {
       const ctx = await browser.newContext({
         viewport: { width: w, height: w < 500 ? 800 : 900 },
-        deviceScaleFactor: w < 500 ? 2 : 1,
+        deviceScaleFactor: 1,
         reducedMotion: m.motion,
       });
       if (m.fx) await ctx.addInitScript((v) => localStorage.setItem('lp-fx', v), m.fx);
@@ -44,9 +48,19 @@ try {
         for (const i of document.querySelectorAll('img[loading="lazy"]')) i.loading = 'eager';
       });
       await page.waitForLoadState('networkidle');
-      const full = join(outDir, `page-${w}-${m.name}.png`);
+      const full = join(outDir, `page-${w}-${m.name}${engine === 'firefox' ? '-firefox' : ''}.png`);
       await page.screenshot({ path: full, fullPage: true });
       files.push(full);
+      if (jpeg) {
+        const tag = `-${w}-${m.name}${engine === 'firefox' ? '-firefox' : ''}`;
+        await page.screenshot({ path: join(outDir, `first${tag}.jpg`), type: 'jpeg', quality: 80 });
+        await page.screenshot({
+          path: join(outDir, `full${tag}.jpg`),
+          type: 'jpeg',
+          quality: 80,
+          fullPage: true,
+        });
+      }
       if (sections) {
         for (const id of ['top', 'trace']) {
           const f = join(outDir, `${id}-${w}-${m.name}.png`);

@@ -139,6 +139,13 @@ pre {
   margin: 0;
 }
 
+p code,
+li > code,
+dd code,
+h3 code {
+  overflow-wrap: anywhere;
+}
+
 .visually-hidden {
   position: absolute !important;
   width: 1px;
@@ -312,7 +319,6 @@ pre {
 
 .display {
   margin-bottom: clamp(1.25rem, 2.5vw, 2rem);
-  max-width: 15ch;
   font-size: calc(9 * var(--u));
   line-height: 1;
 }
@@ -820,12 +826,13 @@ pre {
 /* What it does: six cards on a 6-column grid, deliberately not all alike. */
 .feats {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 1.5rem;
   margin-top: 2rem;
 }
 
 .card {
+  min-width: 0;
   display: flex;
   flex-direction: column;
   grid-column: span 2;
@@ -978,6 +985,19 @@ pre {
   grid-template-columns: minmax(7rem, auto) 1fr;
   gap: 0.5rem 1.25rem;
   margin: 0.5rem 0 1rem;
+}
+
+.kv-stack {
+  grid-template-columns: 1fr;
+  gap: 0.15rem;
+}
+
+.kv-stack dd {
+  margin-bottom: 0.75rem;
+}
+
+.table-wrap + .note {
+  margin-top: 1.25rem;
 }
 
 .kv dt {
@@ -1152,7 +1172,7 @@ tbody th {
 
 @media (max-width: 60rem) {
   .feats {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .card,
   .card-wide + .card {
@@ -1186,7 +1206,7 @@ tbody th {
     margin-left: 0;
   }
   .feats {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   .card,
   .card-wide + .card {
@@ -1222,10 +1242,11 @@ tbody th {
 }
 
 @media (max-width: 26rem) {
-  .bar .fx-toggle {
-    font-size: 0;
-    gap: 0;
-    padding: 0.5rem;
+  .fx-long {
+    display: none;
+  }
+  .bar nav a {
+    padding-inline: 0.45rem;
   }
 }
 

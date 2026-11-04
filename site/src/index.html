@@ -46,13 +46,12 @@
     <nav aria-label="Sections">
       <ul>
         <li><a href="#demo">Demo</a></li>
-        <li><a href="#trace">The trace</a></li>
         <li><a href="#how">How it works</a></li>
         <li><a href="#start">Quick start</a></li>
         <li><a href="#faq">FAQ</a></li>
       </ul>
     </nav>
-    <button type="button" class="fx-toggle" aria-pressed="false">Print effects</button>
+    <button type="button" class="fx-toggle" aria-pressed="false"><span><span class="fx-long">Print </span>effects</span></button>
     <a class="bar-gh" href="https://github.com/Unknown-333/Lightpath">GitHub</a>
   </div>
 </header>
@@ -157,8 +156,10 @@
 <pre class="snip"><code>run_action  target: button "Mark as paid"  within: "Kestrel Labs"
 
 request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
+…
   server/services/ledger.ts
-    getSummary 14-28 ×1 not run: 16-27</code></pre>
+    getSummary 14-28 ×1 not run: 16-27
+…</code></pre>
         <p class="src">Tested in <a href="https://github.com/Unknown-333/Lightpath/blob/main/scripts/e2e-shop.mjs"><code>scripts/e2e-shop.mjs</code></a>. Excerpt from <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/media/demo-run/transcript.jsonl">a recorded run</a> on <code>examples/invoices</code>.</p>
       </article>
       <article class="card">
@@ -217,7 +218,7 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
           <dt>Runtime</dt><dd>Node.js 22.12+, Chrome or Edge</dd>
         </dl>
         <h3>Agents</h3>
-        <dl class="kv">
+        <dl class="kv kv-stack">
           <dt>Kiro</dt><dd>Run end to end with kiro-cli 2.37.0, in the benchmark and the demo.</dd>
           <dt>Claude Code, Cursor, VS Code</dt><dd>Setup tested in CI: <code>lightpath init</code> and <code>doctor</code>, with no agent installed. How each agent picks and calls tools is from their docs, not tested here.</dd>
         </dl>
