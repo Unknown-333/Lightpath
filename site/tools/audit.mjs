@@ -105,7 +105,14 @@ try {
     const fxBefore = await page.evaluate(() => document.documentElement.classList.contains('fx'));
     await page.keyboard.press('Space');
     const fxAfter = await page.evaluate(() => document.documentElement.classList.contains('fx'));
+    await page.focus('.motion-toggle');
+    await page.keyboard.press('Enter');
+    const paused = await page.evaluate(() => ({
+      pressed: document.querySelector('.motion-toggle').getAttribute('aria-pressed'),
+      clipAnimation: getComputedStyle(document.querySelector('.hero-clip')).animationName,
+    }));
     report.keyboard = {
+      pauseAnimation: paused,
       tabStops: stops.length,
       stopsWithoutRing: stops.filter((s) => !s.ring).map((s) => `${s.tag} ${s.label}`),
       stops: stops.map((s) => `${s.tag}: ${s.label}`),

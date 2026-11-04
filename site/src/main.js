@@ -22,6 +22,16 @@
     });
   }
 
+  // Pause for the hero loop (WCAG 2.2.2). Paused shows the still, fully lit frame.
+  const motion = document.querySelector('.motion-toggle');
+  if (motion) {
+    motion.addEventListener('click', () => {
+      const still = root.classList.toggle('still');
+      motion.setAttribute('aria-pressed', String(still));
+      motion.textContent = still ? 'Play animation' : 'Pause animation';
+    });
+  }
+
   // Quick start tabs (WAI-ARIA tabs pattern, automatic activation).
   for (const tabs of document.querySelectorAll('[data-tabs]')) {
     const list = [...tabs.querySelectorAll('[role="tab"]')];

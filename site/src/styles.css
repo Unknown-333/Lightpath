@@ -365,6 +365,26 @@ h3 code {
   height: auto;
 }
 
+.motion-toggle {
+  display: block;
+  margin: 0.75rem 0 0 auto;
+  padding: 0.3rem 0.7rem;
+  border: 2px solid var(--indigo);
+  background: var(--paper);
+  color: var(--indigo);
+  font: 600 0.875rem / 1.2 var(--sans);
+  cursor: pointer;
+}
+
+.still .hero-art * {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .motion-toggle {
+    display: none;
+  }
+}
 /* Ink layers of every drawn print (hero and spots). */
 .art .paper {
   fill: var(--paper);
