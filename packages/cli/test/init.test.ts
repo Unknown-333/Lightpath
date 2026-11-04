@@ -14,6 +14,7 @@ import {
   mcpCommand,
   upsertBlock,
 } from '../src/init.js';
+import { parseJsonc } from '../src/jsonc.js';
 import { serverToolNames } from '../src/mcp-probe.js';
 
 const TOOLS = ['list_traces', 'get_trace', 'find_code_for_action', 'diff_traces'];
@@ -107,11 +108,22 @@ describe('lightpath init --agent', () => {
     expect(lines.some((l) => l.includes('file://AGENTS.md'))).toBe(true);
   });
 
-  it('leaves a config with comments alone and prints the entry to paste', async () => {
-    const jsonc = '// my servers\n{ "servers": {} }\n';
-    write('.vscode/mcp.json', jsonc);
+  // D-151 changed this test: a config with comments was left alone (exit 1). VS Code allows
+  // comments in its config files, so init now adds its entry and keeps the comment.
+  it('adds its entry to a config with comments and keeps the comment', async () => {
+    write('.vscode/mcp.json', '// my servers\n{ "servers": {} }\n');
+    expect(await run('vscode')).toBe(0);
+    expect(read('.vscode/mcp.json').startsWith('// my servers\n{ "servers": {\n')).toBe(true);
+    expect(parseJsonc(read('.vscode/mcp.json'))).toEqual({
+      servers: { lightpath: { type: 'stdio', ...mcpCommand(V, 'linux') } },
+    });
+  });
+
+  it("leaves a config that isn't JSON even with comments alone and prints the entry to paste", async () => {
+    const broken = '{ "servers": { "a": 1 ';
+    write('.vscode/mcp.json', broken);
     expect(await run('vscode')).toBe(1);
-    expect(read('.vscode/mcp.json')).toBe(jsonc);
+    expect(read('.vscode/mcp.json')).toBe(broken);
     expect(lines.join('\n')).toContain('"type": "stdio"');
     expect(lines.join('\n')).toContain('skipped');
     // The rest is still written.

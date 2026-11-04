@@ -9,16 +9,8 @@ import { DISCOVERY_FILE } from '@lightpath-dev/protocol';
 import pc from 'picocolors';
 import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
 import { nodeVersionProblem } from './env.js';
-import {
-  AGENT_SETUP,
-  AGENTS,
-  agentsBlock,
-  findBlock,
-  mcpCommand,
-  PACKAGE,
-  parseJson,
-  SERVER_NAME,
-} from './init.js';
+import { AGENT_SETUP, AGENTS, agentsBlock, findBlock, mcpCommand, PACKAGE, SERVER_NAME } from './init.js';
+import { parseJsonc } from './jsonc.js';
 import { VERSION } from './main.js';
 import { type ProbeResult, probeMcpCommand, serverToolNames } from './mcp-probe.js';
 
@@ -136,7 +128,8 @@ export async function setupChecks(
     const setup = AGENT_SETUP[agent];
     const raw = await readFile(join(cwd, setup.file), 'utf8').catch(() => undefined);
     if (raw === undefined) continue;
-    const json = parseJson(raw) as Record<string, Record<string, unknown> | undefined> | undefined;
+    // Comments and trailing commas are fine (D-151): VS Code allows them in its config files.
+    const json = parseJsonc(raw) as Record<string, Record<string, unknown> | undefined> | undefined;
     const name = `${setup.name} MCP config`;
     if (json === undefined || typeof json !== 'object' || json === null) {
       if (raw.includes(`"${SERVER_NAME}"`)) {
@@ -145,7 +138,7 @@ export async function setupChecks(
           name,
           run: async () => ({
             ok: false,
-            detail: `${setup.file} isn't plain JSON (comments?), so it can't be checked; remove the comments or check the "${SERVER_NAME}" entry by hand`,
+            detail: `${setup.file} isn't valid JSON, so it can't be checked; fix the file, then run lightpath init --agent ${agent} again`,
           }),
         });
       }

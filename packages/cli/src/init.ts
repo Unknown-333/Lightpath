@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { CONFIG_FILE, LightpathConfig } from './config.js';
+import { parseJsonc, sameValue, setMemberChecked } from './jsonc.js';
 
 /** The agents `lightpath init --agent` knows (design section 10.1, D-120). */
 export const AGENTS = ['claude-code', 'cursor', 'vscode', 'kiro'] as const;
@@ -174,20 +175,19 @@ export async function init(options: InitOptions): Promise<number> {
   let failed = false;
   const report = (outcome: Outcome, file: string, note = '') => out(`${outcome.padEnd(9)} ${file}${note}`);
 
-  // 1. The agent's MCP config, merged into what is there.
+  // 1. The agent's MCP config: only the "lightpath" entry is written, as a text edit, so other
+  // servers, comments and formatting stay byte for byte (D-151).
   const entry = mcpEntry(agent, version, platform);
   const configPath = join(cwd, setup.file);
   const raw = await readFile(configPath, 'utf8').catch(() => undefined);
-  const parsed = raw === undefined || raw.trim() === '' ? {} : parseJson(raw);
-  if (!isPlainObject(parsed) || (parsed[setup.key] !== undefined && !isPlainObject(parsed[setup.key]))) {
+  const next = configWithEntry(raw, setup.key, entry);
+  if (next === undefined) {
     failed = true;
-    report('skipped', setup.file, " (not plain JSON, or its servers aren't an object; left as is)");
+    report('skipped', setup.file, " (not JSON, or its servers aren't an object; left as is)");
     out(`Add this under "${setup.key}" in ${setup.file} by hand:`);
     out(JSON.stringify({ [SERVER_NAME]: entry }, null, 2));
   } else {
-    const servers = (parsed[setup.key] ?? {}) as Record<string, unknown>;
-    const next = { ...parsed, [setup.key]: { ...servers, [SERVER_NAME]: entry } };
-    report(await writeIfChanged(configPath, raw, `${JSON.stringify(next, null, 2)}\n`), setup.file);
+    report(await writeIfChanged(configPath, raw, next), setup.file);
   }
 
   // 2. lightpath.config.json: only the keys it lacks.
@@ -240,6 +240,24 @@ export async function init(options: InitOptions): Promise<number> {
       : `Done. Restart ${setup.name} so it loads the server, then run lightpath doctor.`,
   );
   return failed ? 1 : 0;
+}
+
+/**
+ * The agent config text with the "lightpath" entry set (D-151), `raw` itself when the entry is
+ * already there (in any key order or formatting), or undefined when the file can't be edited
+ * safely: not JSON even with comments allowed, servers not an object, or an edit that wouldn't
+ * keep everything else equal.
+ */
+export function configWithEntry(raw: string | undefined, key: string, entry: McpEntry): string | undefined {
+  if (raw === undefined || raw.trim() === '') {
+    return `${JSON.stringify({ [key]: { [SERVER_NAME]: entry } }, null, 2)}\n`;
+  }
+  const parsed = parseJsonc(raw);
+  if (!isPlainObject(parsed)) return undefined;
+  const servers = parsed[key];
+  if (servers !== undefined && !isPlainObject(servers)) return undefined;
+  if (servers !== undefined && sameValue(servers[SERVER_NAME], entry)) return raw;
+  return setMemberChecked(raw, key, SERVER_NAME, entry);
 }
 
 async function writeIfChanged(path: string, before: string | undefined, after: string): Promise<Outcome> {

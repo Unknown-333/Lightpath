@@ -1,0 +1,21 @@
+{
+	"mcpServers": {
+		"sentry": {
+			"url": "https://mcp.sentry.dev/mcp"
+		},
+		"filesystem": {
+			"command": "npx",
+			"args": ["-y", "@modelcontextprotocol/server-filesystem", "C:\\Users\\Jane Doe\\projects"]
+		},
+		"lightpath": {
+			"command": "cmd",
+			"args": [
+				"/c",
+				"npx",
+				"-y",
+				"@lightpath-dev/cli@9.9.9",
+				"mcp"
+			]
+		}
+	}
+}
