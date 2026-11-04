@@ -207,14 +207,12 @@ h3 code {
   padding: 0.35rem 0;
 }
 
-.wordmark {
-  width: calc(var(--w) * 3px);
-  height: 27px;
-  fill: currentColor;
-}
-
-.wm-dot {
-  fill: var(--pink);
+/* The official logo (brand/logo), always clean: no grain, halftone or misregistration. */
+.logo {
+  --logo-i: var(--indigo);
+  --logo-p: var(--pink);
+  width: auto;
+  height: 30px;
 }
 
 .bar nav {
@@ -1156,10 +1154,9 @@ tbody th {
   font-weight: 600;
 }
 
-.foot .wordmark {
-  width: calc(var(--w) * 4px);
-  height: 36px;
-  fill: var(--paper);
+.foot .logo {
+  --logo-i: var(--paper);
+  height: 40px;
 }
 
 .foot-links {
@@ -1270,6 +1267,11 @@ tbody th {
 @media (max-width: 26rem) {
   .fx-long {
     display: none;
+  }
+  /* The lockup is wider than the old pixel wordmark; at phone width this keeps logo, switch and
+     GitHub on one row (checked at 360 and 390 px). */
+  .bar .logo {
+    height: 24px;
   }
   .bar nav a {
     padding-inline: 0.45rem;

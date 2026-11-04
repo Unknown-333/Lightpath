@@ -1,6 +1,7 @@
 // The three social-image concepts, drawn as two-ink riso prints on a cell grid.
 // Each returns { print, scale } where scale takes the grid to 1200x630.
 import { measure } from './font.mjs';
+import { stampLogo } from './logo.mjs';
 import { INK } from './palette.mjs';
 import { Print } from './raster.mjs';
 import { CLICK_RAYS, CURSOR, WALKER } from './sprites.mjs';
@@ -107,7 +108,8 @@ export function drawA(state = {}) {
     ...state,
   };
   const r = new Print(A.W, A.H);
-  wordmark(r, 12, 9, 1);
+  // The wordmark is no longer pixel text: printA() stamps the official logo (brand/logo) at
+  // LOGO_BOX in src/logo.mjs, where the pixel "Lightpath" used to be.
   r.text(HEADLINE[0], 12, 23, 2, INK.indigo, INK.tint);
   r.text(HEADLINE[1], 12, 43, 2, INK.indigo, INK.tint);
 
@@ -128,7 +130,7 @@ export function drawA(state = {}) {
 }
 
 export function conceptA() {
-  return { print: drawA(), scale: 5 };
+  return { print: drawA(), scale: 5, stamp: stampLogo };
 }
 
 // ---- Concept B: typographic, one oversized lit line -----------------------------------------

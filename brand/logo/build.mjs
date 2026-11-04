@@ -66,6 +66,8 @@ out('svg/favicon.svg', faviconSVG(geometryAt(concept, 16)));
 out('svg/app-icon.svg', iconSVG(geo));
 const icons = { fav16: fav[16], app256: iconPixels(concept, 256), avatar: iconPixels(concept, 400) };
 out('png/apple-touch-icon.png', png(iconPixels(concept, 180)));
+// 256 px: the VS Code extension icon (extensions/vscode/media/icon.png is a copy; the check compares).
+out('png/app-icon-256.png', png(iconPixels(concept, 256)));
 out('png/app-icon-512.png', png(iconPixels(concept, 512)));
 out('png/app-icon-1024.png', png(iconPixels(concept, 1024)));
 out('png/avatar-400.png', png(icons.avatar));

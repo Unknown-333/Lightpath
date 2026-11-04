@@ -17,10 +17,10 @@ ffmpeg is only needed for MP4 and WebM. The one used here is the gyan.dev "relea
 
 | File                   | What                                                  | Size       | Colours                                  |
 | ---------------------- | ----------------------------------------------------- | ---------- | ---------------------------------------- |
-| `out/og.png`           | social preview, 1200x630                              | 14.1 KB    | 9, all in the palette                    |
-| `out/loop.gif`         | loop for a README, 960x504, 100 frames, 10 fps, 10 s  | 59.8 KB    | 9-entry table, no local tables           |
-| `out/loop.mp4`         | loop for a site, H.264, 1440x756, 10 fps, 10 s        | 172.0 KB   | see "Video" below                        |
-| `out/loop.webm`        | loop for a site, VP9 lossless, 1440x756, 10 fps, 10 s | 121.9 KB   | see "Video" below                        |
+| `out/og.png`           | social preview, 1200x630                              | 14.2 KB    | 9, all in the palette                    |
+| `out/loop.gif`         | loop for a README, 960x504, 100 frames, 10 fps, 10 s  | 58.5 KB    | 9-entry table, no local tables           |
+| `out/loop.mp4`         | loop for a site, H.264, 1440x756, 10 fps, 10 s        | 169.5 KB   | see "Video" below                        |
+| `out/loop.webm`        | loop for a site, VP9 lossless, 1440x756, 10 fps, 10 s | 119.7 KB   | see "Video" below                        |
 | `out/poster.png`       | poster frame for the videos (frame 72), 1440x756      | 10.4 KB    | 9, all in the palette                    |
 | `review/concept-*.png` | the three concept stills, 1200x630                    | 12-14 KB   | A 9, B 7, C 7, all in the palette        |
 | `review/review-*.png`  | review sheets (see "Review")                          | 109-131 KB | not palette-exact: they show downscaling |
@@ -35,7 +35,7 @@ Paper plus two inks, each at full strength or as a tint. Where the inks overlap 
 | indigo tint   | `#a19dd9`       | `#a16eb3` | `#a13187` |
 | indigo        | `#2b2684`       | `#2b1b6d` | `#2b0c52` |
 
-Pink marks lit things only: tiles that ran, the clicked button, the lantern, the server lights, and the dot of the "i" in the wordmark.
+Pink marks lit things only: tiles that ran, the clicked button, the lantern, the server lights, and the click dot of the logo.
 
 ## How it is drawn
 
@@ -43,7 +43,8 @@ Pink marks lit things only: tiles that ran, the clicked button, the lantern, the
 - Printing scales each layer by a whole number with nearest neighbour. The pink layer is shifted 2 px right and 2 px down, which is the riso misregistration. Then every pixel takes the palette colour for its indigo and pink levels. There is no blending, anti-aliasing, gradient, glow or soft shadow. Shadows are hard one-cell offsets.
 - Grain is single-pixel dots from a fixed seeded hash. It only falls in areas marked as large flat fills (the window panels in A). It never falls on pink ink, the headline or the path. A dot moves a pixel one ink step (ink void or speck).
 - The headline font pixel is 10 px on the 1200x630 canvas: capitals are 70 px tall and the glyph box with descenders is 90 px, which is about a 100 px font size.
-- Text uses "Lightpath Pixel", a bitmap font drawn for this repo (`src/font.mjs`). It is a glyph grid set pixel by pixel, so it has no anti-aliasing. No outside font is used.
+- Text uses "Lightpath Pixel", a bitmap font drawn for this repo (`src/font.mjs`). It is a glyph grid set pixel by pixel, so it has no anti-aliasing.
+- The logo in A (og.png, the loop and the poster) is the official lockup from `brand/logo` (approved 2026-11-04), not pixel text. `src/logo.mjs` prints it from the same outlines as `brand/logo/svg`: each block is ink or no ink (no blending), the pink layer gets the same 2 px misregistration, and pink over indigo prints the overprint colour. In the video the blocks are 2 x 2 px, so every edge stays on an even pixel. Concepts B and C keep the old pixel wordmark; they are review stills only.
 - The walker is an original character: a marshmallow-white blob with a pink lantern on a pole (`src/sprites.mjs`). The pointer is a plain arrow cursor.
 - No code or trace text appears. "browser" and "server" are labels. The install command is not on the image.
 

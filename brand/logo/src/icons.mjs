@@ -17,12 +17,15 @@ export function faviconPixels(concept, size) {
   return c;
 }
 
-/** favicon.svg: transparent, indigo and pink; white and pink when the browser is in dark mode. */
+/**
+ * favicon.svg: transparent, indigo and pink; marshmallow and pink when the browser is in dark
+ * mode. Marshmallow, not white, so the site can serve this file under its nine-colour palette check.
+ */
 export function faviconSVG(geo) {
   const [ind, pk] = markLayers(geo);
   return [
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Lightpath"><title>Lightpath</title>',
-    `<style>.i{fill:${TOKENS['lp-indigo']}}.p{fill:${TOKENS['lp-pink']}}@media (prefers-color-scheme:dark){.i{fill:${TOKENS['lp-white']}}}</style>`,
+    `<style>.i{fill:${TOKENS['lp-indigo']}}.p{fill:${TOKENS['lp-pink']}}@media (prefers-color-scheme:dark){.i{fill:${TOKENS['lp-marshmallow']}}}</style>`,
     `<path class="i" d="${pathData(ind.segs)}"/><path class="p" d="${pathData(pk.segs)}"/>`,
     '</svg>\n',
   ].join('');

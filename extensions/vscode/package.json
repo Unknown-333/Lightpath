@@ -4,6 +4,7 @@
   "description": "Click anything in your running app and watch the code that ran light up in your editor.",
   "version": "0.0.1",
   "publisher": "lightpath-dev",
+  "icon": "media/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Unknown-333/Lightpath.git",
