@@ -138,13 +138,15 @@ export function describeRequestResult(
   path: string,
   sent: { status: number; bytes: number; durationMs: number; redirect?: string | undefined },
   trace: Trace,
+  /** Less than 16,000 when the code that ran follows the text (D-145). */
+  max = MAX_CHARS,
 ): string {
   const lines = [
     `sent: ${method} ${path} → ${sent.status} (${sent.bytes.toLocaleString('en-US')} bytes, ${Math.round(sent.durationMs)} ms)`,
   ];
   const note = redirectNote(sent.status, sent.redirect);
   if (note) lines.push(note);
-  return fitText(summarizeTrace(trace, lines), MAX_CHARS, trace.id);
+  return fitText(summarizeTrace(trace, lines, max), max, trace.id);
 }
 
 /** For a 3xx: that it wasn't followed, and where it points when that is loopback. */

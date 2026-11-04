@@ -16,6 +16,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { AUTO_START_WAIT_MS, AutoStarter, type AutoStartOptions, DEV_LOG } from './autostart.js';
 import { fitText, MAX_CHARS } from './budget.js';
+import { withCode } from './code.js';
 import { diffFunctions, hasFunctions } from './diff.js';
 import {
   describeActionResult,
@@ -86,8 +87,22 @@ async function appUrl(dirs: readonly string[]): Promise<string | undefined> {
   return undefined;
 }
 
-/** run_request (design section 4A, D-125): one request on loopback, then its backend trace. */
-async function runRequest(options: McpOptions, found: Live, input: RunRequestInput): Promise<string> {
+/** A trace to answer with, its workspace roots, and its text within a given cap (D-145). */
+interface TraceAnswer {
+  trace: Trace;
+  roots: readonly string[];
+  render: (max: number) => string;
+}
+
+/**
+ * run_request (design section 4A, D-125): one request on loopback, then its backend trace. A
+ * string when there is no trace to show.
+ */
+async function runRequest(
+  options: McpOptions,
+  found: Live,
+  input: RunRequestInput,
+): Promise<string | TraceAnswer> {
   const method = input.method ?? 'GET';
   const target = await resolveRequestTarget(
     input.url,
@@ -130,12 +145,12 @@ async function runRequest(options: McpOptions, found: Live, input: RunRequestInp
           (note ? `\n${note}` : '')
         );
       }
-      return describeRequestResult(
-        method,
-        path,
-        { ...sent, redirect: loopbackLocation(sent.location, target.url) },
+      const shown = { ...sent, redirect: loopbackLocation(sent.location, target.url) };
+      return {
         trace,
-      );
+        roots: client.workspaceRoots,
+        render: (max) => describeRequestResult(method, path, shown, trace, max),
+      };
     } finally {
       off();
     }
@@ -154,8 +169,8 @@ const VERSION = (
  * cap again, since a `[redacted]` can be longer than what it hides.
  */
 const text = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(redact(t)) }] });
-/** Source slices only: the user's own files are never redacted (design section 9). */
-const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: t }] });
+/** Source slices and trace answers with code: their source lines are redacted by `redactSource` (D-145). */
+const sourceText = (t: string) => ({ content: [{ type: 'text' as const, text: fitText(t) }] });
 const traceIdSchema = z.string().regex(/^t_[a-z0-9]{12}$/);
 
 /**
@@ -188,12 +203,32 @@ export function createMcpServer(options: McpOptions): McpServer {
     note = undefined;
     return text(n ? `${n}\n${t}` : t);
   };
-  /** A source slice: the start line, redacted like any other, then the user's lines as they are. */
+  /** A source slice: the start line, redacted like any other, then the slice (redacted by sliceTrace). */
   const sourceReply = (t: string) => {
     const n = note;
     note = undefined;
     return sourceText(n ? `${redact(n)}\n${t}` : t);
   };
+  /**
+   * A trace answer (D-145): the auto-start line, the trace text redacted like any runtime text,
+   * the code that ran (redacted as source), then `tail` (a compareTo diff), within 16,000.
+   */
+  const traceReply = async (answer: TraceAnswer, fill: readonly string[] = [], tail?: string) => {
+    const n = note;
+    note = undefined;
+    const head = n ? `${redact(n)}\n` : '';
+    const end = tail ? `\n\n${tail}` : '';
+    const body = await withCode(
+      answer.trace,
+      workspaceReader(answer.roots),
+      (m) => fitText(redact(answer.render(m)), m, answer.trace.id),
+      MAX_CHARS - head.length - end.length,
+      fill,
+    );
+    return sourceText(`${head}${body}${end}`);
+  };
+  /** The daemon's workspace roots, or none when they can't be read (the answer then has no code). */
+  const rootsNow = () => withClient(async (c) => c.workspaceRoots).catch(() => [] as readonly string[]);
 
   const withClient = async <T>(fn: (c: DaemonClient) => Promise<T>): Promise<T> => {
     const { info } = await ensure();
@@ -283,7 +318,12 @@ export function createMcpServer(options: McpOptions): McpServer {
         }
         if (runs > 1) notes.unshift(repeatedLine(done, runs));
         const shown = runs > 1 ? repeated(done) : result;
-        if (compareTo === undefined) return reply(describeActionResult(input, shown, notes));
+        const answer: TraceAnswer = {
+          trace: shown.trace,
+          roots: await rootsNow(),
+          render: (max) => describeActionResult(input, shown, notes, max),
+        };
+        if (compareTo === undefined) return await traceReply(answer, values);
         // `compareTo` (D-144): the last run against an earlier trace, as diff_traces would compare them.
         const last = (done.at(-1) as OkAction).trace;
         const ids = new Set(done.map((r) => r.trace.id));
@@ -300,17 +340,19 @@ export function createMcpServer(options: McpOptions): McpServer {
               ? `compareTo: no trace ${before.id}; it may have been evicted. Nothing to compare.`
               : `compareTo: no earlier trace of "${last.label}" to compare with; this is the first.`,
           );
-          return reply(describeActionResult(input, shown, notes));
+          return await traceReply(answer, values);
         }
         const diff = fitText(
-          hasFunctions(before.trace) && hasFunctions(last)
-            ? diffFunctions(before.trace, last)
-            : diffTraces(before.trace, last),
+          redact(
+            hasFunctions(before.trace) && hasFunctions(last)
+              ? diffFunctions(before.trace, last)
+              : diffTraces(before.trace, last),
+          ),
           MAX_DIFF_CHARS,
         );
         notes.push(`compareTo: ${before.trace.id}; what changed against it is at the end.`);
-        const text = describeActionResult(input, shown, notes, MAX_CHARS - diff.length - 2);
-        return reply(`${text}\n\n${diff}`);
+        // The trace, its code, then the diff (D-144, D-145).
+        return await traceReply(answer, values, diff);
       } catch (err) {
         return { ...reply(redactFillValues((err as Error).message, values)), isError: true };
       }
@@ -336,7 +378,8 @@ export function createMcpServer(options: McpOptions): McpServer {
       } catch (err) {
         return reply(`${(err as Error).message} Nothing was sent.`);
       }
-      return reply(await runRequest(options, live, input));
+      const sent = await runRequest(options, live, input);
+      return typeof sent === 'string' ? reply(sent) : await traceReply(sent);
     },
   );
 
@@ -347,11 +390,13 @@ export function createMcpServer(options: McpOptions): McpServer {
       inputSchema: { action: z.string().min(1).describe('Words from the button or link label') },
     },
     async ({ action }) => {
-      const trace = await withClient(async (c) => {
+      const found = await withClient(async (c) => {
         const [match] = await c.listTraces({ label: action, limit: 1 });
-        return match ? c.getTrace(match.id) : null;
+        return { trace: match ? await c.getTrace(match.id) : null, roots: c.workspaceRoots };
       });
-      return reply(trace ? summarizeTrace(trace) : noRecordedAction(action));
+      const { trace, roots } = found;
+      if (!trace) return reply(noRecordedAction(action));
+      return await traceReply({ trace, roots, render: (max) => summarizeTrace(trace, [], max) });
     },
   );
 
@@ -371,11 +416,11 @@ export function createMcpServer(options: McpOptions): McpServer {
         trace: await c.getTrace(traceId),
         roots: c.workspaceRoots,
       }));
-      if (!found.trace) return reply(`No trace ${traceId}; it may have been evicted.`);
-      if (file === undefined && fn === undefined) return reply(summarizeTrace(found.trace));
-      return sourceReply(
-        await sliceTrace(found.trace, { file, function: fn, page }, workspaceReader(found.roots)),
-      );
+      const { trace, roots } = found;
+      if (!trace) return reply(`No trace ${traceId}; it may have been evicted.`);
+      if (file === undefined && fn === undefined)
+        return await traceReply({ trace, roots, render: (max) => summarizeTrace(trace, [], max) });
+      return sourceReply(await sliceTrace(trace, { file, function: fn, page }, workspaceReader(roots)));
     },
   );
 
