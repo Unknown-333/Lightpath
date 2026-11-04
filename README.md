@@ -11,9 +11,26 @@
 [![Node 22.12+](https://img.shields.io/badge/node-22.12%2B-339933)](#quick-start)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-**Show your coding agent the exact lines one click ran.**
+**Your coding agent reads your code, but it doesn't see which lines a click actually ran.**
 
-Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the code that click ran, in the browser and on the server, line by line. It reads V8's own coverage, so it shows what ran, not a guess from file names.
+Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the lines that click ran, in the browser and on the server, from V8's own coverage.
+
+```sh
+npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro
+npx @lightpath-dev/cli doctor
+```
+
+Restart your agent and tell it the bug: "I click Mark as paid and Outstanding doesn't drop." It calls `run_action` and gets:
+
+```
+POST /api/invoices/INV-2041/pay → 200 [node, 8 ms]
+  …
+  server/services/ledger.ts
+    getSummary 14-28 ×1 not run: 16-27
+    markPaid 38-46 ×1
+```
+
+`getSummary` ran but skipped lines 16-27, where the totals are summed: it returned a stale cache. That is part of a real answer from a [one-run case study](docs/LAUNCH_CASE_STUDY.md) on a planted bug, where the agent without Lightpath fixed it too.
 
 ![In tududi, a user reports that "Plan your day" lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison](docs/media/tududi-demo.gif)
 

@@ -1,0 +1,32 @@
+{
+  "lpCommit": "645429001b7d7fe2f998b56267c53e856834bdf0",
+  "tarballs": [
+    "lightpath-dev-browser-0.1.1.tgz",
+    "lightpath-dev-cli-0.1.2.tgz",
+    "lightpath-dev-core-0.1.2.tgz",
+    "lightpath-dev-daemon-0.1.2.tgz",
+    "lightpath-dev-mcp-0.1.2.tgz",
+    "lightpath-dev-node-agent-0.1.0.tgz",
+    "lightpath-dev-protocol-0.1.2.tgz"
+  ],
+  "node": "v24.13.0",
+  "check_d1_planted": {
+    "before": 4248550,
+    "payResponse": 4248550,
+    "after": 4248550,
+    "pass": false
+  },
+  "check_A_planted": {
+    "before": 4248550,
+    "payResponse": 4248550,
+    "after": 4248550,
+    "pass": false
+  },
+  "check_B_planted": {
+    "before": 4248550,
+    "payResponse": 4248550,
+    "after": 4248550,
+    "pass": false
+  },
+  "cliVersionB": "lightpath/0.1.2 win32-x64 node-v24.13.0"
+}

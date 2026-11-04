@@ -1,0 +1,28 @@
+{
+  "lpCommit": "645429001b7d7fe2f998b56267c53e856834bdf0",
+  "init": "created   .kiro/settings/mcp.json\ncreated   lightpath.config.json\ncreated   AGENTS.md\nnote      Kiro custom agents see AGENTS.md only with \"resources\": [\"file://AGENTS.md\"] in the agent file.\nDone. Restart Kiro so it loads the server, then run lightpath doctor.\n",
+  "initMs": 1940,
+  "doctor": "\u001b[32m✓\u001b[39m Node.js version: v24.13.0\n\u001b[32m✓\u001b[39m Chromium-based browser: 156.0.8078.81\n\u001b[32m✓\u001b[39m Node agent: C:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\d1\\node_modules\\@lightpath-dev\\node-agent\\dist\\register.js\n\u001b[32m✓\u001b[39m Config file: C:\\Users\\user\\lightpath-trials\\goal\\launchkit-raw\\trials\\d1\\lightpath.config.json (command, autoStart)\n\u001b[32m✓\u001b[39m Daemon for this workspace: not running (start it with lightpath dev)\n\u001b[32m✓\u001b[39m Kiro MCP config: cmd /c npx -y @lightpath-dev/cli@0.1.2 mcp starts and lists 6 tools\n\u001b[32m✓\u001b[39m AGENTS.md block: names only tools the server lists (6 tools)\n\u001b[32m✓\u001b[39m Auto-start: command \"npm run dev\", autoStart on\n",
+  "doctorExit": 0,
+  "doctorMs": 4510,
+  "server": {
+    "command": "cmd",
+    "args": ["/c", "npx", "-y", "@lightpath-dev/cli@0.1.2", "mcp"]
+  },
+  "runActionMs": 4758,
+  "isError": false,
+  "chars": 1568,
+  "lines": {
+    "getSummary": "    getSummary 14-28 ×1 not run: 16-27",
+    "markPaid": "    markPaid 38-46 ×1",
+    "payInvoice": "    payInvoice 31-33 ×1",
+    "listInvoices": null
+  },
+  "checks": {
+    "under16k": true,
+    "getSummaryNotRun16to27": true,
+    "markPaidAllRun": true,
+    "payInvoiceCatchNotRun": false
+  },
+  "apiPortFreeAfter": true
+}
