@@ -39,7 +39,12 @@ const pairs = [
   ['paper', 'indigo', 'command boxes, trace header, footer, tab, tooltips, local-only card', 4.5],
   ['pink tint', 'indigo', 'source line on the local-only card', 4.5],
   ['indigo', 'pink tint', 'selected text', 4.5],
-  ['violet', 'paper', 'halftone count bars (graphics carrying information)', 3],
+  [
+    'pink',
+    'paper',
+    'halftone count bars: kept by the owner (2026-11-04); counts also shown as ×N text',
+    null,
+  ],
   ['pink', 'paper', 'list ticks (decorative; each has a 2px indigo shadow)', null],
   ['pink tint', 'indigo', 'focus ring on indigo surfaces', 3],
   ['plum', 'paper', 'focus ring on paper', 3],

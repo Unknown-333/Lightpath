@@ -744,9 +744,9 @@ h3 code {
   align-self: center;
   display: block;
   height: 12px;
-  /* Pink over indigo tint (#a13187): 5.87:1 on paper. Plain pink (#ff4f9f) is 2.83:1, under the
-     3:1 that graphics carrying information need (WCAG 1.4.11). */
-  background: var(--violet);
+  /* Bubblegum pink, 2.83:1 on paper: kept by the owner's choice (2026-11-04). Every count is
+     also printed as ×N text, so no information depends on the dots alone. */
+  background: var(--pink);
 }
 
 .t-bar.d1 {
@@ -771,19 +771,19 @@ h3 code {
   background-size: 6px 6px;
 }
 .fx .t-bar.d1 {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.1' fill='%23a13187'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.1' fill='%23ff4f9f'/%3E%3C/svg%3E");
 }
 .fx .t-bar.d2 {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.4' fill='%23a13187'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.4' fill='%23ff4f9f'/%3E%3C/svg%3E");
 }
 .fx .t-bar.d3 {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.9' fill='%23a13187'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1.9' fill='%23ff4f9f'/%3E%3C/svg%3E");
 }
 .fx .t-bar.d4 {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='2.5' fill='%23a13187'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='2.5' fill='%23ff4f9f'/%3E%3C/svg%3E");
 }
 .fx .t-bar.d5 {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='3.4' fill='%23a13187'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='3.4' fill='%23ff4f9f'/%3E%3C/svg%3E");
 }
 
 .trace figcaption {
