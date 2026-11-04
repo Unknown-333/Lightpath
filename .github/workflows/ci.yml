@@ -86,6 +86,36 @@ jobs:
       # it for initialize and tools/list, then run lightpath doctor (D-120).
       - run: node scripts/setup-check.mjs
 
+  first-run:
+    name: first run from the README (${{ matrix.os }}, published CLI)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      # No pnpm install and no build: only the README's steps, with the CLI from npm. examples/invoices
+      # is copied out of the repo, gets its own npm install, and an empty npm cache makes the start
+      # cold. A script plays the agent: it starts the server .mcp.json names and calls run_action.
+      # Step timings are printed at the end of the log and saved as an artifact.
+      - name: install, init, doctor, first trace (examples/invoices)
+        shell: bash
+        run: >
+          node scripts/first-run.mjs --copy examples/invoices --app "$RUNNER_TEMP/invoices"
+          --install "npm install" --cold
+          --target 'button "Mark as paid"' --within "Kestrel Labs"
+          --ports 3002,5174 --log "$RUNNER_TEMP/first-run-${{ matrix.os }}.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: first-run-${{ matrix.os }}
+          path: ${{ runner.temp }}/first-run-${{ matrix.os }}.json
+          if-no-files-found: ignore
+
   e2e-api:
     name: backend end-to-end (${{ matrix.os }}, Node ${{ matrix.node }})
     runs-on: ${{ matrix.os }}

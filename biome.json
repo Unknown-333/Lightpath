@@ -10,7 +10,8 @@
       "!**/*.vsix",
       "!agents/python",
       "!pnpm-lock.yaml",
-      "!packages/core/test/fixtures/*.json"
+      "!packages/core/test/fixtures/*.json",
+      "!packages/cli/test/fixtures"
     ]
   },
   "formatter": {
