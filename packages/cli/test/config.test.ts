@@ -71,7 +71,7 @@ describe('loadConfig', () => {
     await expect(loadConfig(dir)).rejects.toThrow(/isn't valid JSON/);
   });
 
-  // D-152: a config written on Windows works on a teammate's Mac or Linux machine.
+  // D-162: a config written on Windows works on a teammate's Mac or Linux machine.
   it('reads backslash separators in webRoot and roots on every OS', async () => {
     write({ webRoot: 'packages\\web', roots: ['.', '..\\shared\\lib'] });
     const loaded = await loadConfig(dir);
@@ -84,7 +84,7 @@ describe('loadConfig', () => {
     expect((await loadConfig(dir))?.config.webRoot).toBe(resolve(dir, 'my web', 'app root'));
   });
 
-  // D-152: `"webRoot": "C:\Users\me"` isn't JSON (\U is no escape); the error says how to write it.
+  // D-162: `"webRoot": "C:\Users\me"` isn't JSON (\U is no escape); the error says how to write it.
   it('says how to write a Windows path when a single backslash breaks the JSON', async () => {
     write('{ "webRoot": "C:\\Users\\me\\web" }');
     const err = (await loadConfig(dir).catch((e: unknown) => e)) as Error;

@@ -1341,7 +1341,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: all 7 at 0.1.1 so the numbers match (four identical tarballs under new numbers, as rejected in D-107); bumping the extension for the icon (a Marketplace publish with no change in what it does; D-137 keeps the owner's focus on the MCP).
 - Revert: set the three `package.json` versions back to 0.1.0 before anything is published. After publishing, npm keeps each version for good, so the fix is a 0.1.2.
 
-### D-150 `examples/invoices` runs when copied out of the repo: its `tsconfig.json` no longer extends the repo's base (Phase B)
+### D-160 `examples/invoices` runs when copied out of the repo: its `tsconfig.json` no longer extends the repo's base (Phase B)
 
 - Date: 2026-11-04
 - Decision: `examples/invoices/tsconfig.json` carries its own compiler options instead of `"extends": "../../tsconfig.base.json"`. The options are the base's, minus the ones for building packages (`composite`, `declaration`, `declarationMap`, `sourceMap`), plus the app's own (`jsx`, `dom` libs, `bundler` resolution, `noEmit`). `pnpm --filter invoices typecheck` passes as before.
@@ -1351,7 +1351,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: copy `tsconfig.base.json` along in the script (hides the problem from anyone who copies the folder by hand); drop `tsconfig.json` (loses `pnpm --filter invoices typecheck`).
 - Revert: restore the `extends` line and the old options.
 
-### D-151 `init` edits only its own entry in an agent's MCP config, as text, and accepts comments and trailing commas (Phase B; amends D-120)
+### D-161 `init` edits only its own entry in an agent's MCP config, as text, and accepts comments and trailing commas (Phase B; amends D-120)
 
 - Date: 2026-11-04 (written before the code)
 - Decision: `lightpath init` no longer parses the agent's MCP config and writes all of it back with `JSON.stringify`. A small JSON-with-comments reader (`packages/cli/src/jsonc.ts`, no new dependency) finds the `"lightpath"` member under the servers key and either replaces its value or inserts it after the last server. Every other byte of the file stays as it was: other servers, their order, indentation (spaces or tabs), line endings, a byte order mark, comments and trailing commas. The new entry uses the file's own indentation and line endings. After the edit the result is parsed again; if the other servers or keys don't come back equal and in the same order, or the entry isn't there, nothing is written and init prints the entry to paste by hand, as before. An entry that already equals the one init would write is left as it is, whatever its formatting, so a second run changes nothing. `doctor` reads the configs with the same reader, so a `.vscode/mcp.json` with comments is checked instead of being reported as unreadable.
@@ -1361,7 +1361,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: `jsonc-parser` (Microsoft's, what VS Code uses; a new runtime dependency in a published package for one edit); keep the rewrite but detect indentation (still loses comments and inline arrays).
 - Revert: restore the `JSON.stringify` branch in `init.ts` and the old test.
 
-### D-152 Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (Phase B)
+### D-162 Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (Phase B)
 
 - Date: 2026-11-04
 - Decision: `loadConfig` turns `\` into `/` in `webRoot` and each `roots` entry before resolving them, so `"webRoot": "packages\\web"` written on Windows names the same folder on macOS and Linux. (`ignore` globs already did this, in `compileIgnore`.) When the file isn't JSON and a string in it has a backslash that isn't a JSON escape, like `"C:\Users\me\web"`, the error adds: backslashes in JSON must be doubled, so write it as `"C:/Users/me/web"`.

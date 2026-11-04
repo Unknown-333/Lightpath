@@ -108,7 +108,7 @@ describe('lightpath init --agent', () => {
     expect(lines.some((l) => l.includes('file://AGENTS.md'))).toBe(true);
   });
 
-  // D-151 changed this test: a config with comments was left alone (exit 1). VS Code allows
+  // D-161 changed this test: a config with comments was left alone (exit 1). VS Code allows
   // comments in its config files, so init now adds its entry and keeps the comment.
   it('adds its entry to a config with comments and keeps the comment', async () => {
     write('.vscode/mcp.json', '// my servers\n{ "servers": {} }\n');

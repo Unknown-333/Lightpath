@@ -8,7 +8,7 @@ import { setupChecks } from '../src/doctor.js';
 import { AGENT_SETUP, AGENTS, configWithEntry, init, mcpCommand, mcpEntry } from '../src/init.js';
 import { parseJsonc, parseTree } from '../src/jsonc.js';
 
-// D-151: init sets its own entry in an MCP config that already lists other servers, and leaves
+// D-161: init sets its own entry in an MCP config that already lists other servers, and leaves
 // every other byte alone. Each fixture is a config as a user might have it: 4-space indents and
 // inline arrays (Claude Code), tabs and CRLF (Cursor), comments and trailing commas (VS Code), and
 // an old lightpath entry between two others (Kiro).
@@ -41,7 +41,7 @@ function otherServerTexts(text: string, key: string): string[] {
     .map((m) => text.slice(m.keyStart, m.value.end));
 }
 
-describe('init merges into an existing MCP config (D-151)', () => {
+describe('init merges into an existing MCP config (D-161)', () => {
   for (const agent of AGENTS) {
     for (const platform of ['linux', 'win32'] as const) {
       it(`${agent} on ${platform}: adds only its entry, keeps every other byte, then changes nothing`, async () => {
