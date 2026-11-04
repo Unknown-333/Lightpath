@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lightpath MCP: see which code a click runs, for your coding agent</title>
+<meta name="description" content="Lightpath MCP is an open-source MCP server for coding agents. Your agent clicks in your running React app and gets the exact browser and Node lines that ran.">
+<link rel="canonical" href="{{SITE_URL}}">
+<meta name="theme-color" content="#fcf5ec">
+<meta name="color-scheme" content="light">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Lightpath MCP">
+<meta property="og:title" content="Lightpath MCP: see the exact lines one click ran">
+<meta property="og:description" content="Lightpath MCP is a server for coding agents. The agent clicks in your running app and gets back the browser and Node server lines that click ran.">
+<meta property="og:url" content="{{SITE_URL}}">
+<meta property="og:image" content="{{SITE_URL}}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Lightpath: See the exact lines one click ran. A click lights a row of tiles from a browser window to a server.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Lightpath MCP: see the exact lines one click ran">
+<meta name="twitter:description" content="Lightpath MCP is a server for coding agents. The agent clicks in your running app and gets back the browser and Node server lines that click ran.">
+<meta name="twitter:image" content="{{SITE_URL}}og.png">
+<meta name="twitter:image:alt" content="Lightpath: See the exact lines one click ran. A click lights a row of tiles from a browser window to a server.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/ibm-plex-sans-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="styles.css">
+<script>
+  // Before first paint: print effects on unless the visitor asked for less, or turned them off here.
+  (() => {
+    const saved = localStorage.getItem('lp-fx');
+    const less = matchMedia('(prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce), (prefers-contrast: more)').matches;
+    if (saved === 'on' || (saved !== 'off' && !less)) document.documentElement.classList.add('fx');
+  })();
+</script>
+<script type="application/ld+json">{{JSONLD_APP}}</script>
+<script type="application/ld+json">{{JSONLD_FAQ}}</script>
+</head>
+<body>
+{{DEFS}}
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="bar">
+  <div class="bar-in">
+    <a class="brand" href="#top" aria-label="Lightpath, back to top">{{WORDMARK}}</a>
+    <nav aria-label="Sections">
+      <ul>
+        <li><a href="#demo">Demo</a></li>
+        <li><a href="#how">How it works</a></li>
+        <li><a href="#start">Quick start</a></li>
+        <li><a href="#faq">FAQ</a></li>
+      </ul>
+    </nav>
+    <button type="button" class="fx-toggle" aria-pressed="false"><span><span class="fx-long">Print </span>effects</span></button>
+    <a class="bar-gh" href="https://github.com/Unknown-333/Lightpath">GitHub</a>
+  </div>
+</header>
+
+<main id="main">
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <div class="wrap">
+    <h1 id="hero-title" class="display"><span class="visually-hidden">See the exact lines one click ran.</span><span class="display-px" aria-hidden="true">{{H1}}</span></h1>
+    <p class="lede">Lightpath MCP gives your coding agent the code behind a click: the lines it ran, in the browser and on the server.</p>
+    <div class="actions">
+      <a class="btn btn-primary" href="#start">Get started</a>
+      <a class="btn btn-quiet" href="https://github.com/Unknown-333/Lightpath">View on GitHub</a>
+    </div>
+    <p class="meta">Open source, MIT. For React apps with a Node server. Runs on your machine.</p>
+  </div>
+  <div class="hero-print">
+    <div class="wrap">{{HERO}}
+      <button type="button" class="motion-toggle" aria-pressed="false">Pause animation</button>
+    </div>
+  </div>
+</section>
+
+<section id="demo" class="sec" aria-labelledby="demo-title">
+  <div class="wrap">
+    <h2 id="demo-title">A real run on a real app</h2>
+    <p class="intro">An agent gets a bug report for <a href="https://github.com/chrisvel/tududi">tududi</a>, an open-source task manager: “I click Plan your day and my high-priority task comes last.” It clicks the link itself, reads the trace and fixes the sort.</p>
+    <figure class="demo">
+      <img src="media/tududi-demo.gif" width="{{GIF_W}}" height="{{GIF_H}}" loading="lazy" decoding="async" alt="In tududi, a user reports that Plan your day lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison.">
+      <figcaption>
+        <p>One real kiro-cli 2.37.0 run (model claude-sonnet-5.5): 6 tool calls, 0.68 credits, 31.5 s. The bug was planted in a local copy for this demo; tududi doesn’t have it. The GIF shortens the time to 19.7 s and leaves out two failed clicks. The agent said it had not checked the fix in the running app; the “after” screen comes from our recording script.</p>
+        <p>tududi is © Tududi Developers, MIT licence, shown recoloured to our two inks and otherwise unchanged. <a href="https://github.com/Unknown-333/Lightpath/tree/main/docs/media/tududi-run">The run’s transcript, patch and frames</a>.</p>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="why" class="sec" aria-labelledby="why-title">
+  <div class="wrap">
+    <h2 id="why-title">Why your agent needs it</h2>
+    <div class="why">
+      <div class="why-col">
+        <h3>Without it</h3>
+        <p>Your agent reads a bug report and can only read code. It guesses where to look from file names and text search. When that runs out, it asks you to click the button and paste what you see.</p>
+      </div>
+      <div class="why-col why-lit">
+        <h3>With Lightpath MCP</h3>
+        <ul class="ticks">
+          <li>The agent clicks the button itself, in a browser Lightpath opens.</li>
+          <li>It gets back the functions and lines that ran, in the browser and on your Node server, and the lines inside them that didn’t.</li>
+          <li>Errors and failed requests come in the same answer.</li>
+          <li>After a fix, it clicks again and compares the two traces.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="note">Lines come from V8’s own coverage counters, so they show what ran, not a guess from the code.</p>
+  </div>
+</section>
+
+<section id="trace" class="sec sec-paper" aria-labelledby="trace-title">
+  <div class="wrap">
+    <h2 id="trace-title">What your agent gets back</h2>
+    <p class="intro">Part of the real answer from the tududi run above, cut where it says “…”. Each line is a function that ran: its name, its line numbers, and how many times it ran. The dots show the count. After “not run” come the lines inside it that didn’t run.</p>
+    <figure class="trace">
+      <div class="trace-head" aria-hidden="true"><span>run_action</span> <span>target: link "Plan your day"</span></div>
+      {{TRACE}}
+      <figcaption>
+        <span class="legend" aria-hidden="true"><span class="lg"><span class="t-bar d1"></span>once</span> <span class="lg"><span class="t-bar d2"></span>2–4</span> <span class="lg"><span class="t-bar d3"></span>5–9</span> <span class="lg"><span class="t-bar d4"></span>10–39</span> <span class="lg"><span class="t-bar d5"></span>40 or more</span></span>
+        <span>{{TRACE_SHOWN}} of the answer’s {{TRACE_TOTAL}} lines. Full answer in <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/media/tududi-run/transcript.jsonl">the run’s transcript</a>. Every answer is at most 16,000 characters, about 4,000 tokens.</span>
+      </figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="how" class="sec" aria-labelledby="how-title">
+  <div class="wrap">
+    <h2 id="how-title">How it works</h2>
+    <ol class="how">
+      <li>
+        {{SPOT1}}
+        <h3>The agent clicks</h3>
+        <p><code>run_action</code> clicks a button or link in the Chromium browser Lightpath opened for your app. It can fill form fields first.</p>
+      </li>
+      <li>
+        {{SPOT2}}
+        <h3>V8 records what ran</h3>
+        <p>Lightpath reads V8’s coverage just before and after the click: in the browser over the DevTools Protocol, and in your Node server through a small preloaded agent. Requests from the click carry a header that joins the two.</p>
+      </li>
+      <li>
+        {{SPOT3}}
+        <h3>Your agent gets the trace</h3>
+        <p>Source maps turn the byte ranges into your own files and lines. The answer goes to your agent over MCP, cut to fit 16,000 characters.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section id="features" class="sec" aria-labelledby="features-title">
+  <div class="wrap">
+    <h2 id="features-title">What it does</h2>
+    <div class="feats">
+      <article class="card card-wide">
+        <h3><code>run_action</code>: click and trace in one call</h3>
+        <p>The agent names a button or link the way a person would. Lightpath clicks it and returns that click’s trace. No human click, no copy and paste.</p>
+<pre class="snip"><code>run_action  target: button "Mark as paid"  within: "Kestrel Labs"
+
+request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
+…
+  server/services/ledger.ts
+    getSummary 14-28 ×1 not run: 16-27
+…</code></pre>
+        <p class="src">Tested in <a href="https://github.com/Unknown-333/Lightpath/blob/main/scripts/e2e-shop.mjs"><code>scripts/e2e-shop.mjs</code></a>. Excerpt from <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/media/demo-run/transcript.jsonl">a recorded run</a> on <code>examples/invoices</code>.</p>
+      </article>
+      <article class="card">
+        <h3>Errors come with the trace</h3>
+        <p>A thrown error and failed requests, like a 409 or a 400, show up in the same answer as the code that ran.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-121</a>, tested in <code>scripts/e2e-shop.mjs</code>.</p>
+      </article>
+      <article class="card">
+        <h3><code>diff_traces</code> checks a fix</h3>
+        <p>Trace the click, fix the code, trace it again. The diff lists functions that ran in only one trace, changed not-run lines and changed request status.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-118</a>, <code>packages/mcp/test/output.test.ts</code>.</p>
+      </article>
+      <article class="card card-list">
+        <h3><code>run_request</code> for API backends</h3>
+        <p>One HTTP request to your app on localhost, no browser. You get the backend lines it ran. Loopback only: it refuses other hosts, redirects and proxies.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-125</a>, 18 cases in <code>packages/mcp/test/request.test.ts</code>, <code>scripts/e2e-api.mjs</code> on 7 backend apps.</p>
+      </article>
+      <article class="card card-cmd">
+        <h3>One command to set up</h3>
+        <p>For Claude Code, Cursor, VS Code or Kiro. It writes the agent’s MCP config, a <code>lightpath.config.json</code> and a short note in <code>AGENTS.md</code> on when to use Lightpath.</p>
+        <p class="src">CI runs all four on Linux, macOS and Windows: <a href="https://github.com/Unknown-333/Lightpath/blob/main/scripts/setup-check.mjs"><code>scripts/setup-check.mjs</code></a>.</p>
+      </article>
+      <article class="card card-local">
+        <h3>Stays on your machine</h3>
+        <p>The daemon listens on 127.0.0.1 and needs a token. Lightpath sends nothing anywhere. Secrets in URLs, tokens and key=value pairs become <code>[redacted]</code>, and request and response bodies are never collected.</p>
+        <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-123</a>, <code>packages/daemon/test/server.test.ts</code>, <code>packages/mcp/test/redact.test.ts</code>.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section id="start" class="sec sec-paper" aria-labelledby="start-title">
+  <div class="wrap">
+    <h2 id="start-title">Quick start</h2>
+    <p class="intro">In your app’s folder: a React frontend, a Node server and a <code>dev</code> script in <code>package.json</code>. You need Node.js 22.12 or newer and Chrome or Edge.</p>
+    <div class="tabs" data-tabs>
+      <div class="tablist" role="tablist" aria-label="Your coding agent">
+        {{TABS}}
+      </div>
+      {{PANELS}}
+    </div>
+    <p class="notice"><strong>0.1.0 is not on npm yet.</strong> Until it is, <code>npx</code> gets 0.0.2, which has no <code>init</code>, <code>run_action</code> or auto-start. See the <a href="https://github.com/Unknown-333/Lightpath/blob/main/CHANGELOG.md">changelog</a>.</p>
+    <p>The first time your agent calls a Lightpath tool, Lightpath starts your dev server and its own browser, and stops them when the agent closes. Then tell the agent the bug the way a user would: “I click Save and the list doesn’t update.”</p>
+  </div>
+</section>
+
+<section id="works" class="sec" aria-labelledby="works-title">
+  <div class="wrap">
+    <h2 id="works-title">Works with</h2>
+    <div class="works">
+      <div>
+        <h3>Stacks</h3>
+        <dl class="kv">
+          <dt>Browser</dt><dd>React, built with Vite or webpack</dd>
+          <dt>Server</dt><dd>Node: Express, Fastify, Nest</dd>
+          <dt>Runtime</dt><dd>Node.js 22.12+, Chrome or Edge</dd>
+        </dl>
+        <h3>Agents</h3>
+        <dl class="kv kv-stack">
+          <dt>Kiro</dt><dd>Run end to end with kiro-cli 2.37.0, in the benchmark and the demo.</dd>
+          <dt>Claude Code, Cursor, VS Code</dt><dd>Setup tested in CI: <code>lightpath init</code> and <code>doctor</code>, with no agent installed. How each agent picks and calls tools is from their docs, not tested here.</dd>
+        </dl>
+      </div>
+      <div>
+        <h3>Real apps we ran it on</h3>
+        <table class="apps">
+          <thead><tr><th scope="col">App</th><th scope="col">Stack</th><th scope="col">Result</th></tr></thead>
+          <tbody>
+            <tr><th scope="row"><a href="https://github.com/stepful/fullstack_boilerplate">stepful boilerplate</a></th><td>React + Vite, Fastify</td><td>Works with no flags</td></tr>
+            <tr><th scope="row"><a href="https://github.com/chrisvel/tududi">tududi</a></th><td>React + webpack, Express</td><td>Works once webpack has source maps</td></tr>
+            <tr><th scope="row"><a href="https://github.com/actualbudget/actual">Actual Budget</a></th><td>React 19 + Vite, Express 5</td><td>Works: 263 frontend files on one click</td></tr>
+            <tr><th scope="row"><a href="https://github.com/louislam/uptime-kuma">Uptime Kuma</a></th><td>Vue + Vite, Express + socket.io</td><td>HTTP requests work; socket.io messages not yet</td></tr>
+          </tbody>
+        </table>
+        <p class="src">Details in <a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/tested-apps.md"><code>docs/tested-apps.md</code></a>.</p>
+      </div>
+    </div>
+    <div class="limits">
+      <h3>Not yet</h3>
+      <ul>
+        <li>Chromium browsers only (Chrome or Edge).</li>
+        <li>No socket.io or WebSocket messages, Web Workers or Next.js server components.</li>
+        <li>No Python backends in click traces yet; a Python agent is in preview.</li>
+        <li><code>run_action</code> clicks and presses Enter or Space. No hover, drag, file upload, dialogs, popups or iframes.</li>
+      </ul>
+      <p>After 0.1.0, in this order: Next.js, socket.io, then Python (FastAPI).</p>
+    </div>
+  </div>
+</section>
+
+<section id="compare" class="sec" aria-labelledby="compare-title">
+  <div class="wrap">
+    <h2 id="compare-title">Compared with other tools</h2>
+    <p class="intro">As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend (<a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/research/competitors.md">our research</a>, read 2026-11-01). Other tools do other things better.</p>
+    <div class="table-wrap">
+      <table class="compare">
+        <thead><tr><th scope="col">Tool</th><th scope="col">Better than Lightpath at</th><th scope="col">Where Lightpath differs</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Chrome DevTools MCP</th><td>Console, network bodies, screenshots, DOM and performance</td><td>Lightpath returns the lines a click ran, and the Node server’s lines too. Chrome DevTools MCP collects usage statistics by default, with an opt-out; Lightpath sends nothing.</td></tr>
+          <tr><th scope="row">Playwright MCP</th><td>Console, network bodies, screenshots, DOM. Runs Firefox and WebKit too</td><td>Lightpath is Chromium only, and adds the code that ran.</td></tr>
+          <tr><th scope="row">Replay MCP</th><td>Values at any moment and time travel, from a recording</td><td>Replay shows frontend statements from a recording; its Node runtime is Node 16 only. Lightpath joins browser and Node lines for one click, live.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="note">Sentry and Datadog work in production; Lightpath is a development tool and doesn’t watch production.</p>
+  </div>
+</section>
+
+<section id="faq" class="sec sec-paper" aria-labelledby="faq-title">
+  <div class="wrap wrap-narrow">
+    <h2 id="faq-title">Questions</h2>
+    {{FAQ}}
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <div class="foot-brand">{{WORDMARK}}<p>See the exact lines one click ran.</p></div>
+    <ul class="foot-links">
+      <li><a href="https://github.com/Unknown-333/Lightpath">GitHub</a></li>
+      <li><a href="https://www.npmjs.com/package/@lightpath-dev/cli">npm</a></li>
+      <li><a href="https://github.com/Unknown-333/Lightpath/blob/main/CHANGELOG.md">Changelog</a></li>
+      <li><a href="https://github.com/Unknown-333/Lightpath/blob/main/CONTRIBUTING.md">Contributing</a></li>
+      <li><a href="https://github.com/Unknown-333/Lightpath/labels/good%20first%20issue">Good first issues</a></li>
+      <li><a href="https://github.com/Unknown-333/Lightpath/blob/main/LICENSE">MIT licence</a></li>
+    </ul>
+    <p class="foot-small">Print effects (paper grain, halftone, misregistration) start off if your system asks for less motion, less transparency or more contrast. The switch in the top bar remembers your choice on this device only.</p>
+    <p class="foot-small">Fonts: IBM Plex Sans and Plex Mono (SIL Open Font License). Art drawn in code from <a href="https://github.com/Unknown-333/Lightpath/tree/main/brand">brand/src</a>. This site makes no requests to any other server and has no analytics.</p>
+  </div>
+</footer>
+<script src="main.js" defer></script>
+</body>
+</html>
