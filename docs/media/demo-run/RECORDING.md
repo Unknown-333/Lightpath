@@ -39,13 +39,13 @@ The script also changes three small things in the page. None of them changes tud
 
 Each take writes a folder `~/lightpath-demo-takes/take-<time>/` with these files:
 
-| File | What it is |
-| --- | --- |
-| `run.json` | kiro-cli version, model, effort, prompt, credits, steps, estimated tokens, CPU load, window frames, API restarts, the list order when kiro-cli exited |
-| `transcript.jsonl`, `timing.json` | kiro-cli's stream-json output and when each line arrived |
-| `agent-fix.diff` | what the agent changed in the copy |
-| `end.png` | the page when kiro-cli exited |
-| `app.log`, `kiro-cli.stderr.log`, `init.out` | logs |
+| File                                         | What it is                                                                                                                                            |
+| -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `run.json`                                   | kiro-cli version, model, effort, prompt, credits, steps, estimated tokens, CPU load, window frames, API restarts, the list order when kiro-cli exited |
+| `transcript.jsonl`, `timing.json`            | kiro-cli's stream-json output and when each line arrived                                                                                              |
+| `agent-fix.diff`                             | what the agent changed in the copy                                                                                                                    |
+| `end.png`                                    | the page when kiro-cli exited                                                                                                                         |
+| `app.log`, `kiro-cli.stderr.log`, `init.out` | logs                                                                                                                                                  |
 
 Raw recordings and take folders stay out of git. Only the chosen take's prompt and transcript are committed, next to the exports.
 
@@ -99,12 +99,12 @@ After that, the scripted part goes on outside Recordly: the WebM from the MP4 (f
 
 ## What the script was tested on
 
-| Run | What it showed |
-| --- | --- |
-| Dry runs 1, 2 | `node --watch` restarted the API again and again with no file changed, and requests failed with 504. Replaced by a restart on a real content change. |
-| Dry run 3 | Window placement bug: in PowerShell `$h` and `$H` are one name, so the window handle overwrote the height. Fixed. |
-| Dry run 4 | Layout right; the loop's last frame had another tududi quote. Fixed with the seeded `Math.random`. |
+| Run                               | What it showed                                                                                                                                                                                 |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dry runs 1, 2                     | `node --watch` restarted the API again and again with no file changed, and requests failed with 504. Replaced by a restart on a real content change.                                           |
+| Dry run 3                         | Window placement bug: in PowerShell `$h` and `$H` are one name, so the window handle overwrote the height. Fixed.                                                                              |
+| Dry run 4                         | Layout right; the loop's last frame had another tududi quote. Fixed with the seeded `Math.random`.                                                                                             |
 | Proof run 1 (real, 0.912 credits) | The agent ran `run_action`, read `ranking.js`, swapped the comparison back and clicked again. The API restart signed it out, so it couldn't check. Fixed with a fixed session secret per take. |
-| Dry runs 5, 6 | The whole loop by script: the restart keeps the session, the list shows "Send Q4 report to finance" first after the fix, and the first and last frames match (0 pixels differ). |
+| Dry runs 5, 6                     | The whole loop by script: the restart keeps the session, the list shows "Send Q4 report to finance" first after the fix, and the first and last frames match (0 pixels differ).                |
 
 Machine: Windows 11, display 2560 x 1440 at 100%, Windows Terminal 1.24, Recordly 1.4.0, Node 24.13.0, kiro-cli 2.37.0.
