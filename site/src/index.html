@@ -65,7 +65,7 @@
       <a class="btn btn-primary" href="#start">Get started</a>
       <a class="btn btn-quiet" href="https://github.com/Unknown-333/Lightpath">View on GitHub</a>
     </div>
-    <p class="meta">Open source, MIT. For React apps with a Node server. Runs on your machine.</p>
+    <p class="meta">Open source under MIT, for React apps with a Node server, running on your machine.</p>
   </div>
   <div class="hero-print">
     <div class="wrap">{{HERO}}
@@ -76,7 +76,7 @@
 
 <section id="demo" class="sec" aria-labelledby="demo-title">
   <div class="wrap">
-    <h2 id="demo-title">A real run on a real app</h2>
+    <h2 id="demo-title">An agent finds a planted bug in tududi</h2>
     <p class="intro">An agent gets a bug report for <a href="https://github.com/chrisvel/tududi">tududi</a>, an open-source task manager: “I click Plan your day and my high-priority task comes last.” It clicks the link itself, reads the trace and fixes the sort.</p>
     <figure class="demo">
       <img src="media/tududi-demo.gif" width="{{GIF_W}}" height="{{GIF_H}}" loading="lazy" decoding="async" alt="In tududi, a user reports that Plan your day lists low-priority tasks first. The agent clicks the link with run_action, the trace shows GET /api/daily-plan/candidates ran orderCandidates in ranking.js, and the agent flips the priority comparison.">
@@ -154,7 +154,7 @@
     <div class="feats">
       <article class="card card-wide">
         <h3><code>run_action</code>: click and trace in one call</h3>
-        <p>The agent names a button or link the way a person would. Lightpath clicks it and returns that click’s trace. No human click, no copy and paste.</p>
+        <p>The agent names a button or link the way a person would. Lightpath clicks it and returns that click’s trace. You don’t click or paste anything.</p>
 <pre class="snip"><code>run_action  target: button "Mark as paid"  within: "Kestrel Labs"
 
 request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
@@ -186,7 +186,7 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
       </article>
       <article class="card card-local">
         <h3>Stays on your machine</h3>
-        <p>The daemon listens on 127.0.0.1 and needs a token. Lightpath sends nothing anywhere. Secrets in URLs, tokens and key=value pairs become <code>[redacted]</code>, and request and response bodies are never collected.</p>
+        <p>The daemon listens on 127.0.0.1 and needs a token. Lightpath sends no data off your machine. Secrets in URLs, tokens and key=value pairs become <code>[redacted]</code>, and request and response bodies are never collected.</p>
         <p class="src"><a href="https://github.com/Unknown-333/Lightpath/blob/main/decisions.md">D-123</a>, <code>packages/daemon/test/server.test.ts</code>, <code>packages/mcp/test/redact.test.ts</code>.</p>
       </article>
     </div>
@@ -255,7 +255,7 @@ request: POST /api/invoices/INV-2041/pay → 200 (node, 4 ms)
 <section id="compare" class="sec" aria-labelledby="compare-title">
   <div class="wrap">
     <h2 id="compare-title">Compared with other tools</h2>
-    <p class="intro">As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend (<a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/research/competitors.md">our research</a>, read 2026-11-01). Other tools do other things better.</p>
+    <p class="intro">As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend (<a href="https://github.com/Unknown-333/Lightpath/blob/main/docs/research/competitors.md">our research</a>, read 2026-11-01). Each tool below is better than Lightpath at something.</p>
     <div class="table-wrap">
       <table class="compare">
         <thead><tr><th scope="col">Tool</th><th scope="col">Better than Lightpath at</th><th scope="col">Where Lightpath differs</th></tr></thead>

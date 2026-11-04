@@ -67,7 +67,7 @@ const FAQ = [
   {
     q: 'Does any of my data leave my machine?',
     a: [
-      'Lightpath doesn’t send anything anywhere. Its daemon listens on 127.0.0.1 and needs a token. Secrets in what it returns are replaced with [redacted], and request and response bodies and headers are never collected.',
+      'Lightpath sends no data off your machine. Its daemon listens on 127.0.0.1 and needs a token. Secrets in what it returns are replaced with [redacted], and request and response bodies and headers are never collected.',
       'The trace does go to your agent, and your agent sends tool results to its model, as it does with any other tool.',
     ],
   },
