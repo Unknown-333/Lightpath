@@ -2,6 +2,14 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## [Unreleased]
+
+Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps went](https://github.com/Unknown-333/Lightpath/pull/59)).
+
+### Changed
+
+- A `run_action` miss on a page with a password field says the page is a sign-in form and gives a ready `run_action` call built from its own fields, with `<placeholder>` values (D-139).
+
 ## [0.1.0] - 2026-11-04
 
 Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages move to 0.1.0, because every one of them ships changed files (D-133). The VS Code extension stays at 0.0.1, which still reads 0.1.0 traces (D-137). Needs Node.js 22.12 or newer, as before.

@@ -166,11 +166,12 @@ export async function resolveTarget(page: Page, target: string, within?: string)
   const [only] = indexes;
   if (indexes.length === 1 && only !== undefined) return { ok: true, locator: base.nth(only) };
   if (indexes.length === 0) {
+    const form = await signInForm(page).catch(() => undefined);
     return {
       ok: false,
       error: {
         code: 'not_found',
-        message: `No element matches ${describeTarget(target, within)}.`,
+        message: `No element matches ${describeTarget(target, within)}.${form ? `\n${signInHint(form)}` : ''}`,
         count: 0,
         candidates: await closestCandidates(page, parsed),
       },
@@ -229,6 +230,106 @@ async function describeMatch(locator: Locator): Promise<string> {
   const role = /^-\s+([a-z]+)(?:\s+"((?:[^"\\]|\\.)*)")?/.exec(snapshot.trim());
   const head = role ? (role[2] !== undefined ? `${role[1]} "${role[2]}"` : `${role[1]}`) : 'element';
   return context ? `${head} in "${context}"` : head;
+}
+
+/** A sign-in form on the page (D-139): its text fields and submit button, as run_action targets. */
+export interface SignInForm {
+  /** In page order. `label` names the placeholder value: the field's name, or its input type. */
+  fields: { target: string; label: string }[];
+  /** The submit button's target; without one, the call presses Enter in the last field. */
+  submit?: string | undefined;
+}
+
+/** The first `<role> "<name>"` of an aria snapshot. Never what follows the name: that can be a value. */
+function roleAndName(snapshot: string): { role: string; name: string } | undefined {
+  const m = /^-\s+([a-z]+)\s+"((?:[^"\\]|\\.)*)"/.exec(snapshot.trim());
+  return m?.[1] && m[2] ? { role: m[1], name: m[2] } : undefined;
+}
+
+const MAX_SIGN_IN_FIELDS = 4;
+
+/**
+ * The visible sign-in form, when the page has a visible password field (D-139): the form that
+ * holds it, else the whole page. Reads only roles, names and attributes, never a field's value.
+ */
+export async function signInForm(page: Page): Promise<SignInForm | undefined> {
+  if ((await page.locator('input[type="password"]:visible').count()) === 0) return undefined;
+  const forms = page.locator('form:has(input[type="password"]:visible)');
+  const inForm = (await forms.count()) > 0;
+  const scope = inForm ? forms.first() : page.locator('body');
+  const skip = [
+    'hidden',
+    'checkbox',
+    'radio',
+    'submit',
+    'button',
+    'image',
+    'file',
+    'reset',
+    'range',
+    'color',
+  ];
+  const inputs = scope.locator(`input:visible${skip.map((t) => `:not([type="${t}"])`).join('')}`);
+  const fields: SignInForm['fields'] = [];
+  const count = Math.min(await inputs.count(), MAX_SIGN_IN_FIELDS);
+  for (let i = 0; i < count; i++) {
+    const input = inputs.nth(i);
+    const [snapshot, attrs] = await Promise.all([
+      input.ariaSnapshot({ timeout: 1000 }).catch(() => ''),
+      input.evaluate((el) => {
+        const e = el as HTMLInputElement;
+        return {
+          type: e.type || 'text',
+          id: e.id ? CSS.escape(e.id) : '',
+          name: e.getAttribute('name') ?? '',
+        };
+      }),
+    ]);
+    const named = roleAndName(snapshot);
+    const css = attrs.id
+      ? `css=#${attrs.id}`
+      : attrs.name
+        ? `css=input[name="${attrs.name.replace(/"/g, '\\"')}"]`
+        : `css=input[type="${attrs.type}"]`;
+    fields.push({
+      target: named ? `${named.role} "${named.name}"` : css,
+      label: (named?.name ?? attrs.type).toLowerCase(),
+    });
+  }
+  // A button with no type inside a form submits it too.
+  const submit = scope
+    .locator(
+      inForm
+        ? 'button[type="submit"]:visible, button:not([type]):visible, input[type="submit"]:visible'
+        : 'button[type="submit"]:visible, input[type="submit"]:visible',
+    )
+    .first();
+  let submitTarget: string | undefined;
+  if ((await submit.count()) > 0) {
+    const named = roleAndName(await submit.ariaSnapshot({ timeout: 1000 }).catch(() => ''));
+    if (named) submitTarget = `${named.role} "${named.name}"`;
+  }
+  return { fields, submit: submitTarget };
+}
+
+/**
+ * What a miss on a sign-in page says after "No element matches …" (D-139): what the page is, and a
+ * run_action call built from its own fields. Values are `<placeholders>`, never typed or stored ones.
+ */
+export function signInHint(form: SignInForm): string {
+  const fill = form.fields.map((f) => ({ target: f.target, value: `<${f.label}>` }));
+  const last = form.fields.at(-1);
+  const head = 'This page is a sign-in form (it has a password field), so the app is not signed in here.';
+  const call = form.submit
+    ? { target: form.submit, ...(fill.length ? { fill } : {}) }
+    : last
+      ? { target: last.target, action: 'press', fill }
+      : undefined;
+  if (!call) return `${head} Sign in first, then do your step again.`;
+  return (
+    `${head} Sign in first with its own fields, putting the real values in place of the <...> ones, then do your step again:\n` +
+    `  run_action ${JSON.stringify(call)}`
+  );
 }
 
 /** Up to 10 role-and-name pairs on the page, closest to the target first. */
