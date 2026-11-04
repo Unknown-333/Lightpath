@@ -2,7 +2,7 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
-## [0.1.0] - TBD (not published yet)
+## [0.1.0] - 2026-11-04
 
 Your coding agent can now run the loop itself: click something in your app, get the code that ran, look closer, fix, and check the fix. All 7 npm packages move to 0.1.0, because every one of them ships changed files (D-133). The VS Code extension stays at 0.0.1, which still reads 0.1.0 traces (D-137). Needs Node.js 22.12 or newer, as before.
 
