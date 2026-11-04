@@ -1,0 +1,73 @@
+{
+  "app": {
+    "name": "tududi",
+    "repo": "https://github.com/chrisvel/tududi",
+    "commit": "99ef6952fcbdef463f2a59e3f3c8f13e9a1dd511",
+    "license": "MIT"
+  },
+  "model": "claude-sonnet-5.5",
+  "effort": "medium",
+  "prompt": "I click \"Plan your day\" on the Today page. The list starts with \"Water the office plants\" and \"Call the dentist\", which are low priority, and my high-priority \"Send Q4 report to finance\" comes last. Please fix it. The app is already running and I am signed in; use Lightpath to see what the click runs.",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "tasks": [
+    ["Call the dentist", 0, null],
+    ["Review pull requests", 1, "Website relaunch"],
+    ["Send Q4 report to finance", 2, "Q4 planning"],
+    ["Book flights for the offsite", 1, "Q4 planning"],
+    ["Water the office plants", 0, null]
+  ],
+  "seed": [
+    "200 onboarding",
+    "201 project Website relaunch",
+    "201 project Q4 planning",
+    "201 task Call the dentist",
+    "201 task Review pull requests",
+    "201 task Send Q4 report to finance",
+    "201 task Book flights for the offsite",
+    "201 task Water the office plants"
+  ],
+  "kiroCli": "kiro-cli 2.37.0",
+  "cpuStart": 8.5,
+  "args": [
+    "chat",
+    "--no-interactive",
+    "--trust-all-tools",
+    "--trust-workspace",
+    "--require-mcp-startup",
+    "--agent",
+    "demo",
+    "--model",
+    "claude-sonnet-5.5",
+    "--effort",
+    "medium",
+    "--output-format",
+    "stream-json",
+    "--wrap",
+    "never"
+  ],
+  "startedAt": 1793765221214,
+  "exitCode": 0,
+  "endedAt": 1793765252681,
+  "cpuEnd": 4.3,
+  "trial": "C:\\Users\\user\\lightpath-trials\\goal\\realgif-trials\\demo-1793765169663",
+  "steps": 6,
+  "credits": 0.6778866003150913,
+  "tokensEst": 6652,
+  "tokensMethod": "transcript-chars/4",
+  "status": "success",
+  "wallMs": 31467,
+  "frames": 15,
+  "tools": [
+    "Tool Load",
+    "@lightpath/run_action",
+    "@lightpath/run_action",
+    "Read File",
+    "Replace in File",
+    "@lightpath/run_action"
+  ],
+  "changedFiles": ["backend\\modules\\daily-plan\\ranking.js"],
+  "fixLineBack": true
+}
