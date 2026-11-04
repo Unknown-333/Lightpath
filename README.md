@@ -1,15 +1,31 @@
-<h1>
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="brand/logo/svg/lightpath-lockup-horizontal-reversed.svg">
-    <img alt="Lightpath" src="brand/logo/svg/lightpath-lockup-horizontal-colour.svg" height="56">
-  </picture>
-</h1>
+<p align="center">
+  <a href="https://unknown-333.github.io/Lightpath/">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="brand/logo/svg/lightpath-lockup-horizontal-reversed.svg">
+      <img alt="Lightpath" src="brand/logo/svg/lightpath-lockup-horizontal-colour.svg" height="64">
+    </picture>
+  </a>
+</p>
 
-[![npm](https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837)](https://www.npmjs.com/package/@lightpath-dev/cli)
-[![CI](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml/badge.svg)](https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml)
-[![MCP server](https://img.shields.io/badge/MCP-server-4f46e5)](#mcp-tools)
-[![Node 22.12+](https://img.shields.io/badge/node-22.12%2B-339933)](#quick-start)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+<p align="center"><b>See the exact lines one click ran, in the browser and on the server.</b><br>An MCP server for coding agents working on React + Node apps.</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@lightpath-dev/cli"><img alt="npm" src="https://img.shields.io/npm/v/@lightpath-dev/cli?label=npm&color=cb3837"></a>
+  <a href="https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Unknown-333/Lightpath/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="#mcp-tools"><img alt="MCP server" src="https://img.shields.io/badge/MCP-server-4f46e5"></a>
+  <a href="#quick-start"><img alt="Node 22.12+" src="https://img.shields.io/badge/node-22.12%2B-339933"></a>
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
+
+<p align="center">
+  <a href="https://unknown-333.github.io/Lightpath/"><b>Website</b></a> ·
+  <a href="#quick-start">Quick start</a> ·
+  <a href="docs/LAUNCH_CASE_STUDY.md">Case study</a> ·
+  <a href="https://github.com/Unknown-333/Lightpath/releases/tag/v0.1.2">Release notes</a> ·
+  <a href="CHANGELOG.md">Changelog</a>
+</p>
+
+---
 
 **Your coding agent reads your code, but it doesn't see which lines a click actually ran.**
 
@@ -48,7 +64,7 @@ npx @lightpath-dev/cli doctor                     # checks what init wrote
 
 That's all. The first time the agent calls a Lightpath tool, Lightpath starts your dev server and its own browser by itself, and stops them when the agent closes.
 
-Needs Node.js 22.12+ and Chrome or Edge. Latest release: 0.1.1 ([CHANGELOG](CHANGELOG.md)).
+Needs Node.js 22.12+ and Chrome or Edge. Latest release: 0.1.2 ([release notes](https://github.com/Unknown-333/Lightpath/releases/tag/v0.1.2), [CHANGELOG](CHANGELOG.md)).
 
 ## What your agent gets
 
@@ -83,6 +99,8 @@ after the response [browser]
 ```
 
 Each function that ran is listed with its lines, how often it was called, and the lines inside it that did **not** run. Here `getSummary` ran, but lines 16-27, where the totals are summed, didn't: it returned a cached copy. That's the bug, and the agent said so in its answer.
+
+0.1.2 fixed lines that showed as run when they didn't: untaken `else if` and `switch` branches, and the untaken arm of a multi-line ternary or `&&`. When a call throws, V8 has no count for the lines after it, so the trace marks them unknown and names the line that threw. pnpm accuracy checks every line of small Node and React apps against results written by hand ([D-149](decisions.md), [D-153](decisions.md)).
 
 Every answer is at most 16,000 characters (about 4,000 tokens). When a trace is bigger, the least-used files are left out and the last line says how to see them with `get_trace` ([D-109](decisions.md), checked in `pnpm e2e`).
 
@@ -145,19 +163,6 @@ Other servers in the config file stay. Running init again changes nothing. On Wi
 No code changes to your app. The daemon listens on `127.0.0.1` and needs a token. Nothing leaves your machine. Secrets in URLs, `key=value` pairs, `Bearer` tokens and JWT-like strings become `[redacted]` in every answer, and request and response bodies and headers are never collected ([D-123](decisions.md), `packages/mcp/test/redact.test.ts`, `pnpm e2e`).
 
 More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PROTOCOL.md](docs/PROTOCOL.md), [docs/adr](docs/adr).
-
-## Compared with other tools
-
-As of November 2026 we found no other MCP tool that returns the lines one click ran in both the browser and the backend ([docs/research/competitors.md](docs/research/competitors.md), read 2026-11-01). Other tools are better at other things:
-
-| Tool                                | Better than Lightpath at                                                                               |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Chrome DevTools MCP, Playwright MCP | Console, network bodies, screenshots, DOM and performance. Playwright MCP also runs Firefox and WebKit |
-| Replay MCP                          | Values at any moment and time travel, from a recording                                                 |
-| Sentry, Datadog MCP                 | Production errors and traces across services                                                           |
-| React Grab                          | The quickest way to point an agent at one element                                                      |
-
-Lightpath is a development tool. It doesn't watch production.
 
 ## Limits
 
@@ -266,7 +271,7 @@ corepack pnpm --filter invoices lightpath   # the app in the GIF; or: --filter s
 
 ## Roadmap
 
-After 0.1.0, in this order: Next.js, WebSocket messages (socket.io), then Python backends (FastAPI) in the same trace as the React frontend ([docs/design/agent-loop.md](docs/design/agent-loop.md)). Milestones so far: [docs/ROADMAP.md](docs/ROADMAP.md). Changes: [CHANGELOG.md](CHANGELOG.md).
+Next, in this order: Next.js, WebSocket messages (socket.io), then Python backends (FastAPI) in the same trace as the React frontend ([docs/design/agent-loop.md](docs/design/agent-loop.md)). Milestones so far: [docs/ROADMAP.md](docs/ROADMAP.md). Changes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
