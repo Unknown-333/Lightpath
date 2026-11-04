@@ -1,0 +1,58 @@
+name: Site
+
+# Builds and checks the landing page in site/. On a push to main it also deploys site/dist to
+# GitHub Pages. Pages must be switched on once in the repo settings first (see site/README.md).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "site/**"
+      - "brand/**"
+      - "docs/media/tududi-demo.gif"
+      - "docs/media/tududi-run/**"
+      - ".github/workflows/pages.yml"
+      - "package.json"
+      - "pnpm-lock.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: site build and check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # Builds site/dist, then checks HTML, links, palette, SEO tags, copy rules, and runs axe in
+      # Google Chrome (preinstalled on GitHub's Ubuntu images) under the /Lightpath/ prefix.
+      - run: pnpm site:check
+      - if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site/dist
+
+  deploy:
+    name: deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

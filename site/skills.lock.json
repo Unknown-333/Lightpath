@@ -1,0 +1,60 @@
+{
+  "note": "Skills whose written guidance was read for the landing page. Pinned to exact commits. Their files are kept untracked in site/.skills/ (gitignored) and no script from them is ever run.",
+  "skills": [
+    {
+      "name": "frontend-design",
+      "repo": "https://github.com/anthropics/skills",
+      "commit": "ca45fc496a3436251f191354091d557da31c15b5",
+      "path": "skills/frontend-design/",
+      "licence": "Apache-2.0 (skills/frontend-design/LICENSE.txt)",
+      "scripts": []
+    },
+    {
+      "name": "webapp-testing",
+      "repo": "https://github.com/anthropics/skills",
+      "commit": "ca45fc496a3436251f191354091d557da31c15b5",
+      "path": "skills/webapp-testing/",
+      "licence": "Apache-2.0 (skills/webapp-testing/LICENSE.txt)",
+      "scripts": ["scripts/with_server.py", "examples/*.py (3)"]
+    },
+    {
+      "name": "impeccable",
+      "repo": "https://github.com/pbakaus/impeccable",
+      "commit": "695cea5c6d1cbd420fc331375c7ef126a774e5f7",
+      "path": ".claude/skills/impeccable/",
+      "licence": "Apache-2.0 (repo LICENSE)",
+      "scripts": [
+        "scripts/live-browser*.js (4)",
+        "scripts/modern-screenshot.umd.js",
+        "scripts/impeccable (CLI)"
+      ]
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "repo": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "commit": "dd9a1b4cf9f67ca2e326f646d93e101b2778db30",
+      "path": ".claude/skills/ui-ux-pro-max/",
+      "licence": "MIT (repo LICENSE)",
+      "scripts": ["scripts/*.py (5)", "scripts/tests/*.py (14)"]
+    }
+  ],
+  "skipped": [
+    {
+      "name": "Motion",
+      "repo": "https://github.com/motiondivision/ai-kit",
+      "commit": "1e424943582cbbdb6e3f410687e39f96451447bb",
+      "why": "No licence file in the repo, and CSS steps() does the hero loop, so the Motion library is not needed."
+    },
+    {
+      "name": "unslop",
+      "why": "Name matches several repos (heydamir/unslop, theclaymethod/unslop, mshumer/unslop)."
+    },
+    {
+      "name": "Senior Front-End",
+      "why": "Only alirezarezvani/claude-skills found; not confirmed as the one meant."
+    },
+    { "name": "Text Skill", "why": "No single repo found." },
+    { "name": "test skill", "why": "No single repo found." },
+    { "name": "intent", "why": "No single repo found." }
+  ]
+}
