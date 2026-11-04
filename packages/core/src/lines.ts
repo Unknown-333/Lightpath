@@ -12,7 +12,7 @@ export type LineCounts = Map<number, number>;
  * Converts flattened segments to per-line counts for a script whose positions match the
  * original file (plain JS, or TypeScript run with Node's type stripping).
  *
- * A line takes the maximum count of the segments under its code characters (D-150): names,
+ * A line takes the maximum count of the segments under its code characters (D-149): names,
  * keywords, literals, operators. Brackets, braces, parentheses, `;` and `,` count only on a line
  * with nothing else, and comments never count. Maximum, not sum: a loop body that ran 10 times
  * shows 10, not 10 plus the loop test's 11. A line whose code is only `break` or `continue` takes
@@ -77,7 +77,7 @@ function maxOver(segments: readonly Segment[], from: number, to: number): number
   for (let k = lo; k < segments.length; k++) {
     const s = segments[k] as Segment;
     if (s.start >= to) break;
-    if (s.count < 0) continue; // unknown (D-151)
+    if (s.count < 0) continue; // unknown (D-153)
     if (best === undefined || s.count > best) best = s.count;
   }
   return best;

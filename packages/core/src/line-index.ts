@@ -42,7 +42,7 @@ export class LineIndex {
     return this.#source;
   }
 
-  /** Each character's class (code-mask.ts, D-150), computed on first use. */
+  /** Each character's class (code-mask.ts, D-149), computed on first use. */
   get mask(): Uint8Array {
     this.#mask ??= codeMask(this.#source);
     return this.#mask;

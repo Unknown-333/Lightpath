@@ -1341,7 +1341,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: all 7 at 0.1.1 so the numbers match (four identical tarballs under new numbers, as rejected in D-107); bumping the extension for the icon (a Marketplace publish with no change in what it does; D-137 keeps the owner's focus on the MCP).
 - Revert: set the three `package.json` versions back to 0.1.0 before anything is published. After publishing, npm keeps each version for good, so the fix is a 0.1.2.
 
-### D-150 A line's count comes from its code, not from its punctuation or comments (Phase A accuracy audit; amends the line rule of ARCHITECTURE section 4.3)
+### D-149 A line's count comes from its code, not from its punctuation or comments (Phase A accuracy audit; amends the line rule of ARCHITECTURE section 4.3)
 
 - Date: 2026-11-04 (written before the engine change)
 - Decision: In `packages/core`, a line takes the highest count of its code characters: names, keywords, literals and operators. Brackets, braces, parentheses, `;` and `,` count only on a line that has nothing else. Comments never count. A line whose only code is `break` or `continue` takes the lower of its own count and the count of the code just before it. The same rule applies on both paths: plain scripts (`rangesToLines`) and source-mapped ones (`mapToOriginal`, where each mapping's generated text is classified the same way). A small lexer (`code-mask.ts`, no dependency) marks each character of the script V8 ran as space or comment, punctuation, or code, so `//` inside a string or a template is not a comment.
@@ -1355,7 +1355,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: the first character of a line (wrong for `} else if`, whose first character is the `}` of the block that ran); the last character (wrong for `: 'guest';`); a full JavaScript parser (a new runtime dependency in a published package for the same result); leaving the rule and listing the cases as limits (they are ordinary code; the owner's stop rule names them).
 - Revert: drop `code-mask.ts` and its use in `lines.ts` and `sourcemap.ts`; the old rule comes back unchanged.
 
-### D-151 Lines after a call that threw show as "unknown", never as run (Phase A accuracy audit; Tier 2: adds `unknown` to `FunctionHit` in the wire protocol)
+### D-153 Lines after a call that threw show as "unknown", never as run (Phase A accuracy audit; Tier 2: adds `unknown` to `FunctionHit` in the wire protocol)
 
 - Date: 2026-11-04 (written before the protocol and engine change; the owner approved this fix path the same day)
 - Decision: When the `catch` of a `try` ran during a trace, the code in that try block after the line of its first statement, where it only has the block's own count, has no count: it shows neither as run nor as not run. Its lines go in a new optional `FunctionHit.unknown: { lines: number[], threwAfter: number }[]`, where `threwAfter` is the line of the try block's first statement, the last line known to have run. The trace text says `unknown: 55-56 (a call threw on or after line 54)` on the function's line, and `get_trace` slices print `// unknown: lines 55-56 (a call threw on or after line 54)` where they would print code. Code with its own counter inside the region (an inner block or a function called there) keeps its count: V8's block counts are exact.
@@ -1367,7 +1367,7 @@ The Node agent and the Python agent have no runtime dependencies on purpose (D-0
 - Alternatives: leave the lines as V8 counts them (the owner's stop rule names this case); mark every line of the try block unknown (also hides the first statement, which did run); pause on exceptions to find the throw site (the Node agent's in-process inspector can't pause its own thread, and the browser pause budget is 20 ms).
 - Revert: drop `throws.ts` and its call in `pipeline.ts`, the `unknown` field and its two text lines.
 
-### D-152 0.1.2 carries D-150 and D-151: `protocol`, `core`, `daemon`, `mcp` and `cli` move to 0.1.2; `browser` stays at 0.1.1, `node-agent` at 0.1.0 (D-107's rule)
+### D-154 0.1.2 carries D-149 and D-153: `protocol`, `core`, `daemon`, `mcp` and `cli` move to 0.1.2; `browser` stays at 0.1.1, `node-agent` at 0.1.0 (D-107's rule)
 
 - Date: 2026-11-04 (written before the version bump)
 - Decision: bump only the packages whose packed tarball differs from the version npm serves (evidence in `C:\Users\user\lightpath-trials\goal\accuracy-raw\tarballs.txt`): `protocol` (the `unknown` field), `core` (the line rule and the unknown lines), `daemon` (passes `unknown` on), `mcp` (prints it), and `cli`, whose `package.json` pins the new `daemon` and `mcp`. `browser` and `node-agent` don't change: `browser` 0.1.1 keeps its pins on `core` and `protocol` 0.1.0, which is fine because it uses neither the line rule nor `FunctionHit`. After the bump, `browser` and `node-agent` packed from the branch differ from npm only in `package.json` (their `workspace:*` pins would read 0.1.2); no code differs, so they are not republished. Nothing is published here; `docs/RELEASE.md` has the steps for the owner.
