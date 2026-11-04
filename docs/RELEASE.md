@@ -208,14 +208,18 @@ What the 0.0.2 checks found: the 2 packed tarballs, installed with the 0.0.1 pac
 
 ## Releasing 0.1.0
 
-0.1.0 publishes all 7 npm packages and, if you choose, the VS Code extension (D-133). `lightpath-agent` (PyPI) stays at 0.0.1: nothing in `agents/python` changed.
+0.1.0 publishes all 7 npm packages (D-133). The VS Code extension stays at 0.0.1 on the Marketplace, which still reads 0.1.0 traces (D-137). `lightpath-agent` (PyPI) stays at 0.0.1: nothing in `agents/python` changed.
 
-| Moves to 0.1.0                                                                  | Why                                                                                                                                           |
-| ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| `protocol`, `core`, `node-agent`, `browser`, `daemon`, `mcp`, `cli` (npm)       | Each one's shipped code changed since `v0.0.2` (run_action, compact output, init, errors, auto-start, redaction, run_request)                 |
-| VS Code extension `lightpath-dev.lightpath-vscode` (optional, see step 5 below) | Its own code didn't change, but its bundle did: it bundles `protocol`, whose trace schemas grew. The 0.0.1 extension still reads 0.1.0 traces |
+| Moves to 0.1.0                                                            | Why                                                                                                                           |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `protocol`, `core`, `node-agent`, `browser`, `daemon`, `mcp`, `cli` (npm) | Each one's shipped code changed since `v0.0.2` (run_action, compact output, init, errors, auto-start, redaction, run_request) |
 
-> **Benchmark numbers: placeholder.** Release prep part 2 adds the benchmark results to `CHANGELOG.md` and the README before this release goes out. Don't publish until that PR is merged too.
+| Stays                                                       | Why                                                                                      |
+| ----------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| VS Code extension `lightpath-dev.lightpath-vscode` at 0.0.1 | The owner's priority is the MCP for agents; republishing brings no editor change (D-137) |
+| `lightpath-agent` (PyPI) at 0.0.1                           | Nothing in `agents/python` changed                                                       |
+
+The benchmark result is in the 0.1.0 entry of `CHANGELOG.md` and in the README.
 
 ### 1. Sync the clean clone
 
@@ -269,23 +273,7 @@ git tag -a v0.1.0 -m "Lightpath 0.1.0"
 git push origin v0.1.0
 ```
 
-### 5. The VS Code extension (only if you republish it)
-
-Skip this step to leave the Marketplace at 0.0.1, which still works with 0.1.0. To publish 0.1.0, package it, test that exact `.vsix`, then upload it:
-
-```powershell
-cd $HOME\Desktop\lightpath-publish
-pnpm --filter lightpath-vscode exec vsce package
-$env:LIGHTPATH_VSCODE_VSIX = "$PWD\extensions\vscode\lightpath-vscode-0.1.0.vsix"
-pnpm test:vscode               # "extension 0.1.0 from ...", then VS CODE TEST PASSED
-Remove-Item Env:LIGHTPATH_VSCODE_VSIX
-pnpm --filter lightpath-vscode exec vsce login lightpath-dev
-pnpm --filter lightpath-vscode exec vsce publish --packagePath lightpath-vscode-0.1.0.vsix
-```
-
-`vsce login` asks for an Azure DevOps personal access token (scope Marketplace: Manage). Or upload `lightpath-vscode-0.1.0.vsix` by hand as an update of the existing extension on the [publisher page](https://marketplace.visualstudio.com/manage/publishers/lightpath-dev). The listing shows 0.1.0 after the Marketplace's checks, usually within minutes.
-
-### 6. After publishing
+### 5. After publishing
 
 Change the `0.1.0` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR. Then the MCP Registry entry can go up ([docs/launch/awesome-mcp.md](launch/awesome-mcp.md)): it reads `mcpName` from the published cli.
 

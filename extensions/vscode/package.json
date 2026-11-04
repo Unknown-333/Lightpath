@@ -2,7 +2,7 @@
   "name": "lightpath-vscode",
   "displayName": "Lightpath",
   "description": "Click anything in your running app and watch the code that ran light up in your editor.",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "publisher": "lightpath-dev",
   "repository": {
     "type": "git",
