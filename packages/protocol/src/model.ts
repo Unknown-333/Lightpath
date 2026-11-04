@@ -121,7 +121,7 @@ export const FunctionHit = z.object({
     )
     .optional(),
   /**
-   * Lines with no count because a call threw before them (D-151): the catch of their try ran.
+   * Lines with no count because a call threw before them (D-153): the catch of their try ran.
    * `threwAfter` is the try block's first line, the last one known to have run.
    */
   unknown: z

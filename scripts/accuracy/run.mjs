@@ -11,12 +11,12 @@ import { NODE_VARIANTS, nodeRoot, runNodeVariant } from './lib/node.mjs';
 const KNOWN = [
   {
     kind: 'unknown',
-    why: 'a line that ran shows as unknown, not as run: inside a try whose catch ran, code with no counter of its own may come after the throw (D-151)',
+    why: 'a line that ran shows as unknown, not as run: inside a try whose catch ran, code with no counter of its own may come after the throw (D-153)',
   },
   {
     scenario: 'throw-escapes',
     kind: 'line',
-    why: 'V8 limit: a throw that leaves a function with no catch of its own leaves no sign in its coverage (D-151)',
+    why: 'V8 limit: a throw that leaves a function with no catch of its own leaves no sign in its coverage (D-153)',
   },
   ...['await-sequence', 'await-reject'].map((scenario) => ({
     variant: 'tsx',
