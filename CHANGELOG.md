@@ -2,27 +2,49 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
-## [Unreleased]
+## [0.1.1] - TBD (not published yet)
 
-Fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps went](https://github.com/Unknown-333/Lightpath/pull/59)).
+Six fixes from the steps audit of the 2026-11-03 benchmark ([where the extra steps went](https://github.com/Unknown-333/Lightpath/pull/59)), the code that ran on request (`includeCode`), a security fix: `get_trace` showed secrets written in your source code, and the new logo. Needs Node.js 22.12 or newer, as before.
 
-### Changed
+Whether these changes help an agent fix bugs, or fix them with fewer steps or credits, is not measured yet. The next benchmark tests it, under a rule set before any run. The sizes below are characters of tool output, measured without a model.
 
-- A `run_action` miss on a page with a password field says the page is a sign-in form and gives a ready `run_action` call built from its own fields, with `<placeholder>` values (D-139).
-- `run_action`'s schema is shorter: Kiro's `tool_load` text for it goes from 2,409 to 2,091 characters. The daemon checks the bounds the schema no longer repeats, and `press: "Enter" | "Space"` replaces `action: "press"` plus `key`; a call with the old keys now clicks (D-140).
-- A trace with 3 or more backend requests shows each backend file that ran in 3 or more of them once, with request counts, instead of under every request. On a tududi Login trace (13 requests) that is 14,810 → 11,441 characters, with the same files left out (D-141).
-- `find_code_for_action` with nothing recorded answers with the `run_action` call that records it, such as `run_action {"target":"Set in progress"}` (D-143).
+### Packages
 
-### Added
+Only packages whose published files changed get 0.1.1 (D-107, D-148). `npx @lightpath-dev/cli@0.1.1` installs browser and mcp 0.1.1 with the four 0.1.0 packages.
 
-- `run_action` takes `times` (1 to 5): it does the same action that many times and returns one trace with the counts added up. Pressing "Add to cart" twice on the shop goes from 2 calls and 888 characters to 1 call and 633 (D-142).
-- `run_action` takes `compareTo` (a trace id, or `"last"` for the newest earlier trace of the same action): the answer adds the function-level diff, so checking a fix is one call. The server instructions and the `lightpath init` block now point to it instead of `diff_traces` (D-144). A new CI end-to-end test, `scripts/e2e-invoices-fix.mjs`, plants the demo bug in `examples/invoices`, fixes it, and checks that one call's diff shows `getSummary` running its summing lines again.
-- `run_action` and `get_trace` take `includeCode` (opt-in, off by default). With `includeCode: true`, the trace answer ends with the code of the lines that ran: each file's executed lines with their numbers, not-run lines folded as `// not run: lines A-B`, most-used files first, inside the same 16,000-character cap. A last line names what was left out and the `get_trace` call for it. With it, the shop's Checkout answer goes from 1,114 to 6,619 characters, and `examples/invoices`' "Mark as paid" from 1,549 to 10,900. Without it, answers are unchanged (D-145, D-146).
-- `get_trace` and `diff_traces` check trace ids, and `get_trace` its `page`, in the tool instead of the schema, and `run_action`'s `timeoutMs` has no description. That keeps `tools/list` under 4,000 characters with `includeCode` (D-146).
+| Package                                                   | Version     | Why                                                                                                  |
+| --------------------------------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| `@lightpath-dev/mcp`                                      | 0.1.1       | Fixes 2 to 6, `includeCode`, the redaction fix                                                       |
+| `@lightpath-dev/browser`                                  | 0.1.1       | Fix 1 (sign-in pages) and the `press` key of fix 2                                                   |
+| `@lightpath-dev/cli`                                      | 0.1.1       | The `lightpath init` block's fix-check line (fix 6), the npm page README with the logo, the new deps |
+| `@lightpath-dev/protocol`, `core`, `node-agent`, `daemon` | stay 0.1.0  | Their tarballs are byte for byte the same as 0.1.0's                                                 |
+| VS Code extension `lightpath-dev.lightpath-vscode`        | stays 0.0.1 | Not republished (D-137). Its icon changed in the repo only; the Marketplace copy keeps the old look  |
+| `lightpath-agent` (PyPI)                                  | stays 0.0.1 | Nothing in `agents/python` changed                                                                   |
 
 ### Security
 
-- Source code a tool returns is now redacted too, in `get_trace` slices and in the `includeCode` section: Bearer tokens, JWT-like strings, well-known key formats (Stripe, AWS, GitHub, Slack, Google), PEM private keys, secret query values, and string literals named with a secret word (`apiKey = "…"`) become `[redacted]`. Values that `run_action` filled are hidden in the code as well (D-145).
+- **Fixed: `get_trace` returned secrets written in your source code.** In 0.1.0, `get_trace` with a `file` or `function` showed source lines exactly as written. A hard-coded API key, token or password in a traced file went to the agent as is (D-123 redacted runtime text only). In 0.1.1 every piece of source code a tool returns is redacted, in `get_trace` slices and in the `includeCode` section, whether `includeCode` is set or not. Bearer tokens, JWT-like strings, well-known key formats (Stripe, AWS, GitHub, Slack, Google), PEM private keys, secret query values, and string literals named with a secret word (`apiKey = "…"`) become `[redacted]`. Values that `run_action` filled are hidden in the code as well (D-145, D-146). If you used 0.1.0's `get_trace` on code with hard-coded secrets, treat those secrets as seen by your agent and its model provider.
+
+### Changed
+
+- Fix 1: a `run_action` miss on a page with a password field says the page is a sign-in form and gives a ready `run_action` call built from its own fields, with `<placeholder>` values (D-139).
+- Fix 2: `run_action`'s schema is shorter. Kiro's `tool_load` text for it goes from 2,409 to 2,091 characters. The daemon checks the bounds the schema no longer repeats. `press: "Enter" | "Space"` replaces `action: "press"` plus `key`. This breaks calls that use the old keys: they now click instead of pressing (D-140).
+- Fix 3: a trace with 3 or more backend requests shows each backend file that ran in 3 or more of them once, with request counts, instead of under every request. On a tududi Login trace (13 requests) that is 14,810 → 11,441 characters, with the same files left out (D-141).
+- Fix 5: `find_code_for_action` with nothing recorded answers with the `run_action` call that records it, such as `run_action {"target":"Set in progress"}` (D-143).
+- The `@lightpath-dev/cli` npm page shows the new logo and the tududi demo GIF.
+
+### Added
+
+- Fix 4: `run_action` takes `times` (1 to 5). It does the same action that many times and returns one trace with the counts added up. Pressing "Add to cart" twice on the shop goes from 2 calls and 888 characters to 1 call and 633 (D-142).
+- Fix 6: `run_action` takes `compareTo` (a trace id, or `"last"` for the newest earlier trace of the same action). The answer adds the function-level diff, so checking a fix is one call. The server instructions and the `lightpath init` block now point to it instead of `diff_traces` (D-144).
+- `run_action` and `get_trace` take `includeCode` (opt-in, off by default). With `includeCode: true`, the trace answer ends with the code of the lines that ran: each file's executed lines with their numbers, not-run lines folded as `// not run: lines A-B`, most-used files first, inside the same 16,000-character cap. A last line names what was left out and the `get_trace` call for it. With it, the shop's Checkout answer goes from 1,114 to 6,619 characters, and `examples/invoices`' "Mark as paid" from 1,549 to 10,900. Without it, answers are the same as before (D-145, D-146).
+- `get_trace` and `diff_traces` check trace ids, and `get_trace` its `page`, in the tool instead of the schema, and `run_action`'s `timeoutMs` has no description. That keeps `tools/list` under 4,000 characters with `includeCode` (3,990, D-146).
+- The Lightpath logo (a path mark in indigo and pink, built in code as SVG) in the README, on the npm page and on the site. Sources and the build are in `brand/logo/`.
+
+### Tests
+
+- A new CI end-to-end test, `scripts/e2e-invoices-fix.mjs`, plants the demo bug in `examples/invoices`, fixes it, and checks that one `run_action` call with `compareTo: "last"` shows `getSummary` running its summing lines again (D-144).
+- `scripts/e2e-invoices.mjs` checks that a default answer has no code, and that `get_trace` with `includeCode: true` returns it (D-146).
 
 ## [0.1.0] - 2026-11-04
 
