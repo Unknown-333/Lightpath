@@ -119,6 +119,8 @@ try {
     target: 'button "Mark as paid"',
     within: 'Oakline Coffee',
     compareTo: 'last',
+    // The code is opt-in (D-146); the check of the fixed line below reads it.
+    includeCode: true,
   });
   check(after.out.length <= MAX_CHARS, `the answer is at most 16,000 characters (${after.out.length})`);
   check(

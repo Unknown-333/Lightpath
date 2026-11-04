@@ -308,16 +308,55 @@ describe('trace answers through the MCP server (D-145)', () => {
     expectNoSecrets(slice);
   });
 
-  it('returns the code with run_action, find_code_for_action and get_trace, and no seeded secret', async () => {
+  it('adds no code by default: run_action, find_code_for_action and get_trace give the main text (D-146)', async () => {
     const action = await call('run_action', { target: 'button "Connect"' });
+    const id = /^Trace (t_\d{12})/.exec(action)?.[1] as string;
+    const trace = configTrace(id);
+    expect(action).toBe(
+      summarizeTrace(trace, [
+        'action: click button "Connect" (boundary press, settled quiet)',
+        'page: http://localhost:5173/',
+      ]),
+    );
+    expect(await call('find_code_for_action', { action: 'Connect' })).toBe(summarizeTrace(trace));
+    expect(await call('get_trace', { traceId: id })).toBe(summarizeTrace(trace));
+    expect(await call('get_trace', { traceId: id, includeCode: false })).toBe(summarizeTrace(trace));
+    expect(action).not.toContain(CODE_LEGEND);
+  });
+
+  it('refuses a bad trace id and a fractional page in the handler (D-146)', async () => {
+    const res = (await client.callTool({ name: 'get_trace', arguments: { traceId: 'nope' } })) as {
+      content: { text: string }[];
+      isError?: boolean;
+    };
+    expect(res.isError).toBe(true);
+    expect(res.content[0]?.text).toBe(
+      'get_trace did nothing: "nope" is not a trace id like "t_abc123def456". list_traces shows them.',
+    );
+    const diff = (await client.callTool({
+      name: 'diff_traces',
+      arguments: { a: 't_000000000001', b: 'T_X' },
+    })) as { content: { text: string }[]; isError?: boolean };
+    expect(diff.isError).toBe(true);
+    expect(diff.content[0]?.text).toContain('"T_X" is not a trace id');
+    const page = (await client.callTool({
+      name: 'get_trace',
+      arguments: { traceId: 't_000000000001', file: 'src/config.ts', page: 1.5 },
+    })) as { isError?: boolean };
+    expect(page.isError).toBe(true);
+  });
+
+  it('returns the code with run_action and get_trace given includeCode, and no seeded secret', async () => {
+    const action = await call('run_action', { target: 'button "Connect"', includeCode: true });
     const id = /^Trace (t_\d{12})/.exec(action)?.[1];
     expect(action).toContain(`\n\n${CODE_LEGEND}\nsrc/config.ts\n   1  export async function connect(url) {`);
     expect(action).toContain('   7    const session = await getSession(url);');
     expect(action).toContain('   2    const apiKey = "[redacted]";');
     const found = await call('find_code_for_action', { action: 'Connect' });
-    const summary = await call('get_trace', { traceId: id });
+    const summary = await call('get_trace', { traceId: id, includeCode: true });
     const slice = await call('get_trace', { traceId: id, file: 'src/config.ts' });
-    expect(found).toContain(CODE_LEGEND);
+    // find_code_for_action takes no includeCode (D-146).
+    expect(found).not.toContain(CODE_LEGEND);
     expect(summary).toContain(CODE_LEGEND);
     expect(slice).toContain("   5    const header = 'Bearer [redacted]';");
     for (const text of [action, found, summary, slice]) {
@@ -329,6 +368,7 @@ describe('trace answers through the MCP server (D-145)', () => {
   it('redacts a filled value that is also a literal in the code (rule 6)', async () => {
     const text = await call('run_action', {
       target: 'button "Connect"',
+      includeCode: true,
       fill: [{ target: 'textbox "Key"', value: 'getSession' }],
     });
     expect(text).toContain('   7    const session = await [redacted](url);');
