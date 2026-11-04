@@ -9,6 +9,7 @@ import { HtmlValidate } from 'html-validate';
 import { chromium } from 'playwright-core';
 import { PALETTE } from '../brand/src/palette.mjs';
 import { SITE_URL } from './build.mjs';
+import { CURSOR_LINK, SERVER, VSCODE_LINK, VSCODE_WEB_LINK } from './lib/install-links.mjs';
 import { serve } from './tools/serve.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -55,12 +56,29 @@ const css = read('styles.css');
     } else if (ref.startsWith(SITE_URL)) {
       if (!existsSync(join(dist, ref.slice(SITE_URL.length) || 'index.html')))
         fail('links', `missing ${ref}`);
+    } else if (/^(cursor|vscode):/.test(ref)) {
+      // One-click install links (D-155): only the two built from site/lib/install-links.mjs.
+      const href = ref.replace(/&amp;/g, '&');
+      if (href !== CURSOR_LINK && href !== VSCODE_LINK) fail('links', `unexpected install link ${ref}`);
     } else if (/^https?:/.test(ref)) {
       const m = /^https:\/\/github\.com\/Unknown-333\/Lightpath\/(?:blob|tree)\/main\/([^#?]+)/.exec(ref);
       if (m && !existsSync(join(repo, decodeURIComponent(m[1])))) fail('links', `repo has no ${m[1]}`);
     } else if (!existsSync(join(dist, ref.split(/[?#]/)[0]))) fail('links', `missing file ${ref}`);
   }
   report.checks.links = { checked: n };
+  // The page and README.md carry the same install links, decoded to the same server entry.
+  for (const link of [CURSOR_LINK, VSCODE_LINK]) {
+    if (!refs.some((r) => r.replace(/&amp;/g, '&') === link)) fail('links', `page lacks ${link}`);
+  }
+  const cursorConfig = JSON.parse(
+    Buffer.from(new URL(CURSOR_LINK).searchParams.get('config'), 'base64').toString(),
+  );
+  const vscodeConfig = JSON.parse(decodeURIComponent(VSCODE_LINK.slice(VSCODE_LINK.indexOf('?') + 1)));
+  if (JSON.stringify(cursorConfig) !== JSON.stringify(SERVER)) fail('links', 'Cursor link config differs');
+  if (JSON.stringify({ ...vscodeConfig, name: undefined, type: undefined }) !== JSON.stringify(SERVER))
+    fail('links', 'VS Code link config differs');
+  if (!readFileSync(join(repo, 'README.md'), 'utf8').includes(VSCODE_WEB_LINK))
+    fail('links', 'README.md lacks the VS Code install link from site/lib/install-links.mjs');
 }
 
 // 3. Palette: every colour in the CSS, the page's inline SVG and the SVG files is one of the nine.

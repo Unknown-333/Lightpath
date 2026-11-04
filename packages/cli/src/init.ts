@@ -7,6 +7,9 @@ import { parseJsonc, sameValue, setMemberChecked } from './jsonc.js';
 /** The agents `lightpath init --agent` knows (design section 10.1, D-120). */
 export const AGENTS = ['claude-code', 'cursor', 'vscode', 'kiro'] as const;
 export type Agent = (typeof AGENTS)[number];
+/** `--agent other` (D-155): any other MCP client. init writes no client config, it prints the entry. */
+export const INIT_AGENTS = [...AGENTS, 'other'] as const;
+export type InitAgent = (typeof INIT_AGENTS)[number];
 
 interface AgentSetup {
   /** Project MCP config file, relative to the project folder. */
@@ -49,6 +52,11 @@ export function mcpCommand(version: string, platform: NodeJS.Platform): { comman
 
 export function mcpEntry(agent: Agent, version: string, platform: NodeJS.Platform): McpEntry {
   return { ...AGENT_SETUP[agent].extra, ...mcpCommand(version, platform) };
+}
+
+/** The entry `init --agent other` prints (D-155): the "mcpServers" shape most clients read. */
+export function genericSnippet(version: string, platform: NodeJS.Platform): string {
+  return JSON.stringify({ mcpServers: { [SERVER_NAME]: mcpCommand(version, platform) } }, null, 2);
 }
 
 export const BLOCK_START = '<!-- lightpath:start -->';
@@ -144,7 +152,7 @@ const SCHEMA_URL = './node_modules/@lightpath-dev/cli/lightpath.config.schema.js
 
 export interface InitOptions {
   cwd: string;
-  agent: Agent;
+  agent: InitAgent;
   version: string;
   /** The server's tool names (from `serverToolNames`). */
   tools: readonly string[];
@@ -159,7 +167,7 @@ export async function init(options: InitOptions): Promise<number> {
   const { cwd, agent, version, tools } = options;
   const platform = options.platform ?? process.platform;
   const out = options.out ?? ((l: string) => process.stdout.write(`${l}\n`));
-  const setup = AGENT_SETUP[agent];
+  const setup = agent === 'other' ? undefined : AGENT_SETUP[agent];
 
   const pkgRaw = await readFile(join(cwd, 'package.json'), 'utf8').catch(() => undefined);
   const pkg = pkgRaw === undefined ? undefined : parseJson(pkgRaw);
@@ -176,18 +184,20 @@ export async function init(options: InitOptions): Promise<number> {
   const report = (outcome: Outcome, file: string, note = '') => out(`${outcome.padEnd(9)} ${file}${note}`);
 
   // 1. The agent's MCP config: only the "lightpath" entry is written, as a text edit, so other
-  // servers, comments and formatting stay byte for byte (D-151).
-  const entry = mcpEntry(agent, version, platform);
-  const configPath = join(cwd, setup.file);
-  const raw = await readFile(configPath, 'utf8').catch(() => undefined);
-  const next = configWithEntry(raw, setup.key, entry);
-  if (next === undefined) {
-    failed = true;
-    report('skipped', setup.file, " (not JSON, or its servers aren't an object; left as is)");
-    out(`Add this under "${setup.key}" in ${setup.file} by hand:`);
-    out(JSON.stringify({ [SERVER_NAME]: entry }, null, 2));
-  } else {
-    report(await writeIfChanged(configPath, raw, next), setup.file);
+  // servers, comments and formatting stay byte for byte (D-151). `--agent other` writes none (D-155).
+  if (setup && agent !== 'other') {
+    const entry = mcpEntry(agent, version, platform);
+    const configPath = join(cwd, setup.file);
+    const raw = await readFile(configPath, 'utf8').catch(() => undefined);
+    const next = configWithEntry(raw, setup.key, entry);
+    if (next === undefined) {
+      failed = true;
+      report('skipped', setup.file, " (not JSON, or its servers aren't an object; left as is)");
+      out(`Add this under "${setup.key}" in ${setup.file} by hand:`);
+      out(JSON.stringify({ [SERVER_NAME]: entry }, null, 2));
+    } else {
+      report(await writeIfChanged(configPath, raw, next), setup.file);
+    }
   }
 
   // 2. lightpath.config.json: only the keys it lacks.
@@ -234,10 +244,16 @@ export async function init(options: InitOptions): Promise<number> {
       'note      Kiro custom agents see AGENTS.md only with "resources": ["file://AGENTS.md"] in the agent file.',
     );
   }
+  if (!setup) {
+    out("Add this to your MCP client's config (no client config was written):");
+    out(genericSnippet(version, platform));
+    out('note      VS Code reads "servers" instead of "mcpServers", and each entry needs "type": "stdio".');
+    out("note      doctor can't see this client's config; it checks lightpath.config.json and AGENTS.md.");
+  }
   out(
     failed
       ? 'Some files need a hand edit (above).'
-      : `Done. Restart ${setup.name} so it loads the server, then run lightpath doctor.`,
+      : `Done. Restart ${setup?.name ?? 'your MCP client'} so it loads the server, then run lightpath doctor.`,
   );
   return failed ? 1 : 0;
 }

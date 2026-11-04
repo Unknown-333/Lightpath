@@ -32,7 +32,7 @@
 Lightpath is an MCP server for React + Node apps. Your agent clicks a button in your running app and gets back the lines that click ran, in the browser and on the server, from V8's own coverage.
 
 ```sh
-npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro
+npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro, other
 npx @lightpath-dev/cli doctor
 ```
 
@@ -57,7 +57,7 @@ POST /api/invoices/INV-2041/pay → 200 [node, 8 ms]
 In your app's folder (React in the browser, a Node server, a `dev` script in `package.json`):
 
 ```sh
-npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro
+npx @lightpath-dev/cli init --agent claude-code   # or: cursor, vscode, kiro, other
 npx @lightpath-dev/cli doctor                     # checks what init wrote
 # restart your agent, then tell it the bug: "I click Save and the list doesn't update"
 ```
@@ -137,10 +137,41 @@ One command in your project folder. Each writes the agent's MCP config, a `light
 | Cursor      | `npx @lightpath-dev/cli init --agent cursor`      | `.cursor/mcp.json`        | [docs/agents/cursor.md](docs/agents/cursor.md)           |
 | VS Code     | `npx @lightpath-dev/cli init --agent vscode`      | `.vscode/mcp.json`        | [docs/agents/vscode.md](docs/agents/vscode.md)           |
 | Kiro        | `npx @lightpath-dev/cli init --agent kiro`        | `.kiro/settings/mcp.json` | [docs/agents/kiro.md](docs/agents/kiro.md)               |
+| Other       | `npx @lightpath-dev/cli init --agent other`       | no client config          | [Any MCP client](#any-mcp-client)                        |
 
-What is tested: CI runs all four `init` commands on Linux, macOS and Windows with no agent installed, starts the server each config names, lists its tools, and runs `doctor` (`scripts/setup-check.mjs`). Only Kiro (kiro-cli 2.37.0) has run Lightpath for real, in the benchmark and the GIF. How Claude Code, Cursor and VS Code pick and call MCP tools is **from their docs**, not tested here.
+What is tested: CI runs all five `init` commands on Linux, macOS and Windows with no agent installed, starts the server each config names (for `other`, the entry it prints), lists its tools, and runs `doctor` (`scripts/setup-check.mjs`). Only Kiro (kiro-cli 2.37.0) has run Lightpath for real, in the benchmark and the GIF. How Claude Code, Cursor and VS Code pick and call MCP tools is **from their docs**, not tested here.
 
 Other servers in the config file stay. Running init again changes nothing. On Windows, init writes `cmd /c npx …`, which doesn't run on macOS or Linux, so a teammate there runs init again; `doctor` flags the wrong form.
+
+### One-click install
+
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Lightpath_MCP-0098FF)](https://vscode.dev/redirect?url=vscode%3Amcp%2Finstall%3F%257B%2522name%2522%253A%2522lightpath%2522%252C%2522type%2522%253A%2522stdio%2522%252C%2522command%2522%253A%2522npx%2522%252C%2522args%2522%253A%255B%2522-y%2522%252C%2522%2540lightpath-dev%252Fcli%2522%252C%2522mcp%2522%255D%257D)
+
+The button adds only the MCP server, in the macOS and Linux form (`npx`). It doesn't write `lightpath.config.json` or the `AGENTS.md` block, so auto-start stays off and the agent isn't told when to use Lightpath: run `init` for those. On Windows, run `init` instead, because it writes `cmd /c npx`. The link format is from [VS Code's docs](https://code.visualstudio.com/api/extension-guides/ai/mcp).
+
+Cursor documents only a `cursor://` link ([Cursor's docs](https://cursor.com/docs/context/mcp/install-links)), and a GitHub page links only to `http` and `https` addresses. The **Add to Cursor** button is on [the site](https://unknown-333.github.io/Lightpath/#start), under the Cursor tab. Clicking either button was not tested here.
+
+## Any MCP client
+
+For a client without its own `init` (`--agent other` prints this entry and writes no client config). Add it to the client's MCP config:
+
+```json
+{
+  "mcpServers": {
+    "lightpath": {
+      "command": "npx",
+      "args": ["-y", "@lightpath-dev/cli", "mcp"]
+    }
+  }
+}
+```
+
+- On Windows, use `"command": "cmd"` and `"args": ["/c", "npx", "-y", "@lightpath-dev/cli", "mcp"]`, the form `init` writes.
+- VS Code reads `"servers"` instead of `"mcpServers"`, and each entry has `"type": "stdio"`.
+- `init` pins the version, like `@lightpath-dev/cli@0.1.2`, so `lightpath mcp` and `lightpath dev` match.
+- Auto-start needs a `lightpath.config.json` with your dev command; `init --agent other` writes it, with the `AGENTS.md` block.
+
+It should work in clients that start a stdio MCP server, such as Windsurf, Cline, Zed, Continue, Codex CLI, Gemini CLI and Claude Desktop. None of them is tested.
 
 ## How it works
 
@@ -176,6 +207,29 @@ More: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/PROTOCOL.md](docs/PROT
 - Service workers are off in Lightpath's browser, so requests stay visible to it. Offline mode and push don't work there.
 
 Found another? [Open an issue](https://github.com/Unknown-333/Lightpath/issues) with your stack and what you clicked.
+
+## Troubleshooting
+
+Run `npx @lightpath-dev/cli doctor` in your project folder first. These are the messages you may see, and the fix:
+
+| Message                                                                    | Fix                                                                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `Lightpath couldn't start a Chromium-based browser`                        | Install Google Chrome or Microsoft Edge, or run `npx playwright install chromium`                                      |
+| `starts a bare npx, which a client can't start on Windows without a shell` | Run `npx @lightpath-dev/cli init --agent <agent>` again on this machine; it writes `cmd /c npx`                        |
+| `starts "cmd", which exists only on Windows`                               | Run `npx @lightpath-dev/cli init --agent <agent>` again on this machine; it writes `npx`                               |
+| `webpack is serving your code without source maps (devtool 'eval')`        | Set `devtool: 'eval-cheap-module-source-map'` in your webpack config for development                                   |
+| `Lightpath isn't running in <folder>`                                      | Run `npx @lightpath-dev/cli dev -- npm run dev`, or set `"autoStart": true` and `"command"` in `lightpath.config.json` |
+| `stale .lightpath/daemon.json (port <n> not answering); delete it`         | Delete `.lightpath/daemon.json`; `lightpath dev` writes a new one                                                      |
+
+## Uninstall
+
+`init` writes these, and nothing else:
+
+1. The `"lightpath"` entry in your agent's MCP config: `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json` or `.kiro/settings/mcp.json`. Delete that entry; other servers there are yours. `--agent other` writes no client config, so remove the entry you pasted.
+2. `lightpath.config.json`. Delete it.
+3. The block from `<!-- lightpath:start -->` to `<!-- lightpath:end -->` in `AGENTS.md`, and in `CLAUDE.md` if you have one. Delete the block.
+
+`lightpath dev` also writes a `.lightpath` folder in your project; delete it. A server added with a one-click button is removed in the editor's MCP server list. Nothing is installed globally: `npx` runs Lightpath from npm's cache.
 
 ## Without an agent
 

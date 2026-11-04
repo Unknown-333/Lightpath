@@ -10,6 +10,8 @@ import {
   agentsBlock,
   devCommand,
   findBlock,
+  genericSnippet,
+  type InitAgent,
   init,
   mcpCommand,
   upsertBlock,
@@ -40,7 +42,7 @@ function write(file: string, text: string) {
 }
 const read = (file: string) => readFileSync(join(dir, file), 'utf8');
 const json = (file: string) => JSON.parse(read(file));
-const run = (agent: (typeof AGENTS)[number], platform: NodeJS.Platform = 'linux', tools = TOOLS) =>
+const run = (agent: InitAgent, platform: NodeJS.Platform = 'linux', tools = TOOLS) =>
   init({ cwd: dir, agent, version: V, tools, platform, out: (l) => lines.push(l) });
 
 describe('mcpCommand', () => {
@@ -78,6 +80,27 @@ describe('lightpath init --agent', () => {
         expect(lines.filter((l) => /^(created|updated)/.test(l))).toEqual([]);
       });
     }
+  }
+
+  for (const platform of ['linux', 'win32'] as const) {
+    it(`other on ${platform}: writes AGENTS.md and lightpath.config.json, no client config, prints the entry (D-155)`, async () => {
+      expect(await run('other', platform)).toBe(0);
+      for (const setup of Object.values(AGENT_SETUP)) expect(existsSync(join(dir, setup.file))).toBe(false);
+      expect(findBlock(read('AGENTS.md'))).toBe(agentsBlock(TOOLS));
+      expect(json('lightpath.config.json')).toMatchObject({ command: 'npm run dev' });
+      const text = lines.join('\n');
+      expect(text).toContain(genericSnippet(V, platform));
+      expect(JSON.parse(genericSnippet(V, platform))).toEqual({
+        mcpServers: { lightpath: mcpCommand(V, platform) },
+      });
+      expect(text).toContain('"servers" instead of "mcpServers"');
+
+      const before = ['AGENTS.md', 'lightpath.config.json'].map(read);
+      lines = [];
+      expect(await run('other', platform)).toBe(0);
+      expect(['AGENTS.md', 'lightpath.config.json'].map(read)).toEqual(before);
+      expect(lines.filter((l) => /^(created|updated)/.test(l))).toEqual([]);
+    });
   }
 
   it('vscode uses "servers" with type stdio', async () => {
