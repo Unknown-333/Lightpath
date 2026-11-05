@@ -2,6 +2,20 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
+## [0.1.4] - TBD (not published yet)
+
+### Packages
+
+Only `@lightpath-dev/cli` gets 0.1.4 (D-107, D-148). `browser` stays at 0.1.3, `protocol`, `core`, `daemon` and `mcp` at 0.1.2, `node-agent` at 0.1.0.
+
+### Fixed
+
+- Windows, cold npm cache: `lightpath doctor` stopped npx's first install of the pinned CLI after 20 s, and npx could then never start that version again (npm `ENOENT` on `_npx\<hash>\package.json`). `init` and `doctor` now let that install run to its end: `init` installs the pinned version right after it writes the config, and `doctor` installs it offline before its 20 s check. If npx is still installing after 180 s, they say so and leave it running. If the folder is already broken, they name it and print the command that removes it (D-157).
+
+### CI
+
+- The shop end-to-end test passes a release boundary only when the collector said a press read went over the 20 ms budget, and prints that notice (D-157).
+
 ## [0.1.3] - 2026-11-05
 
 ### Packages

@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { CONFIG_FILE, LightpathConfig } from './config.js';
 import { parseJsonc, sameValue, setMemberChecked } from './jsonc.js';
+import { brokenNpxDir, npxVersionArgs, removeDirCommand, type warmNpx } from './mcp-probe.js';
 
 /** The agents `lightpath init --agent` knows (design section 10.1, D-120). */
 export const AGENTS = ['claude-code', 'cursor', 'vscode', 'kiro'] as const;
@@ -158,6 +159,8 @@ export interface InitOptions {
   tools: readonly string[];
   platform?: NodeJS.Platform;
   out?: (line: string) => void;
+  /** Installs the pinned CLI through npx before the client's first start (D-157). Unset: skipped. */
+  warm?: typeof warmNpx;
 }
 
 type Outcome = 'created' | 'updated' | 'unchanged' | 'skipped';
@@ -250,12 +253,42 @@ export async function init(options: InitOptions): Promise<number> {
     out('note      VS Code reads "servers" instead of "mcpServers", and each entry needs "type": "stdio".');
     out("note      doctor can't see this client's config; it checks lightpath.config.json and AGENTS.md.");
   }
+
+  // 4. npx installs the pinned CLI now, with no time limit, so the client's first start of the
+  // server doesn't have to (D-157): a client or check that gives up on a slow first start cuts the
+  // install off, and npx can't start that version again until its folder is removed.
+  let broken: string | undefined;
+  if (options.warm) {
+    const { command, args } = mcpCommand(version, platform);
+    const spec = `${PACKAGE}@${version}`;
+    out(`npx       installing ${spec} for the server's first start...`);
+    const w = await options.warm(command, npxVersionArgs(command, args) as string[], {
+      cwd,
+      env: { ...process.env, npm_config_prefer_offline: 'true' },
+    });
+    broken = brokenNpxDir(w.stderr);
+    const s = (w.ms / 1000).toFixed(1);
+    if (w.ok) out(`ready     npx has ${spec} (${s} s)`);
+    else if (w.running)
+      out(`note      npx is still installing ${spec} after ${s} s and keeps going in the background.`);
+    else if (broken) {
+      out(`failed    npx's folder ${broken} has no package.json (an install that was stopped part way).`);
+      out(`Remove it, then run lightpath init again: ${removeDirCommand(broken)}`);
+    } else {
+      const tail = w.stderr.trim().split(/\r?\n/).slice(-2).join(' | ');
+      out(
+        `note      npx couldn't install ${spec} now (exit ${w.exit}${tail ? `: ${tail}` : ''}); the first start will try again.`,
+      );
+    }
+  }
   out(
     failed
       ? 'Some files need a hand edit (above).'
-      : `Done. Restart ${setup?.name ?? 'your MCP client'} so it loads the server, then run lightpath doctor.`,
+      : broken
+        ? 'Remove the npx folder (above) before you restart your agent.'
+        : `Done. Restart ${setup?.name ?? 'your MCP client'} so it loads the server, then run lightpath doctor.`,
   );
-  return failed ? 1 : 0;
+  return failed || broken ? 1 : 0;
 }
 
 /**

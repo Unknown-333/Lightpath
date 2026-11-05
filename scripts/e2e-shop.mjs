@@ -41,6 +41,7 @@ child.stderr.on('data', (c) => {
 });
 
 let collector;
+const notices = [];
 try {
   const url = await new Promise((resolve, reject) => {
     const watcher = new UrlWatcher();
@@ -60,6 +61,11 @@ try {
     url,
     headless: !headed,
     send: (m) => daemon.correlator.ingest('browser', m),
+    // The notice `lightpath dev` prints when a press read goes over the budget (D-082).
+    notice: (m) => {
+      notices.push(m);
+      console.log(`NOTICE ${m}`);
+    },
   });
   await collector.start();
   // What `lightpath dev` does once the browser is open: run_action acts on this page (D-115).
@@ -212,9 +218,17 @@ try {
     const linesOf = (f) => f.lines.map((l) => l.line).join(',');
 
     const agentAdd = await runAction({ target: 'button "Add to cart"', within: 'Coffee mug' });
+    // The boundary is the press, unless a press read went over the 20 ms budget on this machine
+    // (a slow CI runner): then D-082 moves it to the release, says so, and keeps it there (D-157).
+    const overBudget = notices.find((n) =>
+      /coverage read took .* so clicks now start at the mouse release/.test(n),
+    );
+    const boundary = /within "Coffee mug" \(boundary (press|release)/.exec(agentAdd.text)?.[1];
     check(
-      agentAdd.text.includes('action: click button "Add to cart" within "Coffee mug" (boundary press'),
-      'run_action: Add to cart (within "Coffee mug") was clicked at the press boundary',
+      boundary === 'press' || (boundary === 'release' && overBudget !== undefined),
+      overBudget
+        ? `run_action: Add to cart (within "Coffee mug") was clicked at the release boundary, after: ${overBudget.split(', so')[0]}`
+        : 'run_action: Add to cart (within "Coffee mug") was clicked at the press boundary',
     );
     check(
       agentAdd.trace?.label === 'button: Add to cart' &&

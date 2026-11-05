@@ -143,6 +143,83 @@ export function probeMcpCommand(
   });
 }
 
+/**
+ * The same command with `--version` in place of its last `mcp`, when it starts the server through
+ * npx; undefined otherwise. npx keys its install folder on the package spec, not the arguments,
+ * so this installs exactly what the MCP command will run (D-157).
+ */
+export function npxVersionArgs(command: string, args: readonly string[]): string[] | undefined {
+  const viaNpx = command === 'npx' || (command === 'cmd' && args.includes('npx'));
+  if (!viaNpx || args[args.length - 1] !== 'mcp') return undefined;
+  return [...args.slice(0, -1), '--version'];
+}
+
+export interface WarmResult {
+  ok: boolean;
+  /** How long it ran, in ms. */
+  ms: number;
+  stderr: string;
+  /** Exit code, when it ended. */
+  exit?: string;
+  /** Still running after `waitMs`. It's left to finish, never killed. */
+  running?: boolean;
+}
+
+/**
+ * Runs a command to the end and never kills it (D-157). Killing npx while it installs a package
+ * for the first time leaves `_npx/<hash>` without its package.json, and every later start of that
+ * spec fails with ENOENT. After `waitMs` the call returns `running` and leaves the child to finish.
+ */
+export function warmNpx(
+  command: string,
+  args: readonly string[],
+  options: { cwd: string; env?: NodeJS.ProcessEnv; waitMs?: number },
+): Promise<WarmResult> {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    let stderr = '';
+    let settled = false;
+    const done = (r: Omit<WarmResult, 'ms' | 'stderr'>) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve({ ...r, ms: Date.now() - started, stderr: stderr.slice(-2000) });
+    };
+    const child = spawn(command, [...args], {
+      cwd: options.cwd,
+      env: options.env ?? process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    child.stdout?.resume();
+    child.stderr?.setEncoding('utf8').on('data', (d: string) => {
+      stderr += d;
+    });
+    child.on('error', (err) => {
+      stderr += err.message;
+      done({ ok: false });
+    });
+    child.on('exit', (code, signal) => done({ ok: code === 0, exit: signal ?? String(code) }));
+    const timer = setTimeout(() => {
+      // Let this process exit without waiting for, or stopping, the install.
+      child.unref();
+      (child.stdout as unknown as { unref?: () => void } | null)?.unref?.();
+      (child.stderr as unknown as { unref?: () => void } | null)?.unref?.();
+      done({ ok: false, running: true });
+    }, options.waitMs ?? 180_000);
+  });
+}
+
+/** The `_npx/<hash>` folder an npm ENOENT on its package.json names: a first install that was cut off. */
+export function brokenNpxDir(stderr: string): string | undefined {
+  if (!/ENOENT/.test(stderr)) return undefined;
+  return /([^\s'"]*[\\/]_npx[\\/][0-9a-f]+)[\\/]package\.json/.exec(stderr)?.[1];
+}
+
+/** Removes a folder; the same text works in cmd, PowerShell and POSIX shells. */
+export const removeDirCommand = (dir: string): string =>
+  `node -e "require('fs').rmSync(process.argv[1],{recursive:true,force:true})" "${dir}"`;
+
 /** Stops a child and, on Windows, everything it started (cmd → npx → node). */
 function killTree(pid: number | undefined): void {
   if (pid === undefined) return;
