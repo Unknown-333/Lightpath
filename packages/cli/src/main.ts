@@ -6,7 +6,7 @@ import { CONFIG_FILE, ConfigError, loadConfig } from './config.js';
 import { dev } from './dev.js';
 import { doctor } from './doctor.js';
 import { INIT_AGENTS, type InitAgent, init } from './init.js';
-import { serverToolNames } from './mcp-probe.js';
+import { serverToolNames, warmNpx } from './mcp-probe.js';
 
 /** This package's version, read from package.json (one folder up from both src/ and dist/). */
 export const VERSION = (
@@ -118,6 +118,7 @@ export async function main(argv: string[]): Promise<number> {
           agent: agent as InitAgent,
           version: VERSION,
           tools: await serverToolNames(VERSION),
+          warm: warmNpx,
         });
       })();
     });

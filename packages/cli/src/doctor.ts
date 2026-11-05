@@ -21,7 +21,16 @@ import {
 } from './init.js';
 import { parseJsonc } from './jsonc.js';
 import { VERSION } from './main.js';
-import { type ProbeResult, probeMcpCommand, serverToolNames } from './mcp-probe.js';
+import {
+  brokenNpxDir,
+  npxVersionArgs,
+  type ProbeResult,
+  probeMcpCommand,
+  removeDirCommand,
+  serverToolNames,
+  type WarmResult,
+  warmNpx,
+} from './mcp-probe.js';
 
 export interface Check {
   name: string;
@@ -93,7 +102,7 @@ export async function doctor(cwd: string, configFile?: string): Promise<number> 
         }
       },
     },
-    ...(await setupChecks(cwd, configFile)),
+    ...(await setupChecks(cwd, configFile, { warm: warmNpx })),
   ];
 
   let failed = 0;
@@ -112,6 +121,11 @@ export interface SetupCheckOptions {
   probe?: typeof probeMcpCommand;
   /** The tool names this CLI ships; tests pass a fixed list. */
   tools?: readonly string[];
+  /**
+   * Runs an npx entry's `--version` form to the end before the probe (D-157), so the probe's
+   * time limit never stops a first install. `doctor` passes `warmNpx`; unset, nothing runs.
+   */
+  warm?: typeof warmNpx;
 }
 
 /**
@@ -127,10 +141,12 @@ export async function setupChecks(
   const platform = options.platform ?? process.platform;
   const version = options.version ?? VERSION;
   const probe = options.probe ?? probeMcpCommand;
+  const warm = options.warm;
   const tools = options.tools ?? (await serverToolNames(version));
   const expected = mcpCommand(version, platform);
   const checks: Check[] = [];
-  const started = new Map<string, Promise<ProbeResult>>();
+  type Started = { warm: WarmResult | undefined; result: ProbeResult };
+  const started = new Map<string, Promise<Started>>();
   let configured = 0;
 
   for (const agent of AGENTS) {
@@ -197,24 +213,50 @@ export async function setupChecks(
           };
         }
         const key = JSON.stringify([command, args]);
+        const versionArgs = warm ? npxVersionArgs(command, args) : undefined;
         if (!started.has(key)) {
           // Offline, so npx can't download anything: a doctor that downloads would be a new network call.
+          const env = { ...process.env, npm_config_offline: 'true' };
           started.set(
             key,
-            probe(command, args, {
-              cwd,
-              env: { ...process.env, npm_config_offline: 'true' },
-              timeoutMs: 20_000,
-              version,
-            }),
+            (async (): Promise<Started> => {
+              // npx installs on a first start; the 20 s probe below must never cut that off (D-157).
+              const w = warm && versionArgs ? await warm(command, versionArgs, { cwd, env }) : undefined;
+              if (w && !w.ok) return { warm: w, result: { ok: false, error: '', stderr: w.stderr } };
+              return {
+                warm: w,
+                result: await probe(command, args, { cwd, env, timeoutMs: 20_000, version }),
+              };
+            })(),
           );
         }
-        const result = await (started.get(key) as Promise<ProbeResult>);
+        const { warm: w, result } = await (started.get(key) as Promise<Started>);
+        if (w?.running) {
+          return {
+            ok: true,
+            detail: `${shown}: npx is still installing ${pinned ?? PACKAGE} after ${Math.round(w.ms / 1000)} s (first start); not checked yet. Run lightpath doctor again when it's done`,
+          };
+        }
+        const installed = w && w.ms >= 3000 ? ` (npx installed it first, ${(w.ms / 1000).toFixed(1)} s)` : '';
         if (!result.ok) {
           if (/ENOTCACHED|offline/i.test(result.stderr)) {
             return {
               ok: true,
               detail: `${shown}: npx would download ${pinned ?? PACKAGE} on first start; not checked offline`,
+            };
+          }
+          const broken = brokenNpxDir(result.stderr);
+          if (broken) {
+            return {
+              ok: false,
+              detail: `${shown} can't start: npx's folder ${broken} has no package.json (an install that was stopped part way). Remove it, then run lightpath doctor again: ${removeDirCommand(broken)}`,
+            };
+          }
+          if (w && !w.ok) {
+            const tail = w.stderr.trim().split(/\r?\n/).slice(-3).join(' | ');
+            return {
+              ok: false,
+              detail: `${[command, ...(versionArgs ?? [])].join(' ')} failed (exit ${w.exit})${tail ? `; stderr: ${tail}` : ''}`,
             };
           }
           const tail = result.stderr.trim().split(/\r?\n/).slice(-3).join(' | ');
@@ -230,7 +272,10 @@ export async function setupChecks(
             detail: `${shown} answered with ${result.tools?.length ?? 0} tools, missing ${missing.join(', ')}`,
           };
         }
-        return { ok: true, detail: `${shown} starts and lists ${result.tools?.length ?? 0} tools` };
+        return {
+          ok: true,
+          detail: `${shown} starts and lists ${result.tools?.length ?? 0} tools${installed}`,
+        };
       },
     });
   }
