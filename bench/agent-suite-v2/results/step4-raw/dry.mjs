@@ -64,13 +64,33 @@ for (const c of cases) {
   const rec = JSON.parse(readFileSync(join(TRIALS_ROOT, '_runs', `${c.bug}-with-1`, 'dry-run.json'), 'utf8'));
   const dev = await startLightpathDev(trialDir, lp, join('C:/Users/user/lightpath-trials/goal/step4-raw', `dry-${c.app}-dev.log`));
   const atReady = c.health ? await up(c.health) : null;
-  const bw = wait ? await waitAppBackend(trialDir, { backendUrl: c.health, pageHtml: c.html }) : null;
+  const bw = wait ? await waitAppBackend(trialDir, c.health ? { backendUrl: c.health, pageHtml: c.html } : { pageUrl: 'http://localhost:8613', readyButton: 'Try the demo' }) : null;
   const waitedMs = JSON.stringify(bw);
+  if (c.app === 'actual' && process.argv.includes('--poll')) {
+    const t0 = Date.now();
+    for (let k = 0; k < 24; k++) {
+      const p = await callTool(rec.lightpath.serverEntry, trialDir, 'run_action', { target: 'button "Try the demo"', within: 'zzqq-none' });
+      console.log(`poll t+${Math.round((Date.now() - t0) / 1000)}s: ${(p.text ?? p.error ?? '').replace(/\s+/g, ' ').slice(0, 260)}`);
+      if (/Closest targets/.test(p.text ?? '')) break;
+      await sleep(5000);
+    }
+  }
   let out = await callTool(rec.lightpath.serverEntry, trialDir, 'run_action', c.args);
-  if (wait && out.isError && c.app === 'actual') {
+  console.log(`first call: isError=${out.isError} ${(out.text ?? '').replace(/\s+/g, ' ').slice(0, 300)}`);
+  if (process.argv.includes('--retry') && out.isError && c.app === 'actual') {
     await sleep(30_000);
     out = await callTool(rec.lightpath.serverEntry, trialDir, 'run_action', c.args);
     out.text = `[after 30 s more] ${out.text}`;
+    const { chromium } = (await import('node:module')).createRequire(`${repo}/packages/browser/package.json`)('playwright-core');
+    const b = await chromium.launch({ headless: true });
+    const p = await (await b.newContext({ serviceWorkers: 'block' })).newPage();
+    const errs = []; p.on('pageerror', (e) => errs.push(String(e.message).slice(0, 150)));
+    p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text().slice(0, 150)); });
+    await p.goto('http://localhost:8613/');
+    const ok = await p.getByRole('button', { name: 'Try the demo' }).waitFor({ timeout: 45_000 }).then(() => true, () => false);
+    const body = (await p.locator('body').innerText().catch(() => '')).replace(/\s+/g, ' ').slice(0, 120);
+    console.log(`side browser under lightpath dev: found=${ok} body="${body}" errs=${JSON.stringify(errs.slice(0, 4))}`);
+    await b.close();
   }
   const head = (out.text ?? out.error ?? '').replace(/\s+/g, ' ').slice(0, 220);
   console.log(`${c.app} ${c.bug}: ready ${dev.readyMs} ms, backend up at ready=${atReady}, waited ${waitedMs} ms; ` +

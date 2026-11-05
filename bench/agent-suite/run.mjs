@@ -126,6 +126,7 @@ if (suite === 'v2') {
     backend: {
       tududi: { backendUrl: `${app.API_URL}/api/version`, pageHtml: 'public/index.html' },
       invoices: { backendUrl: `${app.API_URL}/api/invoices`, pageHtml: 'index.html' },
+      actual: { pageUrl: app.WEB_URL, readyButton: 'Try the demo' },
     }[app.APP.name],
   };
 }
