@@ -98,6 +98,18 @@ const htmlLogin =
   '<input type="email" aria-label="Email"><input type="password" aria-label="Password">' +
   '<button type="submit">Login</button></form><p id="out"></p><button id="buy">Checkout</button>';
 
+// A page whose data comes from an API that may not be listening yet (D-156): its rows, each with a
+// "Mark as paid" button, appear only when /api/late answers. `lateFailures` answers 500 first.
+const htmlLate =
+  '<!doctype html><h1>Invoices</h1><table id="rows"></table><script>' +
+  "fetch('/api/late').then((r) => (r.ok ? r.json() : [])).catch(() => []).then((rows) => {" +
+  "  for (const name of rows) { const tr = document.createElement('tr');" +
+  "    tr.innerHTML = '<td>' + name + '</td><td><button>Mark as paid</button></td>';" +
+  "    document.getElementById('rows').append(tr); }" +
+  '});</script>';
+let lateFailures = 0;
+let lateCalls = 0;
+
 let server: http.Server;
 let origin = '';
 let closedOrigin = '';
@@ -114,6 +126,15 @@ beforeAll(async () => {
     if (path === '/two.js') return res.writeHead(200, { 'content-type': 'text/javascript' }).end(pageTwoJs);
     if (path === '/two') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlTwo);
     if (path === '/login') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlLogin);
+    if (path === '/late') return res.writeHead(200, { 'content-type': 'text/html' }).end(htmlLate);
+    if (path === '/api/late') {
+      lateCalls++;
+      if (lateFailures > 0) {
+        lateFailures--;
+        return res.writeHead(500).end();
+      }
+      return res.writeHead(200, { 'content-type': 'application/json' }).end('["Kestrel Labs"]');
+    }
     if (path === '/api/orders') return res.writeHead(201).end('created');
     if (path === '/api/missing') return res.writeHead(404).end('nope');
     if (path === '/api/slow') {
@@ -140,7 +161,7 @@ const action = (target: string, extra: Partial<ActionRequest> = {}): ActionReque
 /** Starts a collector on the test page, runs `act`, and returns what it sent and logged. */
 async function withCollector<T>(
   act: (c: BrowserCollector, page: NonNullable<BrowserCollector['page']>) => Promise<T>,
-  opts: { pressBudgetMs?: number; path?: string; send?: (m: IngestMessage) => void } = {},
+  opts: { pressBudgetMs?: number; path?: string; ready?: string; send?: (m: IngestMessage) => void } = {},
 ) {
   const messages: IngestMessage[] = [];
   const logs: string[] = [];
@@ -160,7 +181,7 @@ async function withCollector<T>(
   try {
     const page = collector.page;
     if (!page) throw new Error('no page');
-    await page.waitForSelector('#buy');
+    await page.waitForSelector(opts.ready ?? '#buy');
     await page.waitForTimeout(300); // the load-time reads
     result = await act(collector, page);
   } catch (err) {
@@ -352,6 +373,30 @@ describe.skipIf(!enabled)('run_action on a real browser', () => {
     expect(result.followed).toMatchObject({ ok: true });
     expect(result.out).toBe('signed in');
     expect(starts).toHaveLength(1);
+  }, 30_000);
+
+  it('reloads once when the page loaded before its API listened, and says so when it still fails (D-156)', async () => {
+    const paid = action('button "Mark as paid"', { within: 'Kestrel Labs' });
+    lateFailures = 1;
+    lateCalls = 0;
+    const late = await withCollector(async (c) => c.runAction(paid), { path: '/late', ready: 'h1' });
+    expect(late.result).toMatchObject({ ok: true });
+    expect(lateCalls).toBe(2);
+    expect(late.logs.join('\n')).toContain('GET /api/late → 500); reloading once');
+    expect(late.starts).toHaveLength(1);
+
+    lateFailures = Number.POSITIVE_INFINITY;
+    lateCalls = 0;
+    const down = await withCollector(async (c) => c.runAction(paid), { path: '/late', ready: 'h1' });
+    expect(down.result).toMatchObject({ ok: false, error: { code: 'not_found' } });
+    if (!down.result.ok)
+      expect(down.result.error.message).toContain(
+        "The page's own requests failed as it loaded, also after a reload: GET /api/late → 500. " +
+          'The backend may still be starting',
+      );
+    expect(lateCalls).toBe(2); // the load and one reload, no more
+    expect(down.starts).toEqual([]);
+    lateFailures = 0;
   }, 30_000);
 
   it('answers not_actionable for a disabled button, without pressing', async () => {

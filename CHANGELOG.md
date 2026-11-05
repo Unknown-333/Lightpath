@@ -2,10 +2,26 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
-## Unreleased
+## [0.1.3] - TBD (not published yet)
+
+### Packages
+
+Only packages whose published files changed get 0.1.3 (D-107, D-148). Publish in this order: `@lightpath-dev/browser`, then `@lightpath-dev/cli`. `protocol`, `core`, `daemon` and `mcp` stay at 0.1.2, `node-agent` at 0.1.0.
+
+### Fixed
+
+- `run_action` on a page that loaded before its backend listened: the page's data requests failed (connection refused, or a 5xx from the dev server's proxy), it showed no rows, and `run_action` answered `not_found`. Now, when the target is missing and the page's own requests failed as it loaded, `run_action` waits 1 s, reloads the page once and tries again. If the requests fail again, the `not_found` answer names them and says the backend may still be starting (D-156). Seen on Windows in CI with `examples/invoices`.
+- `lightpath init` edits only its own entry in an existing `.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json` or Kiro config, as text, and accepts comments and trailing commas (D-151).
+- Paths in `lightpath.config.json` take `\` or `/` on every OS, and a single `\` that breaks the JSON gets a fix (D-152).
+
+### Added
 
 - `lightpath init --agent other`: for any MCP client. Writes `lightpath.config.json` and the `AGENTS.md` block, writes no client config, and prints the server entry for this OS (D-155).
 - README: "Any MCP client", "One-click install" (VS Code), "Troubleshooting" and "Uninstall" sections. Site: an "Other" tab, and "Add to Cursor" and "Install in VS Code" buttons (D-155).
+
+### CI
+
+- The first-run job tests a pull request's own packages, packed and installed in the app, and a push to main tests `@lightpath-dev/cli@latest` (it tested 0.1.1 before) (D-156).
 
 ## [0.1.2] - 2026-11-04
 

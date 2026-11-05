@@ -1,6 +1,6 @@
 {
   "name": "@lightpath-dev/browser",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "description": "Lightpath browser collector: launches Chrome, marks click boundaries, and collects frontend coverage",
   "keywords": [
     "coverage",

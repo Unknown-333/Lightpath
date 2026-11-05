@@ -84,6 +84,9 @@ const PRESS_BUDGET_MS = 20;
 /** Reloads of the first page when its own scripts failed, and the wait before each (D-135). */
 const FIRST_LOAD_RELOADS = 3;
 const FIRST_LOAD_RETRY_MS = 1000;
+/** run_action's one reload when the page's data requests failed as it loaded (D-156): wait, idle cap. */
+const FAILED_LOAD_RETRY_MS = 1000;
+const FAILED_LOAD_IDLE_MS = 5000;
 
 /**
  * Runs in every page before any app script (an init script):
@@ -219,6 +222,11 @@ export class BrowserCollector {
   readonly #readBefore = new Set<TraceId>();
   /** The current run_action's `fill` values (4+ characters): scrubbed from labels and logs (D-123 rule 6). */
   #secrets: string[] = [];
+  /**
+   * The page's fetch and XHR requests that failed (no connection, or a 5xx) since its document
+   * loaded and before any trace on it, as `GET /api/x → 500` (D-156).
+   */
+  #loadFailures: string[] = [];
 
   constructor(opts: CollectorOptions) {
     this.#opts = opts;
@@ -314,6 +322,8 @@ export class BrowserCollector {
       const req = res.request();
       if (res.status() < 400 || !['fetch', 'xhr', 'document'].includes(req.resourceType())) return;
       const { method, path } = requestKey(req);
+      if (res.status() >= 500 && req.resourceType() !== 'document' && !this.#active)
+        this.#loadFailures.push(`${method} ${path} → ${res.status()}`);
       this.#problem('request-failed', `${method} ${path} → ${res.status()}`, undefined, {
         method,
         path,
@@ -327,11 +337,16 @@ export class BrowserCollector {
         return;
       if (!['fetch', 'xhr', 'document'].includes(req.resourceType())) return;
       const { method, path } = requestKey(req);
+      if (!failure.includes('ERR_ABORTED') && req.resourceType() !== 'document' && !this.#active)
+        this.#loadFailures.push(`${method} ${path} failed: ${failure}`);
       this.#problem('request-failed', `${method} ${path} failed: ${failure}`, undefined, {
         method,
         path,
         failure,
       });
+    });
+    page.on('framenavigated', (frame) => {
+      if (frame === page.mainFrame()) this.#loadFailures = [];
     });
     // Page load compiles and runs most of the app. Reading that now keeps the first action's
     // pause as short as later ones (bench/README.md: 40 ms vs 8 ms at 12,000 functions).
@@ -421,7 +436,9 @@ export class BrowserCollector {
     await this.#activeDone;
     this.#secrets = BrowserCollector.#secretForms((request.fill ?? []).map((f) => f.value));
     try {
-      const outcome = await this.#act(page, request);
+      let outcome = await this.#act(page, request);
+      if (!outcome.ok && outcome.error.code === 'not_found' && this.#loadFailures.length > 0)
+        outcome = await this.#retryAfterFailedLoad(page, request, outcome);
       if (outcome.ok) return { ...outcome, pageUrl: this.#scrub(outcome.pageUrl) };
       const { error } = outcome;
       return {
@@ -439,6 +456,36 @@ export class BrowserCollector {
       this.#armed = undefined;
       this.#secrets = [];
     }
+  }
+
+  /**
+   * A target that isn't there, on a page whose own data requests failed as it loaded (D-156): a
+   * frontend dev server often answers before its backend listens, and the page then shows no data
+   * and never asks again. Waits, reloads once and tries again. If the requests fail again, the
+   * answer says which ones, and that the backend may still be starting.
+   */
+  async #retryAfterFailedLoad(
+    page: Page,
+    request: ActionRequest,
+    first: ActionRunOutcome,
+  ): Promise<ActionRunOutcome> {
+    const list = () => [...new Set(this.#loadFailures)].slice(0, 3).join(', ');
+    this.#log(`target not found after the page's requests failed as it loaded (${list()}); reloading once`);
+    await new Promise((r) => setTimeout(r, FAILED_LOAD_RETRY_MS));
+    let outcome = first;
+    try {
+      await page.reload({ timeout: 10_000 });
+      await page.waitForLoadState('networkidle', { timeout: FAILED_LOAD_IDLE_MS }).catch(() => {});
+      outcome = await this.#act(page, request);
+    } catch (err) {
+      if (page.isClosed()) throw err;
+      this.#log(`reload failed: ${String((err as Error)?.message ?? err).split('\n')[0]}`);
+    }
+    if (outcome.ok || outcome.error.code !== 'not_found' || this.#loadFailures.length === 0) return outcome;
+    const hint =
+      `The page's own requests failed as it loaded, also after a reload: ${list()}. ` +
+      'The backend may still be starting; try again in a few seconds.';
+    return { ok: false, error: { ...outcome.error, message: `${outcome.error.message}\n${hint}` } };
   }
 
   async #act(page: Page, request: ActionRequest): Promise<ActionRunOutcome> {
@@ -634,6 +681,7 @@ export class BrowserCollector {
     const done = new Promise<SettleReason>((resolve) => {
       endTrace = resolve;
     });
+    this.#loadFailures = []; // the page is in use now, and a reload would lose its state
     this.#active = traceId; // before resuming, so the click's own requests are tagged
     this.#activeDone = done.then(() => {});
     this.#tagged.set(traceId, []);

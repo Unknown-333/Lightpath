@@ -420,3 +420,32 @@ git push origin v0.1.2
 ### 5. After publishing
 
 Change the `0.1.2` heading in `CHANGELOG.md` from "TBD (not published yet)" to the publish date, in a small PR.
+
+## Releasing 0.1.3
+
+0.1.3 publishes 2 npm packages: `@lightpath-dev/browser` and `@lightpath-dev/cli`. `protocol`, `core`, `daemon` and `mcp` stay at 0.1.2 and `node-agent` at 0.1.0: no file under them changed since `v0.1.2` (D-107, D-156).
+
+| Moves to 0.1.3           | Why                                                                                    |
+| ------------------------ | -------------------------------------------------------------------------------------- |
+| `@lightpath-dev/browser` | 0.1.1 → 0.1.3: one reload when the page's data requests failed as it loaded (D-156)    |
+| `@lightpath-dev/cli`     | `init --agent other` (D-155), the text-only config merge (D-151, D-152), browser 0.1.3 |
+
+Steps 1, 4 and 5 are as for 0.1.2, with `0.1.3` in place of `0.1.2`. The dry run in step 1 is:
+
+```powershell
+pnpm -r --filter @lightpath-dev/browser --filter @lightpath-dev/cli publish --dry-run   # 2 tarballs, both 0.1.3, sends nothing
+```
+
+Publish in this order:
+
+```powershell
+pnpm --filter @lightpath-dev/browser publish --publish-wait-timeout 600000
+pnpm --filter @lightpath-dev/cli publish --publish-wait-timeout 600000
+```
+
+Check what npm serves:
+
+```powershell
+npm view @lightpath-dev/cli@0.1.3 dependencies   # browser 0.1.3; daemon, mcp, protocol 0.1.2; node-agent 0.1.0
+cd $env:TEMP; npx -y @lightpath-dev/cli@0.1.3 --version   # lightpath/0.1.3 ...
+```

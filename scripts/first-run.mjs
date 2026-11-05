@@ -11,15 +11,26 @@
 //
 // Usage:
 //   node scripts/first-run.mjs --app <dir> [--copy <src>] [--install "npm install"]
-//     [--spec @lightpath-dev/cli@0.1.1] [--agent claude-code] [--cold]
+//     [--spec @lightpath-dev/cli@latest | --pack] [--agent claude-code] [--cold]
 //     --target 'button "Mark as paid"' [--within "Kestrel Labs"] [--fill '[{...}]']
 //     [--ports 3002,5174] [--log <file.json>] [--space]
 //
 // --copy copies <src> to --app first (no node_modules, no .lightpath). --cold gives npm a fresh,
 // empty cache in the temp folder, so the CLI and the app's packages download as on a new machine.
+// --pack tests this checkout instead of npm (CI on a pull request): it packs every published
+// package here (run `pnpm build` first), installs the tarballs in the app without saving them, and
+// uses @lightpath-dev/cli@<this version>, which npx then finds in the app instead of downloading.
 
 import { spawn, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -32,7 +43,10 @@ const opt = (name, fallback) => {
 const flag = (name) => argv.includes(`--${name}`);
 
 const app = resolve(opt('app') ?? fail('--app <dir> is required'));
-const spec = opt('spec', '@lightpath-dev/cli@0.1.1');
+const repo = join(import.meta.dirname, '..');
+const pack = flag('pack');
+const cliVersion = JSON.parse(readFileSync(join(repo, 'packages', 'cli', 'package.json'), 'utf8')).version;
+const spec = pack ? `@lightpath-dev/cli@${cliVersion}` : opt('spec', '@lightpath-dev/cli@latest');
 const agent = opt('agent', 'claude-code');
 const target = opt('target') ?? fail('--target is required');
 const within = opt('within');
@@ -66,6 +80,7 @@ const result = {
   os: `${process.platform} ${process.arch}`,
   node: process.version,
   spec,
+  packed: pack,
   agent,
   app,
   agentIsAScript: true,
@@ -100,6 +115,26 @@ if (!existsSync(join(app, 'package.json'))) fail(`no package.json in ${app}`);
 
 let ok = true;
 if (opt('install')) ok = step('app install (the app, not Lightpath)', opt('install')) && ok;
+if (pack) {
+  const dir = mkdtempSync(join(tmpdir(), 'lp-packed-'));
+  for (const name of readdirSync(join(repo, 'packages'))) {
+    const pkg = JSON.parse(readFileSync(join(repo, 'packages', name, 'package.json'), 'utf8'));
+    if (pkg.private) continue;
+    const r = spawnSync(`pnpm pack --pack-destination "${dir}"`, {
+      cwd: join(repo, 'packages', name),
+      shell: true,
+      encoding: 'utf8',
+    });
+    if (r.status !== 0) fail(`pnpm pack failed in packages/${name}: ${r.stderr}`);
+  }
+  const tgz = readdirSync(dir).map((f) => `"${join(dir, f)}"`);
+  console.log(`packed this checkout: ${readdirSync(dir).join(', ')}`);
+  ok =
+    step(
+      'install the packed packages (pull request only)',
+      `npm install --no-save --no-audit --no-fund ${tgz.join(' ')}`,
+    ) && ok;
+}
 ok = step('install', `npx ${spec} --version`) && ok;
 ok = step('init', `npx ${spec} init --agent ${agent}`) && ok;
 // doctor exits 1 on any failed check; that is a finding, and the trace step still runs.
