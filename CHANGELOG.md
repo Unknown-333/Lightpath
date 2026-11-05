@@ -2,7 +2,7 @@
 
 All notable changes to Lightpath are listed here. Versions follow [Semantic Versioning](https://semver.org/); before 1.0, any minor version can break things. Decision numbers (D-xxx) point into [decisions.md](decisions.md).
 
-## [0.1.3] - TBD (not published yet)
+## [0.1.3] - 2026-11-05
 
 ### Packages
 
