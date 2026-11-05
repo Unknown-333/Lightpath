@@ -159,7 +159,8 @@ export async function waitAppBackend(
   const upAtReady = await answers(backendUrl);
   const started = Date.now();
   while (!(await answers(backendUrl))) {
-    if (Date.now() - started > timeoutMs) throw new Error(`app backend ${backendUrl} not answering after ${timeoutMs} ms`);
+    if (Date.now() - started > timeoutMs)
+      throw new Error(`app backend ${backendUrl} not answering after ${timeoutMs} ms`);
     await sleep(500);
   }
   const waitedMs = Date.now() - started;

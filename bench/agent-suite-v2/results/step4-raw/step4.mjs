@@ -25,7 +25,8 @@ const env = {
   LP_KIRO_CLI: 'C:/Users/user/lightpath-trials/tools/kiro-cli-2.37.0/LocalApp/Kiro-Cli/kiro-cli.exe',
   PATH: `${process.env.LOCALAPPDATA}\\corepack-shims;${process.env.PATH}`,
 };
-const read = (f) => (existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : []);
+const read = (f) =>
+  existsSync(f) ? readFileSync(f, 'utf8').split('\n').filter(Boolean).map(JSON.parse) : [];
 const all = () => [...read(visible), ...read(heldResults)];
 const cost = (r) => r.credits ?? (r.tokensEst ?? 0) * RATE;
 const say = (s) => {
@@ -47,27 +48,65 @@ for (const [bug, held] of bugs) {
           say(`STOP before ${id}: total ${total.toFixed(3)}, worst run ${worst.toFixed(3)}`);
           process.exit(3);
         }
-        const args = ['bench/agent-suite/run.mjs', '--suite', 'v2', '--bug', bug, '--condition', condition,
-          '--run', String(runNo), '--max-steps', '12', '--fresh', '--results', held ? heldResults : visible];
+        const args = [
+          'bench/agent-suite/run.mjs',
+          '--suite',
+          'v2',
+          '--bug',
+          bug,
+          '--condition',
+          condition,
+          '--run',
+          String(runNo),
+          '--max-steps',
+          '12',
+          '--fresh',
+          '--results',
+          held ? heldResults : visible,
+        ];
         if (held) args.push('--bugs-dir', heldDir);
         if (lines.length === 1) args.push('--label', 'void-rerun');
         const r = spawnSync(process.execPath, args, { cwd: repo, env, encoding: 'utf8', timeout: 2_400_000 });
-        const tail = `${r.stdout}${r.stderr}`.trim().split('\n').filter((l) => /correct=|Error|error/.test(l)).slice(-1)[0] ?? '';
+        const tail =
+          `${r.stdout}${r.stderr}`
+            .trim()
+            .split('\n')
+            .filter((l) => /correct=|Error|error/.test(l))
+            .slice(-1)[0] ?? '';
         const after = all().filter((x) => x.trial === id);
         if (after.length === lines.length) {
           // run.mjs threw before writing a line: a harness failure. Record it as a void line.
-          const line = { trial: id, bug, condition, run: runNo, suite: 'v2', heldout: held, void: true,
-            voidReasons: [`harness: run.mjs exit ${r.status}: ${tail.slice(0, 300)}`], correct: false, credits: 0,
-            finishedAt: new Date().toISOString(), ...(lines.length === 1 ? { label: 'void-rerun' } : {}) };
+          const line = {
+            trial: id,
+            bug,
+            condition,
+            run: runNo,
+            suite: 'v2',
+            heldout: held,
+            void: true,
+            voidReasons: [`harness: run.mjs exit ${r.status}: ${tail.slice(0, 300)}`],
+            correct: false,
+            credits: 0,
+            finishedAt: new Date().toISOString(),
+            ...(lines.length === 1 ? { label: 'void-rerun' } : {}),
+          };
           appendFileSync(held ? heldResults : visible, `${JSON.stringify(line)}\n`);
         }
-        const last = all().filter((x) => x.trial === id).at(-1);
+        const last = all()
+          .filter((x) => x.trial === id)
+          .at(-1);
         const sum = all().reduce((s, x) => s + cost(x), 0);
-        say(`${id}: correct=${last.correct} void=${last.void} steps=${last.steps} cost=${cost(last).toFixed(3)} total=${sum.toFixed(2)}`);
+        say(
+          `${id}: correct=${last.correct} void=${last.void} steps=${last.steps} cost=${cost(last).toFixed(3)} total=${sum.toFixed(2)}`,
+        );
         const dir = join(trialsRoot, id);
         if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
       }
     }
   }
 }
-say(`ALL DONE: runs ${all().length}, total ${all().reduce((s, r) => s + cost(r), 0).toFixed(2)}`);
+say(
+  `ALL DONE: runs ${all().length}, total ${all()
+    .reduce((s, r) => s + cost(r), 0)
+    .toFixed(2)}`,
+);
