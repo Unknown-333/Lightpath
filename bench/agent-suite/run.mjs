@@ -45,7 +45,13 @@ import {
   sleep,
   TRIALS_ROOT,
 } from './lib/common.mjs';
-import { initTrial, prepareLightpath, probeTools, startLightpathDev } from './lib/lightpath.mjs';
+import {
+  initTrial,
+  prepareLightpath,
+  probeTools,
+  startLightpathDev,
+  waitAppBackend,
+} from './lib/lightpath.mjs';
 import { outsidePaths } from './lib/outside.mjs';
 import * as shopApp from './lib/shop.mjs';
 import * as shopTrial from './lib/trial.mjs';
@@ -116,6 +122,12 @@ if (suite === 'v2') {
     agentDiff: app.agentDiff,
     lightpathConfig: { command: 'node dev.mjs', url: app.WEB_URL, headless: true },
     afterInit: (dir) => app.refreshPristine(dir),
+    // Step 4 (STEP4-RULE.md): the API the page needs, and the page's HTML file, per app.
+    backend: {
+      tududi: { backendUrl: `${app.API_URL}/api/version`, pageHtml: 'public/index.html' },
+      invoices: { backendUrl: `${app.API_URL}/api/invoices`, pageHtml: 'index.html' },
+      actual: { pageUrl: app.WEB_URL, readyButton: 'Try the demo' },
+    }[app.APP.name],
   };
 }
 const S = SUITES[suite];
@@ -235,6 +247,10 @@ async function main() {
     devServer = await startLightpathDev(trialDir, lightpath, join(outDir, 'lightpath-dev.log'));
     record.lightpathDev = { pid: devServer.pid, readyMs: devServer.readyMs };
     log(`lightpath dev ready in ${devServer.readyMs} ms (pid ${devServer.pid})`);
+    if (S.backend) {
+      record.backendWait = await waitAppBackend(trialDir, S.backend);
+      log(`backend ${JSON.stringify(record.backendWait)}`);
+    }
   }
   const load = await loadBeforeRun();
   record.cpuLoadStart = load;

@@ -13,6 +13,7 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { CACHE_DIR, isWindows, killTree, npm, REPO_DIR, run, sleep } from './common.mjs';
 
@@ -98,6 +99,8 @@ export function initTrial(trialDir, lightpath, configKeys, logFile) {
  * the page, so run_action can act on it. Returns { pid, readyMs, stop }.
  */
 export async function startLightpathDev(trialDir, lightpath, logFile, timeoutMs = 300_000) {
+  // A log left by an earlier start of the same trial id would read "watching" at once (Step 4 dry run).
+  rmSync(logFile, { force: true });
   const fd = openSync(logFile, 'a');
   const started = Date.now();
   const child = spawn(process.execPath, [lightpath.bin, 'dev'], {
@@ -126,6 +129,72 @@ export async function startLightpathDev(trialDir, lightpath, logFile, timeoutMs 
   }
   stop();
   throw new Error(`lightpath dev not watching the page after ${timeoutMs} ms; see ${logFile}`);
+}
+
+/** True when `url` answers at all within 2 s. */
+async function answers(url) {
+  try {
+    await fetch(url, { signal: AbortSignal.timeout(2000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Suite v2 Step 4 (STEP4-RULE.md, item it_eaec2cc9): `lightpath dev` can open the page before the
+ * app's API listens, so the page's first data request fails and the page shows no data. After
+ * "watching", wait for the API (`backendUrl`); if it wasn't answering when the page opened, re-save
+ * the page's HTML file unchanged (`pageHtml`, relative to the trial) so the dev server reloads the
+ * page, then wait `settleMs`. Returns what happened, for the run's record.
+ */
+export async function waitAppBackend(
+  trialDir,
+  { backendUrl, pageHtml, pageUrl, readyButton },
+  timeoutMs = 120_000,
+  settleMs = 8000,
+) {
+  if (readyButton) return waitAppPage(pageUrl, readyButton, 180_000, settleMs);
+  if (!backendUrl) return null;
+  const upAtReady = await answers(backendUrl);
+  const started = Date.now();
+  while (!(await answers(backendUrl))) {
+    if (Date.now() - started > timeoutMs)
+      throw new Error(`app backend ${backendUrl} not answering after ${timeoutMs} ms`);
+    await sleep(500);
+  }
+  const waitedMs = Date.now() - started;
+  let reloaded = false;
+  if (!upAtReady && pageHtml) {
+    const file = join(trialDir, pageHtml);
+    writeFileSync(file, readFileSync(file));
+    reloaded = true;
+    await sleep(settleMs);
+  }
+  return { backendUrl, upAtReady, waitedMs, reloaded };
+}
+
+/**
+ * Actual has no API to wait for: its first screen renders about 18 s after "watching" (measured,
+ * STEP4-RULE.md), and a run_action before that answers not_found. So a second headless browser,
+ * closed before the agent starts, opens `pageUrl` until `button "<readyButton>"` shows, then the
+ * harness waits `settleMs` more for Lightpath's own page, which opened first.
+ */
+async function waitAppPage(pageUrl, readyButton, timeoutMs, settleMs) {
+  const require = createRequire(join(REPO_DIR, 'packages', 'browser', 'package.json'));
+  const { chromium } = require('playwright-core');
+  const started = Date.now();
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await (await browser.newContext({ serviceWorkers: 'block' })).newPage();
+    await page.goto(pageUrl, { timeout: timeoutMs });
+    await page.getByRole('button', { name: readyButton }).waitFor({ timeout: timeoutMs });
+  } finally {
+    await browser.close().catch(() => {});
+  }
+  const waitedMs = Date.now() - started;
+  await sleep(settleMs);
+  return { pageUrl, readyButton, waitedMs, settleMs };
 }
 
 /**
